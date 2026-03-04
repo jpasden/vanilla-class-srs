@@ -1,0 +1,310 @@
+import { useState, FormEvent } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import { api, ApiError } from '../../utils/api'
+import { useApi } from '../../hooks/useApi'
+import { Modal } from '../../components/Modal'
+import { CsvImportModal } from '../../components/CsvImportModal'
+import ClassStatsPanel from './ClassStatsPanel'
+
+interface Class {
+  id: string; name: string
+  subjectGrade: { name: string; department: { name: string } }
+  _count: { enrollments: number; assignments: number }
+}
+interface Enrollment {
+  id: string
+  student: { id: string; user: { name: string; email: string } }
+  deck: { id: string; _count: { instances: number } } | null
+}
+interface CardSet { id: string; name: string; status: string; _count: { cards: number } }
+interface Assignment {
+  id: string; type: string; priority: number
+  cardSet: { id: string; name: string; status: string; _count: { cards: number } }
+}
+interface HomeworkReq {
+  id: string; sessionsRequired: number; minCardsPerSession: number
+  periodDays: number; alertThresholdDays: number; activeFrom: string
+}
+
+type Tab = 'students' | 'assignments' | 'homework' | 'stats'
+
+export default function TeacherClassDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const { data: cls, loading: clsLoading } = useApi<Class>(() => api.get(`/teachers/classes/${id}`), [id])
+  const { data: enrollments, reload: reloadEnrollments } = useApi<Enrollment[]>(() => api.get(`/teachers/classes/${id}/students`), [id])
+  const { data: assignments, reload: reloadAssignments } = useApi<Assignment[]>(() => api.get(`/teachers/classes/${id}/assignments`), [id])
+  const { data: hw, reload: reloadHw } = useApi<HomeworkReq | null>(() => api.get(`/teachers/classes/${id}/homework`), [id])
+  const { data: cardSets } = useApi<CardSet[]>(() => api.get('/teachers/cardsets'))
+
+  const [tab, setTab] = useState<Tab>('students')
+  const [showAddStudent, setShowAddStudent] = useState(false)
+  const [showImportStudents, setShowImportStudents] = useState(false)
+  const [showAddAssignment, setShowAddAssignment] = useState(false)
+  const [showHw, setShowHw] = useState(false)
+  const [studentForm, setStudentForm] = useState({ email: '', name: '' })
+  const [newStudentResult, setNewStudentResult] = useState<{ status: string; tempPassword?: string } | null>(null)
+  const [assignForm, setAssignForm] = useState({ cardSetId: '', type: 'MANDATORY', priority: 0 })
+  const [hwForm, setHwForm] = useState({ sessionsRequired: 3, minCardsPerSession: 10, periodDays: 7, alertThresholdDays: 2, activeFrom: new Date().toISOString().slice(0, 16) })
+  const [formError, setFormError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const handleAddStudent = async (e: FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setFormError(null)
+    setNewStudentResult(null)
+    try {
+      const result = await api.post<{ status: string; tempPassword?: string }>(`/teachers/classes/${id}/students`, studentForm)
+      setNewStudentResult(result)
+      reloadEnrollments()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAssign = async (e: FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setFormError(null)
+    try {
+      await api.post(`/teachers/classes/${id}/assignments`, assignForm)
+      setShowAddAssignment(false)
+      reloadAssignments()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteAssignment = async (aId: string) => {
+    if (!confirm('Remove this assignment?')) return
+    try { await api.delete(`/teachers/classes/${id}/assignments/${aId}`); reloadAssignments() }
+    catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
+  }
+
+  const handleSaveHw = async (e: FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setFormError(null)
+    try {
+      await api.post(`/teachers/classes/${id}/homework`, { ...hwForm, activeFrom: new Date(hwForm.activeFrom).toISOString() })
+      setShowHw(false)
+      reloadHw()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (clsLoading) return <div className="spinner" />
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <Link to="/teacher/classes" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>← Classes</Link>
+        <h1 className="page-title" style={{ marginTop: 4 }}>{cls?.name}</h1>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+          {cls?.subjectGrade.name} · {cls?.subjectGrade.department.name}
+        </p>
+      </div>
+
+      <div className="tabs">
+        {(['students', 'assignments', 'homework', 'stats'] as Tab[]).map((t) => (
+          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Students tab */}
+      {tab === 'students' && (
+        <div>
+          {showAddStudent && (
+            <Modal title="Add Student" onClose={() => { setShowAddStudent(false); setNewStudentResult(null) }}>
+              <form onSubmit={handleAddStudent}>
+                {formError && <div className="alert alert-danger">{formError}</div>}
+                {newStudentResult && (
+                  <div className="alert alert-success">
+                    Student {newStudentResult.status === 'already_enrolled' ? 'already enrolled.' : 'added.'}
+                    {newStudentResult.tempPassword && (
+                      <> Temp password: <strong style={{ fontFamily: 'monospace' }}>{newStudentResult.tempPassword}</strong></>
+                    )}
+                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input className="form-input" type="email" value={studentForm.email} onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })} required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Name</label>
+                  <input className="form-input" value={studentForm.name} onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })} required />
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => { setShowAddStudent(false); setNewStudentResult(null) }}>Close</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Adding…' : 'Add Student'}</button>
+                </div>
+              </form>
+            </Modal>
+          )}
+          {showImportStudents && (
+            <CsvImportModal
+              title="Import Students from CSV"
+              endpoint={`/teachers/classes/${id}/students/import`}
+              onSuccess={() => { setShowImportStudents(false); reloadEnrollments() }}
+              onClose={() => setShowImportStudents(false)}
+              templateHint='CSV format: email,name — one student per row. Existing users will be enrolled without duplicating their account.'
+            />
+          )}
+          <div className="page-header" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary btn-sm" onClick={() => { setFormError(null); setNewStudentResult(null); setStudentForm({ email: '', name: '' }); setShowAddStudent(true) }}>+ Add Student</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowImportStudents(true)}>Import CSV</button>
+            </div>
+          </div>
+          <div className="table-scroll">
+          <table className="table">
+            <thead><tr><th>Name</th><th>Email</th><th>Cards in Deck</th><th>Actions</th></tr></thead>
+            <tbody>
+              {!enrollments?.length && <tr><td colSpan={4} className="table-empty">No students enrolled.</td></tr>}
+              {enrollments?.map((enr) => (
+                <tr key={enr.id}>
+                  <td>{enr.student.user.name}</td>
+                  <td>{enr.student.user.email}</td>
+                  <td>{enr.deck?._count.instances ?? 0}</td>
+                  <td>
+                    <Link
+                      to={`/teacher/classes/${id}/students/${enr.student.id}`}
+                      className="btn btn-secondary btn-sm"
+                    >View Cards</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        </div>
+      )}
+
+      {/* Assignments tab */}
+      {tab === 'assignments' && (
+        <div>
+          {showAddAssignment && (
+            <Modal title="Assign CardSet" onClose={() => setShowAddAssignment(false)}>
+              <form onSubmit={handleAssign}>
+                {formError && <div className="alert alert-danger">{formError}</div>}
+                <div className="form-group">
+                  <label className="form-label">CardSet</label>
+                  <select className="form-select" value={assignForm.cardSetId} onChange={(e) => setAssignForm({ ...assignForm, cardSetId: e.target.value })} required>
+                    <option value="">Select…</option>
+                    {cardSets?.map((cs) => <option key={cs.id} value={cs.id}>{cs.name} ({cs._count.cards} cards)</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Type</label>
+                  <select className="form-select" value={assignForm.type} onChange={(e) => setAssignForm({ ...assignForm, type: e.target.value })}>
+                    <option value="MANDATORY">Mandatory</option>
+                    <option value="OPTIONAL">Optional</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Priority (lower = introduced first)</label>
+                  <input className="form-input" type="number" min={0} value={assignForm.priority} onChange={(e) => setAssignForm({ ...assignForm, priority: parseInt(e.target.value) || 0 })} />
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddAssignment(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Assigning…' : 'Assign'}</button>
+                </div>
+              </form>
+            </Modal>
+          )}
+          <div style={{ marginBottom: 16 }}>
+            <button className="btn btn-primary btn-sm" onClick={() => { setFormError(null); setAssignForm({ cardSetId: '', type: 'MANDATORY', priority: 0 }); setShowAddAssignment(true) }}>+ Assign CardSet</button>
+          </div>
+          <div className="table-scroll">
+          <table className="table">
+            <thead><tr><th>CardSet</th><th>Type</th><th>Priority</th><th>Cards</th><th>Actions</th></tr></thead>
+            <tbody>
+              {!assignments?.length && <tr><td colSpan={5} className="table-empty">No assignments yet.</td></tr>}
+              {assignments?.map((a) => (
+                <tr key={a.id}>
+                  <td>{a.cardSet.name}</td>
+                  <td><span className={`badge badge-${a.type === 'MANDATORY' ? 'blue' : 'yellow'}`}>{a.type}</span></td>
+                  <td>{a.priority}</td>
+                  <td>{a.cardSet._count.cards}</td>
+                  <td><button className="btn btn-danger btn-sm" onClick={() => handleDeleteAssignment(a.id)}>Remove</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        </div>
+      )}
+
+      {/* Homework tab */}
+      {tab === 'homework' && (
+        <div>
+          {showHw && (
+            <Modal title="Set Homework Requirement" onClose={() => setShowHw(false)}>
+              <form onSubmit={handleSaveHw}>
+                {formError && <div className="alert alert-danger">{formError}</div>}
+                <div className="form-group">
+                  <label className="form-label">Sessions required per period</label>
+                  <input className="form-input" type="number" min={1} value={hwForm.sessionsRequired} onChange={(e) => setHwForm({ ...hwForm, sessionsRequired: parseInt(e.target.value) || 1 })} required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Minimum cards per session</label>
+                  <input className="form-input" type="number" min={1} value={hwForm.minCardsPerSession} onChange={(e) => setHwForm({ ...hwForm, minCardsPerSession: parseInt(e.target.value) || 1 })} required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Period length (days)</label>
+                  <input className="form-input" type="number" min={1} value={hwForm.periodDays} onChange={(e) => setHwForm({ ...hwForm, periodDays: parseInt(e.target.value) || 7 })} required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Alert threshold (days remaining)</label>
+                  <input className="form-input" type="number" min={0} value={hwForm.alertThresholdDays} onChange={(e) => setHwForm({ ...hwForm, alertThresholdDays: parseInt(e.target.value) || 0 })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Active from</label>
+                  <input className="form-input" type="datetime-local" value={hwForm.activeFrom} onChange={(e) => setHwForm({ ...hwForm, activeFrom: e.target.value })} required />
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowHw(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                </div>
+              </form>
+            </Modal>
+          )}
+          {hw ? (
+            <div className="card" style={{ maxWidth: 440 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 600 }}>Active Requirement</h2>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setFormError(null); setHwForm({ sessionsRequired: hw.sessionsRequired, minCardsPerSession: hw.minCardsPerSession, periodDays: hw.periodDays, alertThresholdDays: hw.alertThresholdDays, activeFrom: new Date(hw.activeFrom).toISOString().slice(0, 16) }); setShowHw(true) }}>Edit</button>
+              </div>
+              <table className="table">
+                <tbody>
+                  <tr><td>Sessions required</td><td><strong>{hw.sessionsRequired}</strong></td></tr>
+                  <tr><td>Min cards per session</td><td><strong>{hw.minCardsPerSession}</strong></td></tr>
+                  <tr><td>Period</td><td><strong>{hw.periodDays} days</strong></td></tr>
+                  <tr><td>Alert threshold</td><td><strong>{hw.alertThresholdDays} days remaining</strong></td></tr>
+                  <tr><td>Active from</td><td><strong>{new Date(hw.activeFrom).toLocaleDateString()}</strong></td></tr>
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div>
+              <p style={{ color: 'var(--color-text-muted)', marginBottom: 16, fontSize: 14 }}>No homework requirement set for this class.</p>
+              <button className="btn btn-primary" onClick={() => { setFormError(null); setShowHw(true) }}>Set Requirement</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stats tab */}
+      {tab === 'stats' && id && <ClassStatsPanel classId={id} />}
+    </div>
+  )
+}

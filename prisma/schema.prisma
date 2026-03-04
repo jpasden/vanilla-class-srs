@@ -1,0 +1,335 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum CardSetStatus {
+  PRIVATE      // visible only to creating teacher
+  DEPARTMENTAL // visible to all teachers in subjectGrade; admin-editable only
+}
+
+enum AssignmentType {
+  MANDATORY // all students in class get CardInstances created automatically
+  OPTIONAL  // students can choose to add to their deck
+}
+
+enum CardOrigin {
+  TEACHER_ASSIGNED // arrived via mandatory assignment
+  OPTIONAL         // student opted into an optional CardSet
+  STUDENT_ADDED    // student manually created
+}
+
+enum FSRSState {
+  NEW
+  LEARNING
+  REVIEW
+  RELEARNING
+}
+
+// ─────────────────────────────────────────────
+// Users & Auth
+// ─────────────────────────────────────────────
+
+model User {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String
+  name               String
+  role               Role      @default(STUDENT)
+  mustChangePassword Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  teacherProfile Teacher?
+  studentProfile Student?
+
+  // Password reset
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  tokenHash String   @unique // SHA-256 hash of the raw token sent by email (allows direct O(1) lookup)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// Organizational Structure
+// ─────────────────────────────────────────────
+
+model Department {
+  id            String         @id @default(uuid())
+  name          String
+  createdAt     DateTime       @default(now())
+  archivedAt    DateTime?
+  subjectGrades SubjectGrade[]
+}
+
+model SubjectGrade {
+  id                      String                   @id @default(uuid())
+  name                    String                   // e.g. "English B HL Grade 12"
+  departmentId            String
+  department              Department               @relation(fields: [departmentId], references: [id])
+  teachers                TeacherSubjectGrade[]
+  classes                 Class[]
+  cardSets                CardSet[]                // departmental CardSets live here
+  subjectGradeAssignments SubjectGradeAssignment[]
+  createdAt               DateTime                 @default(now())
+  archivedAt              DateTime?
+}
+
+model Teacher {
+  id            String                @id @default(uuid())
+  userId        String                @unique
+  user          User                  @relation(fields: [userId], references: [id])
+  subjectGrades TeacherSubjectGrade[]
+  classes       Class[]
+  cardSets      CardSet[]             // teacher-owned CardSets
+  createdAt     DateTime              @default(now())
+}
+
+model TeacherSubjectGrade {
+  teacherId      String
+  subjectGradeId String
+  teacher        Teacher      @relation(fields: [teacherId], references: [id])
+  subjectGrade   SubjectGrade @relation(fields: [subjectGradeId], references: [id])
+
+  @@id([teacherId, subjectGradeId])
+}
+
+model Class {
+  id             String                @id @default(uuid())
+  name           String                // e.g. "Class 12A"
+  teacherId      String
+  teacher        Teacher               @relation(fields: [teacherId], references: [id])
+  subjectGradeId String
+  subjectGrade   SubjectGrade          @relation(fields: [subjectGradeId], references: [id])
+  enrollments    Enrollment[]
+  assignments    Assignment[]
+  homeworkReqs   HomeworkRequirement[]
+  createdAt      DateTime              @default(now())
+  archivedAt     DateTime?
+}
+
+// ─────────────────────────────────────────────
+// Students & Enrollment
+// ─────────────────────────────────────────────
+
+model Student {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id])
+  enrollments Enrollment[]
+  createdAt   DateTime     @default(now())
+}
+
+model Enrollment {
+  id        String   @id @default(uuid())
+  studentId String
+  classId   String
+  student   Student  @relation(fields: [studentId], references: [id])
+  class     Class    @relation(fields: [classId], references: [id])
+  deck      Deck?
+  // Personal CardSet — one per Enrollment, created lazily on first student card addition.
+  // Do not use this field directly in application code to check for the personal set;
+  // prefer querying CardSet where(enrollmentId, isPersonal: true) for clarity.
+  personalCardSet CardSet? @relation("EnrollmentPersonalCardSet")
+  joinedAt        DateTime @default(now())
+
+  @@unique([studentId, classId])
+}
+
+// ─────────────────────────────────────────────
+// Cards & CardSets
+// ─────────────────────────────────────────────
+
+model CardSet {
+  id          String        @id @default(uuid())
+  name        String        // e.g. "Unit 3 Vocabulary"
+  description String?
+  status      CardSetStatus @default(PRIVATE)
+
+  // Ownership: either teacher-owned or departmental (subjectGrade-owned)
+  // When promoted to DEPARTMENTAL, teacherId is retained for attribution only.
+  // Editing rights transfer to admin only after promotion.
+  teacherId      String?       // original creator (attribution)
+  teacher        Teacher?      @relation(fields: [teacherId], references: [id])
+  subjectGradeId String?       // set when promoted to DEPARTMENTAL
+  subjectGrade   SubjectGrade? @relation(fields: [subjectGradeId], references: [id])
+
+  // Personal CardSet fields — only set for auto-created student personal sets
+  isPersonal   Boolean     @default(false)
+  enrollmentId String?     @unique // links personal CardSet to a specific Enrollment
+  enrollment   Enrollment? @relation("EnrollmentPersonalCardSet", fields: [enrollmentId], references: [id])
+
+  cards                   Card[]
+  assignments             Assignment[]
+  subjectGradeAssignments SubjectGradeAssignment[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  archivedAt              DateTime?
+}
+
+model Card {
+  id        String  @id @default(uuid())
+  cardSetId String
+  cardSet   CardSet @relation(fields: [cardSetId], references: [id])
+
+  // At least one of definitionL1 or definitionL2 must be non-null (enforced at app layer)
+  word            String
+  pos             String? // part of speech
+  definitionL2    String? // target language definition (e.g. English)
+  definitionL1    String? // native language definition (e.g. Chinese)
+  exampleSentence String? // teacher-provided example sentence
+
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  instances CardInstance[]
+}
+
+// ─────────────────────────────────────────────
+// Assignments
+// ─────────────────────────────────────────────
+
+model Assignment {
+  id         String         @id @default(uuid())
+  classId    String
+  class      Class          @relation(fields: [classId], references: [id])
+  cardSetId  String
+  cardSet    CardSet        @relation(fields: [cardSetId], references: [id])
+  type       AssignmentType
+  priority   Int            @default(0) // lower = higher priority for new card introduction
+  assignedAt DateTime       @default(now())
+  assignedBy String         // userId of teacher or admin
+
+  @@unique([classId, cardSetId])
+}
+
+// SubjectGradeAssignment — created by admin to push a CardSet to all teachers in a SubjectGrade.
+// Teachers see these in their dashboard and then create Class-level Assignments from them.
+// For MANDATORY: when teacher creates a Class Assignment, CardInstances auto-created for enrolled students.
+// For OPTIONAL: when teacher opts the class in, CardSet appears in each student's available optional list.
+model SubjectGradeAssignment {
+  id             String         @id @default(uuid())
+  subjectGradeId String
+  subjectGrade   SubjectGrade   @relation(fields: [subjectGradeId], references: [id])
+  cardSetId      String
+  cardSet        CardSet        @relation(fields: [cardSetId], references: [id])
+  type           AssignmentType
+  assignedAt     DateTime       @default(now())
+  assignedBy     String         // userId of admin
+
+  @@unique([subjectGradeId, cardSetId])
+}
+
+// ─────────────────────────────────────────────
+// Decks & FSRS
+// ─────────────────────────────────────────────
+
+model Deck {
+  id           String     @id @default(uuid())
+  enrollmentId String     @unique
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  // Per-deck FSRS parameters. "w" = 19 FSRS v5 weight values; empty array = use published defaults
+  // from shared/fsrs/constants.ts. newCardsPerDay controls daily new-card introduction limit.
+  fsrsParams Json @default("{\"requestRetention\":0.9,\"maximumInterval\":36500,\"w\":[],\"newCardsPerDay\":10}")
+
+  instances CardInstance[]
+  sessions  ReviewSession[]
+  createdAt DateTime        @default(now())
+}
+
+model CardInstance {
+  id     String @id @default(uuid())
+  deckId String
+  deck   Deck   @relation(fields: [deckId], references: [id])
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id])
+
+  // Student override of exampleSentence. If null, fall back to Card.exampleSentence at render time.
+  exampleSentence String?
+
+  // How this instance arrived in the student's deck
+  origin CardOrigin @default(TEACHER_ASSIGNED)
+
+  // FSRS state
+  stability      Float     @default(0)
+  difficulty     Float     @default(0)
+  retrievability Float     @default(0)
+  due            DateTime  @default(now())
+  lastReview     DateTime?
+  reps           Int       @default(0)
+  lapses         Int       @default(0)
+  state          FSRSState @default(NEW)
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  reviewEvents ReviewEvent[]
+
+  @@unique([deckId, cardId])
+}
+
+// ─────────────────────────────────────────────
+// Homework Requirements
+// ─────────────────────────────────────────────
+
+model HomeworkRequirement {
+  id                 String    @id @default(uuid())
+  classId            String
+  class              Class     @relation(fields: [classId], references: [id])
+  sessionsRequired   Int       // e.g. 3
+  minCardsPerSession Int       // e.g. 10 — sessions below this threshold don't count
+  periodDays         Int       @default(7) // 7 = weekly
+  alertThresholdDays Int       @default(2) // flag At Risk when N days remain and requirement not met
+  activeFrom         DateTime
+  activeTo           DateTime? // null = ongoing
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  // Only one HomeworkRequirement per class may have isActive = true at a time.
+  // Enforced at app layer: deactivate existing active requirement within a transaction before creating new one.
+}
+
+// ─────────────────────────────────────────────
+// Review Stats
+// ─────────────────────────────────────────────
+
+model ReviewSession {
+  id            String    @id @default(uuid())
+  deckId        String
+  deck          Deck      @relation(fields: [deckId], references: [id])
+  startedAt     DateTime
+  endedAt       DateTime? // null = session abandoned or in progress
+  cardsReviewed Int       @default(0)
+  accuracyRate  Float?    // calculated on session end (correct grades / total grades)
+  events        ReviewEvent[]
+}
+
+model ReviewEvent {
+  id             String        @id @default(uuid())
+  sessionId      String
+  session        ReviewSession @relation(fields: [sessionId], references: [id])
+  cardInstanceId String
+  cardInstance   CardInstance  @relation(fields: [cardInstanceId], references: [id])
+  grade          Int           // FSRS grades: 1 (Again) 2 (Hard) 3 (Good) 4 (Easy)
+  responseTimeMs Int?
+  reviewedAt     DateTime      @default(now())
+}
