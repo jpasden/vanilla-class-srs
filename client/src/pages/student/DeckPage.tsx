@@ -215,7 +215,10 @@ export default function StudentDeckPage() {
       )}
 
       <div className="page-header">
-        <h1 className="page-title">My Deck</h1>
+        <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src="/Vanilla-deck.png" alt="" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+          My Deck
+        </h1>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-primary btn-sm" onClick={() => { setAddForm({ word: '', pos: '', definitionL2: '', definitionL1: '', exampleSentence: '' }); setFormError(null); setAddModal(true) }}>+ Add Card</button>
           <button className="btn btn-secondary btn-sm" onClick={handleExport}>Export CSV</button>

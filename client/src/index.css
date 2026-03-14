@@ -96,7 +96,7 @@
   --shadow:    0 4px 20px rgba(74, 55, 40, 0.1);
   --shadow-sm: 0 2px 8px rgba(74, 55, 40, 0.08);
 
-  font-size: 16px;
+  font-size: 18px;
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
@@ -125,6 +125,7 @@ button, input, select, textarea {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 8px 20px;
   border: none;

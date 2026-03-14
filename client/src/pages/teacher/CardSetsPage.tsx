@@ -62,7 +62,10 @@ export default function TeacherCardSetsPage() {
         </Modal>
       )}
       <div className="page-header">
-        <h1 className="page-title">CardSets</h1>
+        <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src="/Vanilla-deck.png" alt="" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+          CardSets
+        </h1>
         <button className="btn btn-primary" onClick={() => { setForm({ name: '', description: '' }); setFormError(null); setShowCreate(true) }}>+ New CardSet</button>
       </div>
       {loading && <div className="spinner" />}
@@ -79,7 +82,10 @@ export default function TeacherCardSetsPage() {
                 </div>
                 <span className={`badge badge-${cs.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`}>{cs.status}</span>
               </div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12 }}>{cs._count.cards} cards</div>
+              <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <img src="/Vanilla-card.png" alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                {cs._count.cards} cards
+              </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Link to={`/teacher/cardsets/${cs.id}`} className="btn btn-primary btn-sm">Manage Cards</Link>
                 {cs.status === 'PRIVATE' && (

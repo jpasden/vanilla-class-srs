@@ -22,9 +22,12 @@ export default function TeacherLayout() {
       }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-sidebar-border)', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <div>
-              <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16 }}>Vanilla SRS</div>
-              <div style={{ fontSize: 11, color: 'var(--color-sidebar-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Teacher</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <img src="/Vanilla-card.png" alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+              <div>
+                <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16 }}>Vanilla SRS</div>
+                <div style={{ fontSize: 11, color: 'var(--color-sidebar-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Teacher</div>
+              </div>
             </div>
             <div style={{ fontSize: 13, color: 'var(--color-sidebar-muted)' }}>{user?.name}</div>
           </div>

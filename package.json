@@ -11,7 +11,14 @@
     "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
     "db:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
     "db:generate": "prisma generate --schema=prisma/schema.prisma",
-    "db:studio": "prisma studio --schema=prisma/schema.prisma"
+    "db:studio": "prisma studio --schema=prisma/schema.prisma",
+    "db:seed": "tsx prisma/seed.ts",
+    "seed": "cd scripts && npm run seed",
+    "seed:wipe": "cd scripts && npm run wipe",
+    "seed:verify": "cd scripts && npm run verify"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

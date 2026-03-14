@@ -129,6 +129,7 @@ export default function ReviewPage() {
       {/* Idle */}
       {phase === 'idle' && (
         <div style={{ textAlign: 'center', padding: '48px 16px' }}>
+          <img src="/Vanilla-deck.png" alt="" style={{ width: 96, height: 96, objectFit: 'contain', marginBottom: 16 }} />
           <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 12 }}>Study Session</h1>
           <p style={{ color: 'var(--color-text-muted)', marginBottom: 32, fontSize: 15 }}>
             Class: <strong>{active.className}</strong>
@@ -144,6 +145,7 @@ export default function ReviewPage() {
       {/* Empty — no due cards */}
       {phase === 'empty' && (
         <div style={{ textAlign: 'center', padding: '48px 16px' }}>
+          <img src="/Vanilla-deck.png" alt="" style={{ width: 96, height: 96, objectFit: 'contain', marginBottom: 16 }} />
           <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
           <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>All caught up!</h2>
           <p style={{ color: 'var(--color-text-muted)', marginBottom: 24 }}>
@@ -241,6 +243,7 @@ export default function ReviewPage() {
       {/* Done */}
       {phase === 'done' && (
         <div style={{ textAlign: 'center', padding: '48px 16px' }}>
+          <img src="/Vanilla-deck.png" alt="" style={{ width: 96, height: 96, objectFit: 'contain', marginBottom: 16 }} />
           <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
           <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Session Complete</h2>
           {sessionResult && (

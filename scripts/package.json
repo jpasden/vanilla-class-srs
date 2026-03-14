@@ -1,0 +1,21 @@
+{
+  "name": "vanilla-class-srs-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "seed": "ts-node seed/index.ts",
+    "wipe": "ts-node seed/wipe.ts",
+    "verify": "ts-node seed/verify.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "*",
+    "bcryptjs": "*",
+    "dotenv": "*"
+  },
+  "devDependencies": {
+    "ts-node": "*",
+    "typescript": "*",
+    "@types/bcryptjs": "*",
+    "@types/node": "*"
+  }
+}
