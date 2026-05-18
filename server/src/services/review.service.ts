@@ -209,6 +209,70 @@ export async function startSession(
   return { sessionId: session.id, cards, deckId: deck.id }
 }
 
+// ── restudy ──────────────────────────────────────────────────────────────────
+
+export async function startRestudy(
+  prisma: PrismaClient,
+  studentId: string,
+  enrollmentId: string,
+  instanceIds: string[],
+  now: Date = new Date(),
+): Promise<StartSessionResult | { error: string; status: number }> {
+  const enrollment = await prisma.enrollment.findUnique({
+    where: { id: enrollmentId },
+    include: { deck: true },
+  })
+  if (!enrollment || enrollment.studentId !== studentId) {
+    return { error: 'Enrollment not found', status: 404 }
+  }
+  if (!enrollment.deck) {
+    return { error: 'Deck not found', status: 404 }
+  }
+  const deck = enrollment.deck
+
+  // Close any open (abandoned) session
+  const openSession = await prisma.reviewSession.findFirst({
+    where: { deckId: deck.id, endedAt: null },
+  })
+  if (openSession) {
+    await closeSession(prisma, openSession.id, now)
+  }
+
+  const instances = await prisma.cardInstance.findMany({
+    where: { id: { in: instanceIds }, deckId: deck.id },
+    include: { card: true },
+  })
+
+  const session = await prisma.reviewSession.create({
+    data: { deckId: deck.id, startedAt: now },
+  })
+
+  // Preserve the caller's ordering
+  const byId = Object.fromEntries(instances.map((i) => [i.id, i]))
+  const cards: SessionCard[] = instanceIds
+    .filter((id) => byId[id])
+    .map((id) => {
+      const inst = byId[id]
+      return {
+        instanceId: inst.id,
+        cardId: inst.cardId,
+        word: inst.card.word,
+        pos: inst.card.pos,
+        definitionL2: inst.card.definitionL2,
+        definitionL1: inst.card.definitionL1,
+        exampleSentence: inst.exampleSentence ?? inst.card.exampleSentence,
+        state: inst.state,
+        due: inst.due,
+        stability: inst.stability,
+        difficulty: inst.difficulty,
+        lapses: inst.lapses,
+        reps: inst.reps,
+      }
+    })
+
+  return { sessionId: session.id, cards, deckId: deck.id }
+}
+
 // ── grade ────────────────────────────────────────────────────────────────────
 
 export interface GradeResult {

@@ -98,45 +98,55 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
     select: { endedAt: true, cardsReviewed: true },
   })
 
+  const tz = (req.query.tz as string | undefined) || 'UTC'
+  const toLocalDay = (date: Date) => {
+    try {
+      return date.toLocaleDateString('en-CA', { timeZone: tz }) // en-CA gives YYYY-MM-DD
+    } catch {
+      return date.toISOString().slice(0, 10)
+    }
+  }
+
   // Group by calendar day
   const daySet = new Set<string>()
   const cardsPerDay: Record<string, number> = {}
   for (const s of allSessions) {
     if (!s.endedAt) continue
-    const d = s.endedAt.toISOString().slice(0, 10)
+    const d = toLocalDay(s.endedAt)
     daySet.add(d)
     cardsPerDay[d] = (cardsPerDay[d] ?? 0) + s.cardsReviewed
   }
 
   // Current streak — consecutive days from today/yesterday backwards
+  // Use noon UTC as anchor so toLocalDay never flips to the previous day
   let currentStreak = 0
   const checkDate = new Date()
-  checkDate.setHours(0, 0, 0, 0)
-  // If today has no session yet, start checking from yesterday
-  const todayStr = checkDate.toISOString().slice(0, 10)
-  if (!daySet.has(todayStr)) checkDate.setDate(checkDate.getDate() - 1)
+  checkDate.setUTCHours(12, 0, 0, 0)
+  const todayStr = toLocalDay(now)
+  if (!daySet.has(todayStr)) checkDate.setUTCDate(checkDate.getUTCDate() - 1)
   while (true) {
-    const key = checkDate.toISOString().slice(0, 10)
+    const key = toLocalDay(checkDate)
     if (!daySet.has(key)) break
     currentStreak++
-    checkDate.setDate(checkDate.getDate() - 1)
+    checkDate.setUTCDate(checkDate.getUTCDate() - 1)
   }
 
-  // Longest streak — scan sorted days
+  // Longest streak — scan sorted local-date strings (YYYY-MM-DD), use noon UTC to diff safely
   const sortedDays = [...daySet].sort()
   let longest = 0
   let run = 0
-  let prevDate: Date | null = null
+  let prevDay: string | null = null
   for (const day of sortedDays) {
-    const d = new Date(day + 'T00:00:00')
-    if (prevDate) {
-      const diff = Math.round((d.getTime() - prevDate.getTime()) / 86_400_000)
+    if (prevDay) {
+      const prev = new Date(prevDay + 'T12:00:00Z')
+      const curr = new Date(day + 'T12:00:00Z')
+      const diff = Math.round((curr.getTime() - prev.getTime()) / 86_400_000)
       run = diff === 1 ? run + 1 : 1
     } else {
       run = 1
     }
     if (run > longest) longest = run
-    prevDate = d
+    prevDay = day
   }
 
   // Most cards in a single day
@@ -205,10 +215,15 @@ router.get('/stats/daily', async (req: Request, res: Response) => {
     select: { reviewedAt: true },
   })
 
+  const tz = (req.query.tz as string | undefined) || 'UTC'
+  const toLocalDay = (date: Date) => {
+    try { return date.toLocaleDateString('en-CA', { timeZone: tz }) } catch { return date.toISOString().slice(0, 10) }
+  }
+
   // Bucket by date
   const buckets: Record<string, number> = {}
   for (const e of events) {
-    const d = e.reviewedAt.toISOString().slice(0, 10)
+    const d = toLocalDay(e.reviewedAt)
     buckets[d] = (buckets[d] ?? 0) + 1
   }
 
@@ -216,9 +231,9 @@ router.get('/stats/daily', async (req: Request, res: Response) => {
   const result: { date: string; cardsReviewed: number }[] = []
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date()
-    d.setHours(0, 0, 0, 0)
+    d.setHours(12, 0, 0, 0) // use noon to avoid DST edge cases
     d.setDate(d.getDate() - i)
-    const key = d.toISOString().slice(0, 10)
+    const key = toLocalDay(d)
     result.push({ date: key, cardsReviewed: buckets[key] ?? 0 })
   }
 
@@ -266,7 +281,7 @@ router.get('/stats/accuracy', async (req: Request, res: Response) => {
       ? window.filter((e) => e.grade >= 2).length / window.length
       : null
 
-    result.push({ date: end.toISOString().slice(0, 10), accuracy })
+    result.push({ date: end.toLocaleDateString('en-CA', { timeZone: (req.query.tz as string | undefined) || 'UTC' }), accuracy })
   }
 
   res.json(result)

@@ -4,7 +4,7 @@ import { CardOrigin, CardSetStatus } from '@prisma/client'
 import prisma from '../lib/prisma'
 import { requireAuth, requireStudent } from '../middleware/auth'
 import { validate } from '../middleware/validate'
-import { startSession, gradeCard, finishSession } from '../services/review.service'
+import { startSession, startRestudy, gradeCard, finishSession } from '../services/review.service'
 import studentStatsRouter from './stats.student'
 
 const router = Router()
@@ -345,6 +345,21 @@ router.post('/review/start', validate(StartSessionSchema), async (req: Request, 
   if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
 
   const result = await startSession(prisma, student.id, req.body.enrollmentId)
+  if ('error' in result) { res.status(result.status).json({ error: result.error }); return }
+  res.status(201).json(result)
+})
+
+const RestudySchema = z.object({
+  enrollmentId: z.string().uuid(),
+  instanceIds: z.array(z.string().uuid()).min(1),
+})
+
+// POST /api/students/review/restudy — open a fresh session for weak-card re-drill
+router.post('/review/restudy', validate(RestudySchema), async (req: Request, res: Response) => {
+  const student = await getStudent(req.user!.sub)
+  if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
+
+  const result = await startRestudy(prisma, student.id, req.body.enrollmentId, req.body.instanceIds)
   if ('error' in result) { res.status(result.status).json({ error: result.error }); return }
   res.status(201).json(result)
 })

@@ -82,7 +82,15 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
 
     setAuthCookies(res, user.id, user.role)
-    res.json({ ok: true })
+    res.json({
+      user: {
+        sub: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        mustChangePassword: user.mustChangePassword,
+      },
+    })
   } catch {
     res.status(401).json({ error: 'Invalid or expired refresh token' })
   }

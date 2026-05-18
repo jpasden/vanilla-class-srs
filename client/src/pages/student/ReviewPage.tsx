@@ -70,21 +70,27 @@ export default function ReviewPage() {
     }
   }
 
-  const keepStudying = () => {
-    if (weakCards.length === 0) return
-    const fakeSession: SessionResponse = {
-      sessionId: session?.sessionId ?? '',
-      cards: weakCards,
-      totalCards: weakCards.length,
+  const keepStudying = async () => {
+    if (weakCards.length === 0 || !active) return
+    setPhase('loading')
+    setError(null)
+    try {
+      const data = await api.post<SessionResponse>('/students/review/restudy', {
+        enrollmentId: active.enrollmentId,
+        instanceIds: weakCards.map((c) => c.instanceId),
+      })
+      setSession(data)
+      setCardIndex(0)
+      setFlipped(false)
+      setCompletedCount(0)
+      setSessionResult(null)
+      setWeakCards([])
+      setStartTime(Date.now())
+      setPhase('reviewing')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Failed to start restudy session')
+      setPhase('done')
     }
-    setSession(fakeSession)
-    setCardIndex(0)
-    setFlipped(false)
-    setCompletedCount(0)
-    setSessionResult(null)
-    setWeakCards([])
-    setStartTime(Date.now())
-    setPhase('reviewing')
   }
 
   const gradeCard = async (grade: number) => {
@@ -196,8 +202,8 @@ export default function ReviewPage() {
             {confirmFinish ? (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>End session?</span>
-                <button className="btn btn-danger btn-sm" onClick={async () => { setConfirmFinish(false); await finishSession(session!.sessionId) }}>End</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setConfirmFinish(false)}>Cancel</button>
+                <button className="btn btn-danger btn-sm" disabled={grading} onClick={async () => { await finishSession(session!.sessionId); setConfirmFinish(false) }}>End</button>
+                <button className="btn btn-secondary btn-sm" disabled={grading} onClick={() => setConfirmFinish(false)}>Cancel</button>
               </div>
             ) : (
               <button className="btn btn-secondary btn-sm" onClick={handleFinishEarly}>Finish Early</button>

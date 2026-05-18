@@ -55,7 +55,7 @@ export default function StudentLayout() {
         <div style={{ padding: '8px 16px' }}>
           <button
             className="btn btn-secondary btn-sm"
-            onClick={async () => { await logout(); navigate('/login') }}
+            onClick={async () => { setActive(null); await logout(); navigate('/login') }}
           >
             Sign out
           </button>

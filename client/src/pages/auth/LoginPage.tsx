@@ -1,21 +1,24 @@
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../utils/auth'
 import { ApiError } from '../../utils/api'
 
 export default function LoginPage() {
-  const { login, user } = useAuth()
+  const { login, user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (user && !user.mustChangePassword) {
-    if (user.role === 'ADMIN') navigate('/admin/departments', { replace: true })
-    else if (user.role === 'TEACHER') navigate('/teacher/classes', { replace: true })
-    else navigate('/student', { replace: true })
-  }
+  useEffect(() => {
+    if (authLoading) return
+    if (user && !user.mustChangePassword) {
+      if (user.role === 'ADMIN') navigate('/admin/departments', { replace: true })
+      else if (user.role === 'TEACHER') navigate('/teacher/classes', { replace: true })
+      else navigate('/student', { replace: true })
+    }
+  }, [user, authLoading, navigate])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -30,6 +33,8 @@ export default function LoginPage() {
       setLoading(false)
     }
   }
+
+  if (authLoading) return <div className="loading-center"><div className="spinner" /></div>
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>

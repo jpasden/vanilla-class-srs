@@ -112,15 +112,15 @@ export default function StudentStatsPage() {
   const eid = active?.enrollmentId
 
   const { data: summary, loading: sumLoad } = useApi<Summary>(
-    () => api.get(`/students/stats/summary?enrollmentId=${eid}`),
+    () => api.get(`/students/stats/summary?enrollmentId=${eid}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`),
     [eid]
   )
   const { data: daily } = useApi<{ date: string; cardsReviewed: number }[]>(
-    () => api.get(`/students/stats/daily?enrollmentId=${eid}&days=90`),
+    () => api.get(`/students/stats/daily?enrollmentId=${eid}&days=90&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`),
     [eid]
   )
   const { data: accuracy } = useApi<{ date: string; accuracy: number | null }[]>(
-    () => api.get(`/students/stats/accuracy?enrollmentId=${eid}`),
+    () => api.get(`/students/stats/accuracy?enrollmentId=${eid}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`),
     [eid]
   )
   const { data: sessions, loading: sessLoad } = useApi<Session[]>(
