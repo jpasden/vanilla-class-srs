@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { useEnrollment } from '../../utils/enrollment'
+import { SimpleBarChart, AccuracyLineChart } from '../../components/Charts'
 
 interface Summary {
   deckBreakdown: { NEW: number; LEARNING: number; REVIEW: number; RELEARNING: number; dueToday: number }
@@ -337,97 +338,3 @@ export default function StudentStatsPage() {
   )
 }
 
-function SimpleBarChart({ data, color = 'var(--color-accent)' }: { data: { label: string; value: number }[]; color?: string }) {
-  const max = Math.max(...data.map((d) => d.value), 1)
-  const showLabel = (i: number) => i % Math.ceil(data.length / 8) === 0
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <div style={{ display: 'flex', gap: 2, minWidth: 'max-content', paddingBottom: 52 }}>
-        {data.map((d, i) => (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', flex: '0 0 auto', width: 14, height: 100, position: 'relative' }}>
-            <div
-              title={`${d.label}: ${d.value}`}
-              style={{
-                width: 12,
-                height: Math.max(2, (d.value / max) * 100),
-                background: color,
-                borderRadius: '2px 2px 0 0',
-                opacity: d.value === 0 ? 0.2 : 1,
-              }}
-            />
-            {showLabel(i) && (
-              <div style={{
-                position: 'absolute',
-                top: 104,
-                left: 0,
-                fontSize: 9,
-                color: 'var(--color-text-muted)',
-                transform: 'rotate(-45deg)',
-                transformOrigin: 'left top',
-                whiteSpace: 'nowrap',
-              }}>
-                {d.label}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/** Simple SVG line chart for rolling accuracy trend */
-function AccuracyLineChart({ data }: { data: { date: string; accuracy: number | null }[] }) {
-  const W = 600
-  const H = 160
-  const PAD = { top: 10, right: 10, bottom: 24, left: 36 }
-  const innerW = W - PAD.left - PAD.right
-  const innerH = H - PAD.top - PAD.bottom
-
-  const points = data
-    .map((d, i) => ({ x: i, y: d.accuracy, date: d.date }))
-    .filter((p) => p.y !== null) as { x: number; y: number; date: string }[]
-
-  if (points.length === 0) {
-    return <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>No accuracy data yet.</p>
-  }
-
-  const n = data.length
-  const toSvgX = (i: number) => PAD.left + (i / (n - 1)) * innerW
-  const toSvgY = (v: number) => PAD.top + (1 - v) * innerH
-
-  const path = points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${toSvgX(p.x)},${toSvgY(p.y)}`)
-    .join(' ')
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, overflow: 'visible' }}>
-      {/* Grid lines at 25%, 50%, 75%, 100% */}
-      {[0, 0.25, 0.5, 0.75, 1].map((v) => (
-        <g key={v}>
-          <line
-            x1={PAD.left} y1={toSvgY(v)} x2={W - PAD.right} y2={toSvgY(v)}
-            stroke="var(--color-border)" strokeWidth={1}
-          />
-          <text x={PAD.left - 4} y={toSvgY(v) + 4} textAnchor="end" fontSize={10} fill="var(--color-text-muted)">
-            {Math.round(v * 100)}%
-          </text>
-        </g>
-      ))}
-      {/* Line */}
-      <path d={path} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
-      {/* Dots */}
-      {points.map((p, i) => (
-        <circle key={i} cx={toSvgX(p.x)} cy={toSvgY(p.y)} r={3} fill="var(--color-accent)">
-          <title>{p.date}: {pct(p.y)}</title>
-        </circle>
-      ))}
-      {/* X-axis labels (every ~7th point) */}
-      {data.filter((_, i) => i % Math.ceil(n / 6) === 0).map((d, i) => (
-        <text key={i} x={toSvgX(data.findIndex((dd) => dd.date === d.date))} y={H - 4} textAnchor="middle" fontSize={10} fill="var(--color-text-muted)">
-          {d.date.slice(5)}
-        </text>
-      ))}
-    </svg>
-  )
-}
