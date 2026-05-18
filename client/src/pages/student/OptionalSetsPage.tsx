@@ -9,6 +9,16 @@ interface OptionalSet {
   name: string
   description: string | null
   _count: { cards: number }
+  added: boolean
+}
+
+interface BrowseCard {
+  id: string
+  word: string
+  pos: string | null
+  definitionL2: string | null
+  definitionL1: string | null
+  exampleSentence: string | null
 }
 
 export default function OptionalSetsPage() {
@@ -20,8 +30,26 @@ export default function OptionalSetsPage() {
   )
   const [adding, setAdding] = useState<string | null>(null)
   const [addError, setAddError] = useState<string | null>(null)
-  // Track recently added sets with the count for inline feedback before reload
   const [justAdded, setJustAdded] = useState<Record<string, number>>({})
+  const [browseSet, setBrowseSet] = useState<{ id: string; name: string } | null>(null)
+  const [browseCards, setBrowseCards] = useState<BrowseCard[] | null>(null)
+  const [browseLoading, setBrowseLoading] = useState(false)
+  const [browseError, setBrowseError] = useState<string | null>(null)
+
+  const handleBrowse = async (cs: OptionalSet) => {
+    setBrowseSet({ id: cs.id, name: cs.name })
+    setBrowseCards(null)
+    setBrowseError(null)
+    setBrowseLoading(true)
+    try {
+      const cards = await api.get<BrowseCard[]>(`/students/deck/optional/${cs.id}/cards?enrollmentId=${active?.enrollmentId}`)
+      setBrowseCards(cards)
+    } catch (e) {
+      setBrowseError(e instanceof ApiError ? e.message : 'Failed to load cards')
+    } finally {
+      setBrowseLoading(false)
+    }
+  }
 
   if (!active) { navigate('/student'); return null }
 
@@ -52,33 +80,79 @@ export default function OptionalSetsPage() {
       {error && <div className="alert alert-danger">{error}</div>}
       {addError && <div className="alert alert-danger">{addError}</div>}
       {sets?.length === 0 && !loading && (
-        <div className="alert alert-info">No optional CardSets available right now.</div>
+        <div className="alert alert-info">No optional CardSets have been assigned to your class.</div>
       )}
       <div className="grid-2">
-        {sets?.map((cs) => {
-          const added = justAdded[cs.id]
-          return (
+        {sets?.map((cs) => (
             <div key={cs.id} className="card">
               <div style={{ fontWeight: 600, marginBottom: 4 }}>{cs.name}</div>
               {cs.description && <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8 }}>{cs.description}</div>}
               <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 16 }}>{cs._count.cards} cards</div>
-              {added !== undefined ? (
+                  {justAdded[cs.id] !== undefined ? (
                 <div className="alert alert-success" style={{ margin: 0, padding: '6px 10px', fontSize: 13 }}>
-                  Added {added} card{added !== 1 ? 's' : ''} to your deck!
+                  Added {justAdded[cs.id]} card{justAdded[cs.id] !== 1 ? 's' : ''} to your deck!
+                </div>
+              ) : cs.added ? (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span className="badge badge-green">Already in your deck</span>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleBrowse(cs)}>Browse</button>
                 </div>
               ) : (
-                <button
-                  className="btn btn-primary btn-sm"
-                  disabled={adding === cs.id}
-                  onClick={() => handleOptIn(cs.id)}
-                >
-                  {adding === cs.id ? 'Adding…' : 'Add to Deck'}
-                </button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={adding === cs.id}
+                    onClick={() => handleOptIn(cs.id)}
+                  >
+                    {adding === cs.id ? 'Adding…' : 'Add to Deck'}
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleBrowse(cs)}>Browse</button>
+                </div>
               )}
             </div>
-          )
-        })}
+          ))}
       </div>
+      {browseSet && (
+        <div className="modal-overlay" onClick={() => setBrowseSet(null)}>
+          <div className="modal" style={{ maxWidth: 700, width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700 }}>{browseSet.name}</h2>
+              <button className="btn btn-secondary btn-sm" onClick={() => setBrowseSet(null)}>✕</button>
+            </div>
+            {browseLoading && <div className="spinner" />}
+            {browseError && <div className="alert alert-danger">{browseError}</div>}
+            {browseCards && (
+              <div className="table-scroll">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Word</th>
+                      <th>POS</th>
+                      <th>Definition (L2)</th>
+                      <th>Definition (L1)</th>
+                      <th>Example</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {browseCards.length === 0 && (
+                      <tr><td colSpan={5} className="table-empty">No cards in this set.</td></tr>
+                    )}
+                    {browseCards.map((c) => (
+                      <tr key={c.id}>
+                        <td style={{ fontWeight: 600 }}>{c.word}</td>
+                        <td style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{c.pos ?? '—'}</td>
+                        <td>{c.definitionL2 ?? '—'}</td>
+                        <td style={{ color: 'var(--color-text-muted)' }}>{c.definitionL1 ?? '—'}</td>
+                        <td style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{c.exampleSentence ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

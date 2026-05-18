@@ -339,25 +339,39 @@ export default function StudentStatsPage() {
 
 function SimpleBarChart({ data, color = 'var(--color-accent)' }: { data: { label: string; value: number }[]; color?: string }) {
   const max = Math.max(...data.map((d) => d.value), 1)
+  const showLabel = (i: number) => i % Math.ceil(data.length / 8) === 0
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 100, overflowX: 'auto', paddingBottom: 20 }}>
-      {data.map((d, i) => (
-        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '0 0 auto', minWidth: 14 }}>
-          <div
-            title={`${d.label}: ${d.value}`}
-            style={{
-              width: 12, height: Math.max(2, (d.value / max) * 80),
-              background: color, borderRadius: '2px 2px 0 0',
-              opacity: d.value === 0 ? 0.2 : 1,
-            }}
-          />
-          {i % Math.ceil(data.length / 8) === 0 && (
-            <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 2, transform: 'rotate(-45deg)', transformOrigin: 'left top', whiteSpace: 'nowrap' }}>
-              {d.label}
-            </div>
-          )}
-        </div>
-      ))}
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 2, minWidth: 'max-content', paddingBottom: 52 }}>
+        {data.map((d, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', flex: '0 0 auto', width: 14, height: 100, position: 'relative' }}>
+            <div
+              title={`${d.label}: ${d.value}`}
+              style={{
+                width: 12,
+                height: Math.max(2, (d.value / max) * 100),
+                background: color,
+                borderRadius: '2px 2px 0 0',
+                opacity: d.value === 0 ? 0.2 : 1,
+              }}
+            />
+            {showLabel(i) && (
+              <div style={{
+                position: 'absolute',
+                top: 104,
+                left: 0,
+                fontSize: 9,
+                color: 'var(--color-text-muted)',
+                transform: 'rotate(-45deg)',
+                transformOrigin: 'left top',
+                whiteSpace: 'nowrap',
+              }}>
+                {d.label}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

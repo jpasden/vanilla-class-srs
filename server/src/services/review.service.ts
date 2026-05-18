@@ -302,9 +302,7 @@ export async function gradeCard(
     },
   })
 
-  // Lapse re-queue logic — spec §24 decision 6:
-  // If grade=1 (Again), re-queue ONCE per session.
-  // Detect if this card was already re-queued this session (has a prior Again event in this session).
+  // Lapse re-queue logic: if grade=1 (Again), re-queue up to 3 times per card per session.
   let requeue = false
   if (grade === 1) {
     const priorAgainCount = await prisma.reviewEvent.count({
@@ -312,11 +310,10 @@ export async function gradeCard(
         sessionId,
         cardInstanceId: instanceId,
         grade: 1,
-        NOT: { id: event.id }, // exclude the event we just wrote (by ID, not timestamp)
+        NOT: { id: event.id },
       },
     })
-    // priorAgainCount === 0 means this is the FIRST Again for this card this session → re-queue
-    requeue = priorAgainCount === 0
+    requeue = priorAgainCount < 3
   }
 
   return {

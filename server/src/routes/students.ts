@@ -216,11 +216,36 @@ router.get('/deck/optional', async (req: Request, res: Response) => {
     })
   ).map((i) => i.card.cardSetId)
 
-  const available = optionalAssignments
-    .filter((a) => !optedInCardSetIds.includes(a.cardSetId))
-    .map((a) => a.cardSet)
+  res.json(optionalAssignments.map((a) => ({
+    ...a.cardSet,
+    added: optedInCardSetIds.includes(a.cardSetId),
+  })))
+})
 
-  res.json(available)
+// GET /api/students/deck/optional/:cardSetId/cards  — browse cards before opting in
+router.get('/deck/optional/:cardSetId/cards', async (req: Request, res: Response) => {
+  const student = await getStudent(req.user!.sub)
+  if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
+
+  const enrollmentId = req.query.enrollmentId as string | undefined
+  if (!enrollmentId) { res.status(400).json({ error: 'enrollmentId query param required' }); return }
+
+  const enrollment = await getEnrollmentAndDeck(student.id, enrollmentId)
+  if (!enrollment) { res.status(404).json({ error: 'Enrollment not found' }); return }
+
+  // Verify this CardSet is actually assigned as OPTIONAL to the student's class
+  const assignment = await prisma.assignment.findFirst({
+    where: { classId: enrollment.classId, cardSetId: req.params.cardSetId, type: 'OPTIONAL' },
+  })
+  if (!assignment) { res.status(404).json({ error: 'CardSet not found' }); return }
+
+  const cards = await prisma.card.findMany({
+    where: { cardSetId: req.params.cardSetId },
+    select: { id: true, word: true, pos: true, definitionL2: true, definitionL1: true, exampleSentence: true },
+    orderBy: { word: 'asc' },
+  })
+
+  res.json(cards)
 })
 
 // POST /api/students/deck/optional/:cardSetId  — opt in

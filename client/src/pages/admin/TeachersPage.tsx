@@ -128,7 +128,8 @@ export default function AdminTeachersPage() {
                       <span className="badge badge-gray">{m.subjectGrade.name}</span>
                       <button
                         onClick={() => handleRemoveSg(t, m.subjectGrade.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)', fontSize: 12, marginLeft: 2 }}
+                        className="badge btn-danger"
+                        style={{ border: 'none', cursor: 'pointer', fontWeight: 'bold', marginLeft: 2 }}
                         title="Remove"
                       >✕</button>
                     </span>

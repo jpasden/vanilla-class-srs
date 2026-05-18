@@ -19,7 +19,7 @@ interface Enrollment {
 
 export default function EnrollmentPickerPage() {
   const { data: enrollments, loading, error } = useApi<Enrollment[]>(() => api.get('/students/enrollments'))
-  const { setActive } = useEnrollment()
+  const { setActive, setEnrollmentCount } = useEnrollment()
   const navigate = useNavigate()
 
   const pick = (enr: Enrollment) => {
@@ -28,13 +28,13 @@ export default function EnrollmentPickerPage() {
       className: enr.class.name,
       subjectGradeName: enr.class.subjectGrade.name,
     })
-    navigate('/student/deck')
+    navigate('/student/review')
   }
 
-  // Auto-pick if only one enrollment
   useEffect(() => {
-    if (enrollments?.length === 1) {
-      pick(enrollments[0])
+    if (enrollments) {
+      setEnrollmentCount(enrollments.length)
+      if (enrollments.length === 1) pick(enrollments[0])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enrollments])

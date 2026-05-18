@@ -336,18 +336,20 @@ button, input, select, textarea {
 
 .app-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .app-sidebar {
   width: 220px;
   flex-shrink: 0;
+  overflow-y: auto;
 }
 
 .app-main {
   flex: 1;
   padding: 28px 32px;
-  overflow: auto;
+  overflow-y: auto;
   min-width: 0;
 }
 

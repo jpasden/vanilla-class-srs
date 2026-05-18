@@ -42,12 +42,15 @@ export default function ReviewPage() {
   const [startTime, setStartTime] = useState<number>(0)
   const [completedCount, setCompletedCount] = useState(0)
   const [sessionResult, setSessionResult] = useState<{ cardsReviewed: number; accuracyRate: number | null } | null>(null)
+  // Cards graded < 3 this session, for "Keep Studying" re-drill
+  const [weakCards, setWeakCards] = useState<SessionCard[]>([])
 
   if (!active) { navigate('/student'); return null }
 
   const startSession = async () => {
     setPhase('loading')
     setError(null)
+    setWeakCards([])
     try {
       const data = await api.post<SessionResponse>('/students/review/start', { enrollmentId: active.enrollmentId })
       if (data.cards.length === 0) {
@@ -67,6 +70,23 @@ export default function ReviewPage() {
     }
   }
 
+  const keepStudying = () => {
+    if (weakCards.length === 0) return
+    const fakeSession: SessionResponse = {
+      sessionId: session?.sessionId ?? '',
+      cards: weakCards,
+      totalCards: weakCards.length,
+    }
+    setSession(fakeSession)
+    setCardIndex(0)
+    setFlipped(false)
+    setCompletedCount(0)
+    setSessionResult(null)
+    setWeakCards([])
+    setStartTime(Date.now())
+    setPhase('reviewing')
+  }
+
   const gradeCard = async (grade: number) => {
     if (!session || grading) return
     setGrading(true)
@@ -80,6 +100,14 @@ export default function ReviewPage() {
       })
 
       const newCompleted = completedCount + 1
+
+      // Track weak cards (grade < 3) for "Keep Studying" — deduplicated by instanceId
+      if (grade < 3) {
+        const card = session.cards[cardIndex]
+        setWeakCards((prev) =>
+          prev.some((c) => c.instanceId === card.instanceId) ? prev : [...prev, card]
+        )
+      }
 
       // Build the new cards array synchronously so all derived values use the same snapshot
       const newCards = result.requeue
@@ -151,7 +179,14 @@ export default function ReviewPage() {
           <p style={{ color: 'var(--color-text-muted)', marginBottom: 24 }}>
             No cards are due right now. Come back later!
           </p>
-          <button className="btn btn-secondary" onClick={() => navigate('/student/stats')}>View Stats</button>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {weakCards.length > 0 && (
+              <button className="btn btn-primary" onClick={keepStudying}>
+                Keep Studying ({weakCards.length} weak {weakCards.length === 1 ? 'card' : 'cards'})
+              </button>
+            )}
+            <button className="btn btn-secondary" onClick={() => navigate('/student/stats')}>View Stats</button>
+          </div>
         </div>
       )}
 
@@ -263,7 +298,12 @@ export default function ReviewPage() {
             </div>
           )}
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={startSession}>Study Again</button>
+            {weakCards.length > 0 && (
+              <button className="btn btn-primary" onClick={keepStudying}>
+                Keep Studying ({weakCards.length} weak {weakCards.length === 1 ? 'card' : 'cards'})
+              </button>
+            )}
+            <button className="btn btn-secondary" onClick={startSession}>New Session</button>
             <button className="btn btn-secondary" onClick={() => navigate('/student/stats')}>View Stats</button>
           </div>
         </div>
