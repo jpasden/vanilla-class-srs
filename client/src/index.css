@@ -57,7 +57,8 @@
   --color-surface:  #FAFAF8;
   --color-primary:  var(--color-accent);
   --color-primary-hover: var(--color-accent-hover);
-  --color-danger:   var(--color-accent);   /* strawberry for destructive */
+  --color-danger:       #C45C3A;           /* warm terracotta, distinct from primary */
+  --color-danger-hover: #A84D2F;
   --color-success:  var(--color-accent-alt);
   --color-warning:  #D4900A;
   --color-warning-text: #7A4F00;
@@ -96,7 +97,7 @@
   --shadow:    0 4px 20px rgba(74, 55, 40, 0.1);
   --shadow-sm: 0 2px 8px rgba(74, 55, 40, 0.08);
 
-  font-size: 18px;
+  font-size: 16px;
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
@@ -142,8 +143,10 @@ button, input, select, textarea {
 
 .btn-primary { background: var(--color-accent); color: var(--color-vanilla); }
 .btn-primary:hover:not(:disabled) { background: var(--color-accent-hover); }
-.btn-danger { background: var(--color-accent); color: var(--color-vanilla); }
-.btn-danger:hover:not(:disabled) { background: var(--color-accent-hover); }
+.btn-danger { background: var(--color-danger); color: var(--color-vanilla); }
+.btn-danger:hover:not(:disabled) { background: var(--color-danger-hover); }
+.btn-ghost { background: transparent; border: 1.5px solid var(--color-accent); color: var(--color-accent); }
+.btn-ghost:hover:not(:disabled) { background: rgba(232, 105, 138, 0.08); }
 .btn-secondary { background: var(--color-mango); color: var(--color-text); }
 .btn-secondary:hover:not(:disabled) { background: var(--color-peach); }
 .btn-sm { padding: 4px 14px; font-size: var(--text-xs); }
@@ -280,6 +283,11 @@ button, input, select, textarea {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 8px 40px rgba(74, 55, 40, 0.2);
+  animation: modal-in 0.15s ease-out;
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
 }
 .modal-title {
   font-family: var(--font-heading);
@@ -331,6 +339,26 @@ button, input, select, textarea {
 
 .progress-bar { height: 8px; background: var(--color-border); border-radius: var(--radius-pill); overflow: hidden; margin-top: 4px; }
 .progress-fill { height: 100%; border-radius: var(--radius-pill); background: var(--color-accent); transition: width 0.3s; }
+
+/* ── Sidebar nav links ────────────────────────────────────────────────────── */
+
+.sidebar-nav-link {
+  display: block;
+  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+  color: var(--color-sidebar-muted);
+  background: transparent;
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: color 0.15s, background 0.15s;
+}
+.sidebar-nav-link:hover:not(.active) { color: var(--color-sidebar-text); }
+.sidebar-nav-link.active {
+  color: var(--color-vanilla);
+  background: var(--color-sidebar-active-bg);
+}
 
 /* ── Responsive app layout ────────────────────────────────────────────────── */
 

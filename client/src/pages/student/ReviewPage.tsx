@@ -27,7 +27,6 @@ const GRADE_COLORS: Record<number, string> = {
   1: 'var(--color-danger)',
   2: 'var(--color-warning)',
   3: 'var(--color-accent-alt)',
-  4: 'var(--color-accent-alt)',
 }
 
 export default function ReviewPage() {
@@ -42,6 +41,7 @@ export default function ReviewPage() {
   const [startTime, setStartTime] = useState<number>(0)
   const [completedCount, setCompletedCount] = useState(0)
   const [sessionResult, setSessionResult] = useState<{ cardsReviewed: number; accuracyRate: number | null } | null>(null)
+  const [confirmFinish, setConfirmFinish] = useState(false)
   // Cards graded < 3 this session, for "Keep Studying" re-drill
   const [weakCards, setWeakCards] = useState<SessionCard[]>([])
 
@@ -145,10 +145,7 @@ export default function ReviewPage() {
     }
   }, [])
 
-  const handleFinishEarly = async () => {
-    if (!session || !confirm('End session now? Your progress so far will be saved.')) return
-    await finishSession(session.sessionId)
-  }
+  const handleFinishEarly = () => setConfirmFinish(true)
 
   const currentCard = session?.cards[cardIndex]
 
@@ -158,8 +155,8 @@ export default function ReviewPage() {
       {phase === 'idle' && (
         <div style={{ textAlign: 'center', padding: '48px 16px' }}>
           <img src="/Vanilla-deck.png" alt="" style={{ width: 96, height: 96, objectFit: 'contain', marginBottom: 16 }} />
-          <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 12 }}>Study Session</h1>
-          <p style={{ color: 'var(--color-text-muted)', marginBottom: 32, fontSize: 15 }}>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 12 }}>Study Session</h1>
+          <p style={{ color: 'var(--color-text-muted)', marginBottom: 32, fontSize: 'var(--text-base)' }}>
             Class: <strong>{active.className}</strong>
           </p>
           {error && <div className="alert alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
@@ -175,7 +172,7 @@ export default function ReviewPage() {
         <div style={{ textAlign: 'center', padding: '48px 16px' }}>
           <img src="/Vanilla-deck.png" alt="" style={{ width: 96, height: 96, objectFit: 'contain', marginBottom: 16 }} />
           <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>All caught up!</h2>
+          <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 8 }}>All caught up!</h2>
           <p style={{ color: 'var(--color-text-muted)', marginBottom: 24 }}>
             No cards are due right now. Come back later!
           </p>
@@ -194,12 +191,20 @@ export default function ReviewPage() {
       {phase === 'reviewing' && currentCard && (
         <div>
           {/* Progress */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, fontSize: 13, color: 'var(--color-text-muted)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
             <span>{cardIndex + 1} / {session!.cards.length}</span>
-            <button className="btn btn-secondary btn-sm" onClick={handleFinishEarly}>Finish Early</button>
+            {confirmFinish ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>End session?</span>
+                <button className="btn btn-danger btn-sm" onClick={async () => { setConfirmFinish(false); await finishSession(session!.sessionId) }}>End</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setConfirmFinish(false)}>Cancel</button>
+              </div>
+            ) : (
+              <button className="btn btn-secondary btn-sm" onClick={handleFinishEarly}>Finish Early</button>
+            )}
           </div>
           <div className="progress-bar" style={{ marginBottom: 24 }}>
-            <div className="progress-fill" style={{ width: `${(cardIndex / session!.cards.length) * 100}%` }} />
+            <div className="progress-fill" style={{ width: `${((cardIndex + 1) / session!.cards.length) * 100}%` }} />
           </div>
 
           {/* Card */}
@@ -216,27 +221,27 @@ export default function ReviewPage() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              boxShadow: 'var(--shadow-sm)',
             }}
             onClick={() => !flipped && setFlipped(true)}
           >
             {/* Front */}
             <div style={{ fontSize: 'clamp(24px, 7vw, 36px)', fontWeight: 700, marginBottom: 8, wordBreak: 'break-word' }}>{currentCard.word}</div>
             {currentCard.pos && (
-              <div style={{ fontSize: 14, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{currentCard.pos}</div>
+              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{currentCard.pos}</div>
             )}
 
             {/* Back */}
             {flipped && (
               <div style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 20, width: '100%' }}>
                 {currentCard.definitionL2 && (
-                  <p style={{ fontSize: 17, marginBottom: 8 }}>{currentCard.definitionL2}</p>
+                  <p style={{ fontSize: 'var(--text-lg)', marginBottom: 8 }}>{currentCard.definitionL2}</p>
                 )}
                 {currentCard.definitionL1 && (
-                  <p style={{ fontSize: 15, color: 'var(--color-text-muted)', marginBottom: 8 }}>{currentCard.definitionL1}</p>
+                  <p style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-muted)', marginBottom: 8 }}>{currentCard.definitionL1}</p>
                 )}
                 {currentCard.exampleSentence && (
-                  <p style={{ fontSize: 14, fontStyle: 'italic', color: 'var(--color-text-muted)', marginTop: 12 }}>
+                  <p style={{ fontSize: 'var(--text-sm)', fontStyle: 'italic', color: 'var(--color-text-muted)', marginTop: 12 }}>
                     "{currentCard.exampleSentence}"
                   </p>
                 )}
@@ -244,7 +249,7 @@ export default function ReviewPage() {
             )}
 
             {!flipped && (
-              <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 24 }}>Tap to reveal</p>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 24 }}>Tap to reveal</p>
             )}
           </div>
 
@@ -255,10 +260,17 @@ export default function ReviewPage() {
                 <button
                   key={g}
                   className="btn"
-                  style={{
+                  style={g === 4 ? {
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-accent-alt)',
+                    border: '2px solid var(--color-accent-alt)',
+                    fontSize: 'var(--text-base)',
+                    padding: '12px 8px',
+                    justifyContent: 'center',
+                  } : {
                     background: GRADE_COLORS[g],
                     color: 'var(--color-vanilla)',
-                    fontSize: 15,
+                    fontSize: 'var(--text-base)',
                     padding: '14px 8px',
                     justifyContent: 'center',
                   }}
@@ -280,7 +292,7 @@ export default function ReviewPage() {
         <div style={{ textAlign: 'center', padding: '48px 16px' }}>
           <img src="/Vanilla-deck.png" alt="" style={{ width: 96, height: 96, objectFit: 'contain', marginBottom: 16 }} />
           <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Session Complete</h2>
+          <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 8 }}>Session Complete</h2>
           {sessionResult && (
             <div style={{ display: 'flex', gap: 24, justifyContent: 'center', marginBottom: 24 }}>
               <div className="stat-block">

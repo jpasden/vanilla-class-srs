@@ -61,10 +61,10 @@ function StreakHeatmap({ daily }: { daily: { date: string; cardsReviewed: number
     if (!date) return 'transparent'
     if (cards === 0) return 'var(--color-border)'
     const intensity = Math.min(cards / maxCards, 1)
-    if (intensity < 0.25) return '#C8E6C9'
-    if (intensity < 0.5) return '#81C784'
-    if (intensity < 0.75) return '#4CAF50'
-    return '#2E7D32'
+    if (intensity < 0.25) return 'rgba(107, 175, 146, 0.25)'
+    if (intensity < 0.5)  return 'rgba(107, 175, 146, 0.5)'
+    if (intensity < 0.75) return 'rgba(107, 175, 146, 0.75)'
+    return 'var(--color-accent-alt)'
   }
 
   return (
@@ -95,7 +95,7 @@ function StreakHeatmap({ daily }: { daily: { date: string; cardsReviewed: number
       </div>
       <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 6 }}>
         Less&nbsp;
-        {['var(--color-border)', '#C8E6C9', '#81C784', '#4CAF50', '#2E7D32'].map((c, i) => (
+        {['var(--color-border)', 'rgba(107,175,146,0.25)', 'rgba(107,175,146,0.5)', 'rgba(107,175,146,0.75)', 'var(--color-accent-alt)'].map((c, i) => (
           <span key={i} style={{ display: 'inline-block', width: 12, height: 12, background: c, borderRadius: 2, margin: '0 1px', verticalAlign: 'middle' }} />
         ))}
         &nbsp;More
@@ -175,7 +175,7 @@ export default function StudentStatsPage() {
 
               {/* Deck breakdown */}
               <div className="card" style={{ marginBottom: 20 }}>
-                <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Deck Breakdown</h2>
+                <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 16 }}>Deck Breakdown</h2>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
                   {[
                     { state: 'NEW', color: 'var(--color-text-muted)' },
@@ -184,17 +184,17 @@ export default function StudentStatsPage() {
                     { state: 'RELEARNING', color: 'var(--color-accent)' },
                   ].map(({ state, color }) => (
                     <div key={state} style={{ textAlign: 'center', minWidth: 70 }}>
-                      <div style={{ fontSize: 22, fontWeight: 700, color }}>{bd?.[state as keyof typeof bd] ?? 0}</div>
-                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>{state}</div>
+                      <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color }}>{bd?.[state as keyof typeof bd] ?? 0}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>{state}</div>
                     </div>
                   ))}
                   <div style={{ textAlign: 'center', minWidth: 70 }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-primary)' }}>{bd?.dueToday ?? 0}</div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Due Today</div>
+                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-primary)' }}>{bd?.dueToday ?? 0}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Due Today</div>
                   </div>
                   <div style={{ textAlign: 'center', minWidth: 70 }}>
-                    <div style={{ fontSize: 22, fontWeight: 700 }}>{totalCards}</div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Total</div>
+                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700 }}>{totalCards}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Total</div>
                   </div>
                 </div>
               </div>
@@ -202,8 +202,8 @@ export default function StudentStatsPage() {
               {/* Weekly goal */}
               {summary.weeklyGoal && (
                 <div className="card" style={{ marginBottom: 20 }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Weekly Goal</h2>
-                  <p style={{ fontSize: 14, marginBottom: 8 }}>
+                  <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 12 }}>Weekly Goal</h2>
+                  <p style={{ fontSize: 'var(--text-sm)', marginBottom: 8 }}>
                     {summary.weeklyGoal.sessionsCompleted} / {summary.weeklyGoal.sessionsRequired} sessions completed
                     &nbsp;·&nbsp; {summary.weeklyGoal.daysRemaining} day{summary.weeklyGoal.daysRemaining !== 1 ? 's' : ''} remaining
                   </p>
@@ -220,7 +220,7 @@ export default function StudentStatsPage() {
                       }}
                     />
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 6 }}>
                     Min {summary.weeklyGoal.minCardsPerSession} cards/session · {summary.weeklyGoal.periodDays}-day period
                   </p>
                   {/* In-app alert — §20 */}
@@ -237,7 +237,7 @@ export default function StudentStatsPage() {
               {/* Study streak heatmap — §21.2 */}
               {daily && daily.length > 0 && (
                 <div className="card" style={{ marginBottom: 20 }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Study Streak Calendar</h2>
+                  <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 12 }}>Study Streak Calendar</h2>
                   <StreakHeatmap daily={daily} />
                 </div>
               )}
@@ -245,11 +245,11 @@ export default function StudentStatsPage() {
               {/* Due forecast */}
               {forecast && (
                 <div className="card" style={{ marginBottom: 20 }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Due Card Forecast</h2>
+                  <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 12 }}>Due Card Forecast</h2>
                   <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
                     {([7, 14, 30] as const).map((n) => (
                       <div key={n} className="stat-block">
-                        <div className="stat-value" style={{ fontSize: 20 }}>
+                        <div className="stat-value" style={{ fontSize: 'var(--text-xl)' }}>
                           {forecast.cumulative[`days${n}` as 'days7' | 'days14' | 'days30']}
                         </div>
                         <div className="stat-label">{n} days</div>
@@ -263,7 +263,7 @@ export default function StudentStatsPage() {
               {/* Daily activity */}
               {daily && (
                 <div className="card" style={{ marginBottom: 20 }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Cards Reviewed Per Day</h2>
+                  <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 12 }}>Cards Reviewed Per Day</h2>
                   <SimpleBarChart data={daily.slice(-30).map((d) => ({ label: d.date.slice(5), value: d.cardsReviewed }))} />
                 </div>
               )}
@@ -271,7 +271,7 @@ export default function StudentStatsPage() {
               {/* Deck growth — §21.2 */}
               {growth && (
                 <div className="card">
-                  <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>New Cards Added Per Day</h2>
+                  <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 12 }}>New Cards Added Per Day</h2>
                   <SimpleBarChart data={growth.map((d) => ({ label: d.date.slice(5), value: d.newCards }))} color="var(--color-accent)" />
                 </div>
               )}
@@ -284,14 +284,14 @@ export default function StudentStatsPage() {
       {tab === 'accuracy' && (
         <div>
           <div className="card">
-            <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Rolling 7-Day Accuracy Rate</h2>
-            <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 16 }}>
+            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 4 }}>Rolling 7-Day Accuracy Rate</h2>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginBottom: 16 }}>
               Each point shows accuracy across the 7 days ending on that date.
             </p>
             {accuracy && <AccuracyLineChart data={accuracy} />}
             {accuracy && (
               <div className="table-scroll">
-              <table className="table" style={{ marginTop: 16, fontSize: 13 }}>
+              <table className="table" style={{ marginTop: 16, fontSize: 'var(--text-sm)' }}>
                 <thead><tr><th>Date</th><th>7-Day Accuracy</th></tr></thead>
                 <tbody>
                   {[...accuracy].reverse().map((d, i) => (

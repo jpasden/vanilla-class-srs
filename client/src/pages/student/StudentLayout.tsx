@@ -26,18 +26,18 @@ export default function StudentLayout() {
         <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid var(--color-sidebar-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
             <img src="/Vanilla-card.png" alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} />
-            <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 22, color: 'var(--color-sidebar-text)' }}>Vanilla SRS</div>
+            <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 'var(--text-2xl)', color: 'var(--color-sidebar-text)' }}>Vanilla SRS</div>
           </div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-sidebar-text)' }}>{user?.name}</div>
-          <div style={{ fontSize: 11, color: 'var(--color-sidebar-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 2 }}>Student</div>
+          <div style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-sidebar-text)' }}>{user?.name}</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-sidebar-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 2 }}>Student</div>
         </div>
         {active && (
-          <div style={{ padding: '6px 16px', background: 'var(--color-sidebar-well)', fontSize: 12 }}>
+          <div style={{ padding: '6px 16px', background: 'var(--color-sidebar-well)', fontSize: 'var(--text-xs)' }}>
             <span style={{ color: 'var(--color-sidebar-muted)' }}>Class: </span>
             <span style={{ color: 'var(--color-sidebar-text)', fontWeight: 500 }}>{active.className}</span>
             {enrollmentCount > 1 && (
               <button
-                style={{ background: 'none', border: 'none', color: 'var(--color-accent)', cursor: 'pointer', fontSize: 11, padding: '0 0 0 8px', textDecoration: 'underline' }}
+                style={{ background: 'none', border: 'none', color: 'var(--color-accent)', cursor: 'pointer', fontSize: 'var(--text-xs)', padding: '0 0 0 8px', textDecoration: 'underline' }}
                 onClick={() => { setActive(null); navigate('/student') }}
               >
                 Switch
@@ -47,20 +47,7 @@ export default function StudentLayout() {
         )}
         <div style={{ display: 'flex', flexDirection: 'column', padding: '4px 8px', gap: 2 }}>
           {active && navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              style={({ isActive }) => ({
-                display: 'block',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-pill)',
-                color: isActive ? 'var(--color-vanilla)' : 'var(--color-sidebar-muted)',
-                background: isActive ? 'var(--color-sidebar-active-bg)' : 'transparent',
-                textDecoration: 'none',
-                fontFamily: 'var(--font-heading)',
-                fontSize: 14,
-              })}
-            >
+            <NavLink key={item.to} to={item.to} className="sidebar-nav-link">
               {item.label}
             </NavLink>
           ))}
