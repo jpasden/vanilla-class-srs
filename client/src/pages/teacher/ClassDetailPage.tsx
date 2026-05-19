@@ -67,6 +67,7 @@ export default function TeacherClassDetailPage() {
   const [progressLines, setProgressLines] = useState<ProgressLine[]>([])
   const [progressDone, setProgressDone] = useState(false)
   const [showProgress, setShowProgress] = useState(false)
+  const [resetResult, setResetResult] = useState<{ studentName?: string; tempPassword: string; count?: number } | null>(null)
   const pendingAssignmentId = useRef<string | null>(null)
 
   const handleAddStudent = async (e: FormEvent) => {
@@ -82,6 +83,27 @@ export default function TeacherClassDetailPage() {
       setFormError(e instanceof ApiError ? e.message : 'Failed')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleResetStudentPassword = async (enr: Enrollment) => {
+    if (!confirm(`Reset password for ${enr.student.user.name}? They will need the new temp password to log in.`)) return
+    try {
+      const result = await api.post<{ tempPassword: string }>(`/teachers/classes/${id}/students/${enr.student.id}/reset-password`, {})
+      setResetResult({ studentName: enr.student.user.name, tempPassword: result.tempPassword })
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Failed')
+    }
+  }
+
+  const handleResetAllPasswords = async () => {
+    const count = enrollments?.length ?? 0
+    if (!confirm(`Reset passwords for all ${count} students in this class? They will all need the new temp password to log in.`)) return
+    try {
+      const result = await api.post<{ tempPassword: string; count: number }>(`/teachers/classes/${id}/reset-passwords`, {})
+      setResetResult({ tempPassword: result.tempPassword, count: result.count })
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Failed')
     }
   }
 
@@ -228,13 +250,36 @@ export default function TeacherClassDetailPage() {
               endpoint={`/teachers/classes/${id}/students/import`}
               onSuccess={() => { setShowImportStudents(false); reloadEnrollments() }}
               onClose={() => setShowImportStudents(false)}
-              templateHint='CSV format: email,name — one student per row. Existing users will be enrolled without duplicating their account.'
+              templateHint='CSV format: name,email — one student per row. Existing users will be enrolled without duplicating their account.'
             />
           )}
+          {resetResult && (
+            <Modal title={resetResult.studentName ? 'Password Reset' : 'Class Passwords Reset'} onClose={() => setResetResult(null)}>
+              <div className="alert alert-success" style={{ marginBottom: 16 }}>
+                {resetResult.studentName
+                  ? <><strong>{resetResult.studentName}</strong>'s password has been reset.</>
+                  : <><strong>{resetResult.count}</strong> student{resetResult.count !== 1 ? 's' : ''} reset.</>
+                }
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 4 }}>Temporary password:</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 600, letterSpacing: 1 }}>{resetResult.tempPassword}</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
+                  {resetResult.studentName ? 'This student must' : 'Students must'} change this password on first login.
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-primary" onClick={() => setResetResult(null)}>Done</button>
+              </div>
+            </Modal>
+          )}
           <div className="page-header" style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-primary btn-sm" onClick={() => { setFormError(null); setNewStudentResult(null); setStudentForm({ email: '', name: '' }); setShowAddStudent(true) }}>+ Add Student</button>
               <button className="btn btn-secondary btn-sm" onClick={() => setShowImportStudents(true)}>Import CSV</button>
+              {enrollments && enrollments.length > 0 && (
+                <button className="btn btn-secondary btn-sm" onClick={handleResetAllPasswords}>Reset All Passwords</button>
+              )}
             </div>
           </div>
           <div className="table-scroll">
@@ -247,11 +292,12 @@ export default function TeacherClassDetailPage() {
                   <td>{enr.student.user.name}</td>
                   <td>{enr.student.user.email}</td>
                   <td>{enr.deck?._count.instances ?? 0}</td>
-                  <td>
+                  <td style={{ display: 'flex', gap: 4 }}>
                     <Link
                       to={`/teacher/classes/${id}/students/${enr.student.id}`}
                       className="btn btn-secondary btn-sm"
                     >View Cards</Link>
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleResetStudentPassword(enr)}>Reset Password</button>
                   </td>
                 </tr>
               ))}

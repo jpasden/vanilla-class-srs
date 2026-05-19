@@ -288,7 +288,7 @@ router.post('/teachers', validate(CreateTeacherSchema), async (req: Request, res
     return
   }
 
-  const tempPassword = generateTempPassword()
+  const tempPassword = generateTempPassword(req.body.name)
   const passwordHash = await hashPassword(tempPassword)
 
   const teacher = await prisma.$transaction(async (tx) => {
@@ -564,13 +564,16 @@ const AddStudentSchema = z.object({
 
 // POST /api/admin/classes/:id/students  — single add
 router.post('/classes/:id/students', validate(AddStudentSchema), async (req: Request, res: Response) => {
-  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  const cls = await prisma.class.findUnique({
+    where: { id: p(req, 'id') },
+    include: { teacher: { include: { user: { select: { name: true } } } } },
+  })
   if (!cls || cls.archivedAt) {
     res.status(404).json({ error: 'Class not found' })
     return
   }
 
-  const results = await enrollStudents(prisma, cls.id, [{ email: req.body.email, name: req.body.name }])
+  const results = await enrollStudents(prisma, cls.id, [{ email: req.body.email, name: req.body.name }], cls.teacher.user.name)
   const result = results[0]
 
   if (result.status === 'error') {
@@ -585,7 +588,10 @@ router.post(
   '/classes/:id/students/import',
   upload.single('file'),
   async (req: Request, res: Response) => {
-    const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+    const cls = await prisma.class.findUnique({
+      where: { id: p(req, 'id') },
+      include: { teacher: { include: { user: { select: { name: true } } } } },
+    })
     if (!cls || cls.archivedAt) {
       res.status(404).json({ error: 'Class not found' })
       return
@@ -614,7 +620,7 @@ router.post(
       return
     }
 
-    const results = await enrollStudents(prisma, cls.id, rows)
+    const results = await enrollStudents(prisma, cls.id, rows, cls.teacher.user.name)
     res.json({ results })
   },
 )

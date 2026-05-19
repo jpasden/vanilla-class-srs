@@ -79,23 +79,34 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
       {result?.created !== undefined && (
         <div className="alert alert-success">Imported {result.created} card(s) successfully.</div>
       )}
-      {result?.results && (
-        <div>
-          <p style={{ fontSize: 13, marginBottom: 8 }}>Enrollment results:</p>
-          <table className="table" style={{ fontSize: 13 }}>
-            <thead><tr><th>Email</th><th>Status</th><th>Temp Password</th></tr></thead>
-            <tbody>
-              {result.results.map((r, i) => (
-                <tr key={i}>
-                  <td>{r.email ?? '—'}</td>
-                  <td><span className={`badge badge-${r.status === 'enrolled' || r.status === 'already_enrolled' ? 'green' : 'red'}`}>{r.status}</span></td>
-                  <td style={{ fontFamily: 'monospace' }}>{r.tempPassword ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {result?.results && (() => {
+        const sharedPassword = result.results.find((r) => r.tempPassword)?.tempPassword
+        return (
+          <div>
+            {sharedPassword && (
+              <div className="alert alert-success" style={{ marginBottom: 12 }}>
+                <strong>Temporary password for new students:</strong>{' '}
+                <span style={{ fontFamily: 'monospace', fontSize: 15 }}>{sharedPassword}</span>
+                <div style={{ fontSize: 12, marginTop: 4, color: 'var(--color-text-muted)' }}>
+                  All new students use this password. Students must change it on first login.
+                </div>
+              </div>
+            )}
+            <p style={{ fontSize: 13, marginBottom: 8 }}>Enrollment results:</p>
+            <table className="table" style={{ fontSize: 13 }}>
+              <thead><tr><th>Email</th><th>Status</th></tr></thead>
+              <tbody>
+                {result.results.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.email ?? '—'}</td>
+                    <td><span className={`badge badge-${r.status === 'enrolled' || r.status === 'already_enrolled' ? 'green' : 'red'}`}>{r.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      })()}
       <div className="modal-footer">
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button

@@ -7,6 +7,7 @@ import prisma from '../lib/prisma'
 import { requireAuth, requireTeacher } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { enrollStudents, validateEnrollRows } from '../services/enrollment.service'
+import { generateTempPassword, hashPassword } from '../services/auth.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
 import teacherStatsRouter from './stats.teacher'
 
@@ -164,13 +165,16 @@ router.post('/classes/:id/students', validate(AddStudentSchema), async (req: Req
     res.status(403).json({ error: 'No teacher profile found' })
     return
   }
-  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  const [cls, teacherUser] = await Promise.all([
+    prisma.class.findUnique({ where: { id: p(req, 'id') } }),
+    prisma.user.findUnique({ where: { id: req.user!.sub }, select: { name: true } }),
+  ])
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' })
     return
   }
 
-  const results = await enrollStudents(prisma, cls.id, [{ email: req.body.email, name: req.body.name }])
+  const results = await enrollStudents(prisma, cls.id, [{ email: req.body.email, name: req.body.name }], teacherUser?.name ?? '')
   const result = results[0]
 
   if (result.status === 'error') {
@@ -190,7 +194,10 @@ router.post(
       res.status(403).json({ error: 'No teacher profile found' })
       return
     }
-    const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+    const [cls, teacherUser] = await Promise.all([
+      prisma.class.findUnique({ where: { id: p(req, 'id') } }),
+      prisma.user.findUnique({ where: { id: req.user!.sub }, select: { name: true } }),
+    ])
     if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
       res.status(404).json({ error: 'Class not found' })
       return
@@ -219,10 +226,67 @@ router.post(
       return
     }
 
-    const results = await enrollStudents(prisma, cls.id, rows)
+    const results = await enrollStudents(prisma, cls.id, rows, teacherUser?.name ?? '')
     res.json({ results })
   },
 )
+
+// POST /api/teachers/classes/:id/students/:studentId/reset-password
+router.post('/classes/:id/students/:studentId/reset-password', async (req: Request, res: Response) => {
+  const teacher = await getTeacher(req.user!.sub)
+  if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
+
+  const [cls, teacherUser] = await Promise.all([
+    prisma.class.findUnique({ where: { id: p(req, 'id') } }),
+    prisma.user.findUnique({ where: { id: req.user!.sub }, select: { name: true } }),
+  ])
+  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+    res.status(404).json({ error: 'Class not found' }); return
+  }
+
+  const enrollment = await prisma.enrollment.findFirst({
+    where: { classId: cls.id, student: { id: p(req, 'studentId') } },
+    include: { student: { include: { user: { select: { id: true } } } } },
+  })
+  if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
+
+  const tempPassword = generateTempPassword(teacherUser?.name ?? '')
+  const passwordHash = await hashPassword(tempPassword)
+  await prisma.user.update({
+    where: { id: enrollment.student.user.id },
+    data: { passwordHash, mustChangePassword: true },
+  })
+  res.json({ tempPassword })
+})
+
+// POST /api/teachers/classes/:id/reset-passwords  — reset all students in class
+router.post('/classes/:id/reset-passwords', async (req: Request, res: Response) => {
+  const teacher = await getTeacher(req.user!.sub)
+  if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
+
+  const [cls, teacherUser] = await Promise.all([
+    prisma.class.findUnique({ where: { id: p(req, 'id') } }),
+    prisma.user.findUnique({ where: { id: req.user!.sub }, select: { name: true } }),
+  ])
+  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+    res.status(404).json({ error: 'Class not found' }); return
+  }
+
+  const tempPassword = generateTempPassword(teacherUser?.name ?? '')
+  const passwordHash = await hashPassword(tempPassword)
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: { classId: cls.id },
+    include: { student: { include: { user: { select: { id: true } } } } },
+  })
+
+  await prisma.user.updateMany({
+    where: { id: { in: enrollments.map((e) => e.student.user.id) } },
+    data: { passwordHash, mustChangePassword: true },
+  })
+
+  res.json({ tempPassword, count: enrollments.length })
+})
 
 // GET /api/teachers/classes/:id/students  — list enrolled students
 router.get('/classes/:id/students', async (req: Request, res: Response) => {

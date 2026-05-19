@@ -72,9 +72,11 @@ export function comparePassword(plain: string, hash: string): Promise<boolean> {
   return bcrypt.compare(plain, hash)
 }
 
-export function generateTempPassword(): string {
-  // 12-char alphanumeric — readable enough for teachers to hand out
-  return crypto.randomBytes(9).toString('base64url').slice(0, 12)
+export function generateTempPassword(teacherLastName: string, date?: Date): string {
+  const d = date ?? new Date()
+  const dateStr = d.toISOString().slice(0, 10).replace(/-/g, '')
+  const lastName = teacherLastName.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+  return `${dateStr}${lastName}`
 }
 
 // ─── Password reset tokens ───────────────────────────────────────────────────
