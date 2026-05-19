@@ -15,6 +15,7 @@ import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
 
 const router = Router({ mergeParams: true })
+const p = (req: Request, key: string) => req.params[key] as string
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ router.get('/', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' }); return
   }

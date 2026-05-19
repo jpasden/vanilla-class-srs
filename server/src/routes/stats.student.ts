@@ -17,6 +17,7 @@ import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
 
 const router = Router()
+const p = (req: Request, key: string) => req.params[key] as string
 
 // ── Helper: resolve student from JWT ─────────────────────────────────────────
 
@@ -392,7 +393,7 @@ router.get('/deck/cards/:instanceId/history', async (req: Request, res: Response
 
   // Verify the instance belongs to this deck
   const instance = await prisma.cardInstance.findUnique({
-    where: { id: req.params.instanceId },
+    where: { id: p(req, 'instanceId') },
     include: { card: { select: { word: true, pos: true } } },
   })
   if (!instance || instance.deckId !== enrollment.deck.id) {

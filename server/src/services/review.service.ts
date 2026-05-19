@@ -120,7 +120,7 @@ export async function startSession(
     return { error: 'Deck not found', status: 404 }
   }
   const deck = enrollment.deck
-  const params = deck.fsrsParams as FSRSParams
+  const params = deck.fsrsParams as unknown as FSRSParams
 
   // Close any open (abandoned) session — spec §24 decision 3
   const openSession = await prisma.reviewSession.findFirst({
@@ -322,7 +322,7 @@ export async function gradeCard(
     return { error: 'Card instance not found', status: 404 }
   }
 
-  const params = session.deck.fsrsParams as FSRSParams
+  const params = session.deck.fsrsParams as unknown as FSRSParams
 
   // Apply FSRS scheduling
   const fsrsResult = schedule(

@@ -17,6 +17,8 @@ async function getStudent(userId: string) {
   return prisma.student.findUnique({ where: { userId } })
 }
 
+const p = (req: Request, key: string) => req.params[key] as string
+
 // ─────────────────────────────────────────────
 // Enrollments — student deck picker support
 // ─────────────────────────────────────────────
@@ -165,7 +167,7 @@ router.patch('/deck/cards/:instanceId', validate(PatchInstanceSchema), async (re
   if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
 
   const instance = await prisma.cardInstance.findUnique({
-    where: { id: req.params.instanceId },
+    where: { id: p(req, 'instanceId') },
     include: { deck: { include: { enrollment: true } } },
   })
   if (!instance || instance.deck.enrollment.studentId !== student.id) {
@@ -235,12 +237,12 @@ router.get('/deck/optional/:cardSetId/cards', async (req: Request, res: Response
 
   // Verify this CardSet is actually assigned as OPTIONAL to the student's class
   const assignment = await prisma.assignment.findFirst({
-    where: { classId: enrollment.classId, cardSetId: req.params.cardSetId, type: 'OPTIONAL' },
+    where: { classId: enrollment.classId, cardSetId: p(req, 'cardSetId'), type: 'OPTIONAL' },
   })
   if (!assignment) { res.status(404).json({ error: 'CardSet not found' }); return }
 
   const cards = await prisma.card.findMany({
-    where: { cardSetId: req.params.cardSetId },
+    where: { cardSetId: p(req, 'cardSetId') },
     select: { id: true, word: true, pos: true, definitionL2: true, definitionL1: true, exampleSentence: true },
     orderBy: { word: 'asc' },
   })
@@ -262,7 +264,7 @@ router.post('/deck/optional/:cardSetId', async (req: Request, res: Response) => 
 
   // Verify there is an OPTIONAL assignment for this CardSet in the student's class
   const assignment = await prisma.assignment.findUnique({
-    where: { classId_cardSetId: { classId: enrollment.classId, cardSetId: req.params.cardSetId } },
+    where: { classId_cardSetId: { classId: enrollment.classId, cardSetId: p(req, 'cardSetId') } },
     include: { cardSet: { include: { cards: { select: { id: true } } } } },
   })
   if (!assignment || assignment.type !== 'OPTIONAL') {

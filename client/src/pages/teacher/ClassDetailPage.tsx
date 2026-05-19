@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, useRef, FormEvent } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
@@ -28,6 +28,22 @@ interface HomeworkReq {
 
 type Tab = 'students' | 'assignments' | 'homework' | 'stats'
 
+interface AssignConfirm {
+  cardSetId: string
+  cardSetName: string
+  type: string
+  priority: number
+  totalInstances: number
+  enrollmentCount: number
+}
+
+interface ProgressLine {
+  studentName: string
+  instancesCreated: number
+  completed: number
+  total: number
+}
+
 export default function TeacherClassDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { data: cls, loading: clsLoading } = useApi<Class>(() => api.get(`/teachers/classes/${id}`), [id])
@@ -47,6 +63,11 @@ export default function TeacherClassDetailPage() {
   const [hwForm, setHwForm] = useState({ sessionsRequired: 3, minCardsPerSession: 10, periodDays: 7, alertThresholdDays: 2, activeFrom: new Date().toISOString().slice(0, 16) })
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [assignConfirm, setAssignConfirm] = useState<AssignConfirm | null>(null)
+  const [progressLines, setProgressLines] = useState<ProgressLine[]>([])
+  const [progressDone, setProgressDone] = useState(false)
+  const [showProgress, setShowProgress] = useState(false)
+  const pendingAssignmentId = useRef<string | null>(null)
 
   const handleAddStudent = async (e: FormEvent) => {
     e.preventDefault()
@@ -69,13 +90,64 @@ export default function TeacherClassDetailPage() {
     setSaving(true)
     setFormError(null)
     try {
-      await api.post(`/teachers/classes/${id}/assignments`, assignForm)
+      const result = await api.post<{
+        assignmentId: string
+        cardSetName: string
+        totalInstances: number
+        enrollmentCount: number
+        needsStream: boolean
+      }>(`/teachers/classes/${id}/assignments`, assignForm)
+
       setShowAddAssignment(false)
-      reloadAssignments()
+
+      if (result.needsStream) {
+        pendingAssignmentId.current = result.assignmentId
+        setAssignConfirm({
+          cardSetId: assignForm.cardSetId,
+          cardSetName: result.cardSetName,
+          type: assignForm.type,
+          priority: assignForm.priority,
+          totalInstances: result.totalInstances,
+          enrollmentCount: result.enrollmentCount,
+        })
+      } else {
+        reloadAssignments()
+      }
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : 'Failed')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleConfirmAssign = () => {
+    const assignmentId = pendingAssignmentId.current
+    if (!assignmentId) return
+
+    setAssignConfirm(null)
+    setProgressLines([])
+    setProgressDone(false)
+    setShowProgress(true)
+
+    const es = new EventSource(`/api/teachers/classes/${id}/assignments/${assignmentId}/progress`, {
+      withCredentials: true,
+    })
+
+    es.addEventListener('progress', (e) => {
+      const data = JSON.parse(e.data) as ProgressLine
+      setProgressLines((prev) => [...prev, data])
+    })
+
+    es.addEventListener('done', () => {
+      setProgressDone(true)
+      es.close()
+      reloadAssignments()
+    })
+
+    es.onerror = () => {
+      setProgressDone(true)
+      es.close()
+      reloadAssignments()
     }
   }
 
@@ -187,6 +259,52 @@ export default function TeacherClassDetailPage() {
           </table>
           </div>
         </div>
+      )}
+
+      {/* Confirm large assignment modal */}
+      {assignConfirm && (
+        <Modal title="Confirm Assignment" onClose={() => setAssignConfirm(null)}>
+          <p style={{ marginBottom: 16, fontSize: 14 }}>
+            Assigning <strong>{assignConfirm.cardSetName}</strong> as{' '}
+            <strong>{assignConfirm.type}</strong> will create{' '}
+            <strong>{assignConfirm.totalInstances.toLocaleString()} CardInstances</strong> across{' '}
+            <strong>{assignConfirm.enrollmentCount} student{assignConfirm.enrollmentCount !== 1 ? 's' : ''}</strong>.
+            This may take a moment.
+          </p>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setAssignConfirm(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleConfirmAssign}>Confirm &amp; Assign</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Assignment progress modal */}
+      {showProgress && (
+        <Modal
+          title="Creating CardInstances…"
+          onClose={() => { if (progressDone) setShowProgress(false) }}
+        >
+          <div style={{ fontFamily: 'monospace', fontSize: 13, maxHeight: 320, overflowY: 'auto', marginBottom: 16 }}>
+            {progressLines.map((line, i) => (
+              <div key={i} style={{ marginBottom: 4, color: 'var(--color-text)' }}>
+                <span style={{ marginRight: 8 }}>✓</span>
+                <span>
+                  {line.instancesCreated} card{line.instancesCreated !== 1 ? 's' : ''} added for{' '}
+                  <strong>{line.studentName}</strong>
+                  {' '}({line.completed} / {line.total})
+                </span>
+              </div>
+            ))}
+            {!progressDone && (
+              <div style={{ color: 'var(--color-text-muted)', marginTop: 8 }}>Working…</div>
+            )}
+          </div>
+          {progressDone && (
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setShowProgress(false)}>Done</button>
+            </div>
+          )}
+        </Modal>
       )}
 
       {/* Assignments tab */}

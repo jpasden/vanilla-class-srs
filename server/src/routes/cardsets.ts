@@ -18,6 +18,7 @@ import { validate } from '../middleware/validate'
 import { validateCardRows, normaliseCardRow } from '../services/card.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
+const p = (req: Request, key: string) => req.params[key] as string
 
 const router = Router()
 router.use(requireAuth, requireTeacher)
@@ -88,7 +89,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
   const cs = await prisma.cardSet.findUnique({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     include: {
       cards: { orderBy: { createdAt: 'asc' } },
       _count: { select: { assignments: true } },
@@ -131,7 +132,7 @@ router.patch('/:id', validate(PatchCardSetSchema), async (req: Request, res: Res
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cs = await getEditableCardSet(req.params.id, teacher.id)
+  const cs = await getEditableCardSet(p(req, 'id'), teacher.id)
   if (!cs) { res.status(404).json({ error: 'CardSet not found or not editable' }); return }
 
   const updated = await prisma.cardSet.update({
@@ -146,7 +147,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cs = await getEditableCardSet(req.params.id, teacher.id)
+  const cs = await getEditableCardSet(p(req, 'id'), teacher.id)
   if (!cs) { res.status(404).json({ error: 'CardSet not found or not editable' }); return }
 
   const updated = await prisma.cardSet.update({
@@ -184,7 +185,7 @@ router.get('/:id/cards', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cs = await prisma.cardSet.findUnique({ where: { id: req.params.id } })
+  const cs = await prisma.cardSet.findUnique({ where: { id: p(req, 'id') } })
   if (!cs || cs.archivedAt || cs.isPersonal) { res.status(404).json({ error: 'CardSet not found' }); return }
   if (cs.status === CardSetStatus.PRIVATE && cs.teacherId !== teacher.id) {
     res.status(404).json({ error: 'CardSet not found' }); return
@@ -202,7 +203,7 @@ router.post('/:id/cards', validate(CreateCardSchema), async (req: Request, res: 
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cs = await getEditableCardSet(req.params.id, teacher.id)
+  const cs = await getEditableCardSet(p(req, 'id'), teacher.id)
   if (!cs) { res.status(404).json({ error: 'CardSet not found or not editable' }); return }
 
   const card = await prisma.card.create({
@@ -226,7 +227,7 @@ router.post(
     const teacher = await getTeacher(req.user!.sub)
     if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-    const cs = await getEditableCardSet(req.params.id, teacher.id)
+    const cs = await getEditableCardSet(p(req, 'id'), teacher.id)
     if (!cs) { res.status(404).json({ error: 'CardSet not found or not editable' }); return }
 
     if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return }
@@ -264,10 +265,10 @@ router.patch('/:csId/cards/:cardId', validate(PatchCardSchema), async (req: Requ
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cs = await getEditableCardSet(req.params.csId, teacher.id)
+  const cs = await getEditableCardSet(p(req, 'csId'), teacher.id)
   if (!cs) { res.status(404).json({ error: 'CardSet not found or not editable' }); return }
 
-  const card = await prisma.card.findUnique({ where: { id: req.params.cardId } })
+  const card = await prisma.card.findUnique({ where: { id: p(req, 'cardId') } })
   if (!card || card.cardSetId !== cs.id) { res.status(404).json({ error: 'Card not found' }); return }
 
   // Check the updated card still has at least one definition
@@ -295,10 +296,10 @@ router.delete('/:csId/cards/:cardId', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cs = await getEditableCardSet(req.params.csId, teacher.id)
+  const cs = await getEditableCardSet(p(req, 'csId'), teacher.id)
   if (!cs) { res.status(404).json({ error: 'CardSet not found or not editable' }); return }
 
-  const card = await prisma.card.findUnique({ where: { id: req.params.cardId } })
+  const card = await prisma.card.findUnique({ where: { id: p(req, 'cardId') } })
   if (!card || card.cardSetId !== cs.id) { res.status(404).json({ error: 'Card not found' }); return }
 
   // Guard: cannot delete a card that is in use in student decks (FK constraint)

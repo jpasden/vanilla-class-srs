@@ -192,7 +192,7 @@ export default function TeacherCardSetDetailPage() {
               {isEditable && (
                 <td>
                   <button className="btn btn-secondary btn-sm" onClick={() => openEdit(c)} style={{ marginRight: 4 }}>Edit</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c)}>Del</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c)}>Delete</button>
                 </td>
               )}
             </tr>

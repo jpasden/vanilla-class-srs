@@ -8,11 +8,12 @@ import { requireAuth, requireAdmin } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows } from '../services/enrollment.service'
-import { createClassAssignment } from '../services/assignment.service'
+import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
 const router = Router()
+const p = (req: Request, key: string) => req.params[key] as string
 router.use(requireAuth, requireAdmin)
 
 // ─────────────────────────────────────────────
@@ -36,7 +37,7 @@ router.get('/departments', async (_req: Request, res: Response) => {
 // GET /api/admin/departments/:id
 router.get('/departments/:id', async (req: Request, res: Response) => {
   const dept = await prisma.department.findUnique({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     include: {
       subjectGrades: {
         where: { archivedAt: null },
@@ -60,13 +61,13 @@ router.post('/departments', validate(DepartmentSchema), async (req: Request, res
 
 // PATCH /api/admin/departments/:id
 router.patch('/departments/:id', validate(DepartmentSchema), async (req: Request, res: Response) => {
-  const dept = await prisma.department.findUnique({ where: { id: req.params.id } })
+  const dept = await prisma.department.findUnique({ where: { id: p(req, 'id') } })
   if (!dept || dept.archivedAt) {
     res.status(404).json({ error: 'Department not found' })
     return
   }
   const updated = await prisma.department.update({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     data: { name: req.body.name },
   })
   res.json(updated)
@@ -74,7 +75,7 @@ router.patch('/departments/:id', validate(DepartmentSchema), async (req: Request
 
 // DELETE /api/admin/departments/:id  — archives (soft delete)
 router.delete('/departments/:id', async (req: Request, res: Response) => {
-  const dept = await prisma.department.findUnique({ where: { id: req.params.id } })
+  const dept = await prisma.department.findUnique({ where: { id: p(req, 'id') } })
   if (!dept || dept.archivedAt) {
     res.status(404).json({ error: 'Department not found' })
     return
@@ -108,13 +109,13 @@ router.delete('/departments/:id', async (req: Request, res: Response) => {
 
 // POST /api/admin/departments/:id/unarchive
 router.post('/departments/:id/unarchive', async (req: Request, res: Response) => {
-  const dept = await prisma.department.findUnique({ where: { id: req.params.id } })
+  const dept = await prisma.department.findUnique({ where: { id: p(req, 'id') } })
   if (!dept) {
     res.status(404).json({ error: 'Department not found' })
     return
   }
   const updated = await prisma.department.update({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     data: { archivedAt: null },
   })
   res.json(updated)
@@ -150,7 +151,7 @@ router.get('/subject-grades', async (_req: Request, res: Response) => {
 // GET /api/admin/subject-grades/:id
 router.get('/subject-grades/:id', async (req: Request, res: Response) => {
   const sg = await prisma.subjectGrade.findUnique({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     include: {
       department: { select: { id: true, name: true } },
       teachers: { include: { teacher: { include: { user: { select: { id: true, name: true, email: true } } } } } },
@@ -179,7 +180,7 @@ router.post('/subject-grades', validate(SubjectGradeSchema), async (req: Request
 
 // PATCH /api/admin/subject-grades/:id
 router.patch('/subject-grades/:id', validate(SubjectGradePatchSchema), async (req: Request, res: Response) => {
-  const sg = await prisma.subjectGrade.findUnique({ where: { id: req.params.id } })
+  const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
   if (!sg || sg.archivedAt) {
     res.status(404).json({ error: 'SubjectGrade not found' })
     return
@@ -192,7 +193,7 @@ router.patch('/subject-grades/:id', validate(SubjectGradePatchSchema), async (re
     }
   }
   const updated = await prisma.subjectGrade.update({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     data: req.body,
   })
   res.json(updated)
@@ -200,7 +201,7 @@ router.patch('/subject-grades/:id', validate(SubjectGradePatchSchema), async (re
 
 // DELETE /api/admin/subject-grades/:id  — archives, cascades to classes
 router.delete('/subject-grades/:id', async (req: Request, res: Response) => {
-  const sg = await prisma.subjectGrade.findUnique({ where: { id: req.params.id } })
+  const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
   if (!sg || sg.archivedAt) {
     res.status(404).json({ error: 'SubjectGrade not found' })
     return
@@ -218,13 +219,13 @@ router.delete('/subject-grades/:id', async (req: Request, res: Response) => {
 
 // POST /api/admin/subject-grades/:id/unarchive
 router.post('/subject-grades/:id/unarchive', async (req: Request, res: Response) => {
-  const sg = await prisma.subjectGrade.findUnique({ where: { id: req.params.id } })
+  const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
   if (!sg) {
     res.status(404).json({ error: 'SubjectGrade not found' })
     return
   }
   const updated = await prisma.subjectGrade.update({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     data: { archivedAt: null },
   })
   res.json(updated)
@@ -263,7 +264,7 @@ router.get('/teachers', async (_req: Request, res: Response) => {
 // GET /api/admin/teachers/:id
 router.get('/teachers/:id', async (req: Request, res: Response) => {
   const teacher = await prisma.teacher.findUnique({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
       subjectGrades: {
@@ -319,7 +320,7 @@ router.post('/teachers', validate(CreateTeacherSchema), async (req: Request, res
 
 // PATCH /api/admin/teachers/:id
 router.patch('/teachers/:id', validate(PatchTeacherSchema), async (req: Request, res: Response) => {
-  const teacher = await prisma.teacher.findUnique({ where: { id: req.params.id } })
+  const teacher = await prisma.teacher.findUnique({ where: { id: p(req, 'id') } })
   if (!teacher) {
     res.status(404).json({ error: 'Teacher not found' })
     return
@@ -345,7 +346,7 @@ router.patch('/teachers/:id', validate(PatchTeacherSchema), async (req: Request,
 // all classes to another teacher first. User record is retained; role is demoted to STUDENT.
 router.delete('/teachers/:id', async (req: Request, res: Response) => {
   const teacher = await prisma.teacher.findUnique({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     include: { _count: { select: { classes: true } } },
   })
   if (!teacher) {
@@ -377,7 +378,7 @@ router.delete('/teachers/:id', async (req: Request, res: Response) => {
 // POST /api/admin/teachers/:id/promote-admin
 router.post('/teachers/:id/promote-admin', async (req: Request, res: Response) => {
   const teacher = await prisma.teacher.findUnique({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     include: { user: true },
   })
   if (!teacher) {
@@ -405,7 +406,7 @@ router.post(
   '/teachers/:id/subject-grades',
   validate(AssignSubjectGradesSchema),
   async (req: Request, res: Response) => {
-    const teacher = await prisma.teacher.findUnique({ where: { id: req.params.id } })
+    const teacher = await prisma.teacher.findUnique({ where: { id: p(req, 'id') } })
     if (!teacher) {
       res.status(404).json({ error: 'Teacher not found' })
       return
@@ -427,7 +428,7 @@ router.delete(
   '/teachers/:id/subject-grades/:subjectGradeId',
   async (req: Request, res: Response) => {
     await prisma.teacherSubjectGrade.deleteMany({
-      where: { teacherId: req.params.id, subjectGradeId: req.params.subjectGradeId },
+      where: { teacherId: p(req, 'id'), subjectGradeId: p(req, 'subjectGradeId') },
     })
     res.json({ ok: true })
   }
@@ -465,7 +466,7 @@ router.get('/classes', async (_req: Request, res: Response) => {
 // GET /api/admin/classes/:id
 router.get('/classes/:id', async (req: Request, res: Response) => {
   const cls = await prisma.class.findUnique({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     include: {
       teacher: { include: { user: { select: { id: true, name: true, email: true } } } },
       subjectGrade: { include: { department: { select: { id: true, name: true } } } },
@@ -505,7 +506,7 @@ router.post('/classes', validate(CreateClassSchema), async (req: Request, res: R
 
 // PATCH /api/admin/classes/:id
 router.patch('/classes/:id', validate(PatchClassSchema), async (req: Request, res: Response) => {
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt) {
     res.status(404).json({ error: 'Class not found' })
     return
@@ -518,7 +519,7 @@ router.patch('/classes/:id', validate(PatchClassSchema), async (req: Request, re
     }
   }
   const updated = await prisma.class.update({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     data: req.body,
   })
   res.json(updated)
@@ -526,13 +527,13 @@ router.patch('/classes/:id', validate(PatchClassSchema), async (req: Request, re
 
 // DELETE /api/admin/classes/:id  — archives
 router.delete('/classes/:id', async (req: Request, res: Response) => {
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt) {
     res.status(404).json({ error: 'Class not found' })
     return
   }
   const updated = await prisma.class.update({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     data: { archivedAt: new Date() },
   })
   res.json(updated)
@@ -540,13 +541,13 @@ router.delete('/classes/:id', async (req: Request, res: Response) => {
 
 // POST /api/admin/classes/:id/unarchive
 router.post('/classes/:id/unarchive', async (req: Request, res: Response) => {
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls) {
     res.status(404).json({ error: 'Class not found' })
     return
   }
   const updated = await prisma.class.update({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     data: { archivedAt: null },
   })
   res.json(updated)
@@ -563,7 +564,7 @@ const AddStudentSchema = z.object({
 
 // POST /api/admin/classes/:id/students  — single add
 router.post('/classes/:id/students', validate(AddStudentSchema), async (req: Request, res: Response) => {
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt) {
     res.status(404).json({ error: 'Class not found' })
     return
@@ -584,7 +585,7 @@ router.post(
   '/classes/:id/students/import',
   upload.single('file'),
   async (req: Request, res: Response) => {
-    const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+    const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
     if (!cls || cls.archivedAt) {
       res.status(404).json({ error: 'Class not found' })
       return
@@ -620,7 +621,7 @@ router.post(
 
 // GET /api/admin/classes/:id/students  — list enrolled students
 router.get('/classes/:id/students', async (req: Request, res: Response) => {
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt) {
     res.status(404).json({ error: 'Class not found' })
     return
@@ -650,7 +651,7 @@ const PromoteCardSetSchema = z.object({
 
 // POST /api/admin/cardsets/:id/promote
 router.post('/cardsets/:id/promote', validate(PromoteCardSetSchema), async (req: Request, res: Response) => {
-  const cs = await prisma.cardSet.findUnique({ where: { id: req.params.id } })
+  const cs = await prisma.cardSet.findUnique({ where: { id: p(req, 'id') } })
   if (!cs || cs.archivedAt || cs.isPersonal) {
     res.status(404).json({ error: 'CardSet not found' }); return
   }
@@ -688,7 +689,7 @@ router.get('/cardsets', async (_req: Request, res: Response) => {
 // GET /api/admin/cardsets/:id
 router.get('/cardsets/:id', async (req: Request, res: Response) => {
   const cs = await prisma.cardSet.findUnique({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     include: {
       cards: { orderBy: { createdAt: 'asc' } },
       teacher: { include: { user: { select: { id: true, name: true } } } },
@@ -712,7 +713,7 @@ const CreateSGAssignmentSchema = z.object({
 
 // GET /api/admin/subject-grades/:id/assignments
 router.get('/subject-grades/:id/assignments', async (req: Request, res: Response) => {
-  const sg = await prisma.subjectGrade.findUnique({ where: { id: req.params.id } })
+  const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
   if (!sg || sg.archivedAt) { res.status(404).json({ error: 'SubjectGrade not found' }); return }
 
   const assignments = await prisma.subjectGradeAssignment.findMany({
@@ -727,7 +728,7 @@ router.post(
   '/subject-grades/:id/assignments',
   validate(CreateSGAssignmentSchema),
   async (req: Request, res: Response) => {
-    const sg = await prisma.subjectGrade.findUnique({ where: { id: req.params.id } })
+    const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
     if (!sg || sg.archivedAt) { res.status(404).json({ error: 'SubjectGrade not found' }); return }
 
     const cs = await prisma.cardSet.findUnique({ where: { id: req.body.cardSetId } })
@@ -757,9 +758,9 @@ router.post(
 // DELETE /api/admin/subject-grades/:id/assignments/:assignmentId
 router.delete('/subject-grades/:id/assignments/:assignmentId', async (req: Request, res: Response) => {
   const assignment = await prisma.subjectGradeAssignment.findUnique({
-    where: { id: req.params.assignmentId },
+    where: { id: p(req, 'assignmentId') },
   })
-  if (!assignment || assignment.subjectGradeId !== req.params.id) {
+  if (!assignment || assignment.subjectGradeId !== p(req, 'id')) {
     res.status(404).json({ error: 'Assignment not found' }); return
   }
   await prisma.subjectGradeAssignment.delete({ where: { id: assignment.id } })
@@ -773,12 +774,23 @@ const AdminCreateClassAssignmentSchema = z.object({
   priority: z.number().int().min(0).default(0),
 })
 
+// In-memory store for admin pending jobs (same pattern as teachers router)
+type AdminPendingJob = {
+  enrollments: Awaited<ReturnType<typeof createClassAssignment>>['enrollments']
+  cardIds: string[]
+  className: string
+  totalInstances: number
+  enrollmentCount: number
+  timer: ReturnType<typeof setTimeout>
+}
+const adminPendingJobs = new Map<string, AdminPendingJob>()
+
 // POST /api/admin/classes/:id/assignments
 router.post(
   '/classes/:id/assignments',
   validate(AdminCreateClassAssignmentSchema),
   async (req: Request, res: Response) => {
-    const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+    const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
     if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
 
     const cs = await prisma.cardSet.findUnique({ where: { id: req.body.cardSetId } })
@@ -793,7 +805,7 @@ router.post(
       res.status(409).json({ error: 'CardSet already assigned to this class' }); return
     }
 
-    const assignment = await createClassAssignment(
+    const { assignment, enrollments, cardIds } = await createClassAssignment(
       prisma,
       cls.id,
       cs.id,
@@ -801,8 +813,44 @@ router.post(
       req.body.priority,
       req.user!.sub,
     )
-    res.status(201).json(assignment)
+
+    const totalInstances = enrollments.filter((e) => e.deck).length * cardIds.length
+    const enrollmentCount = enrollments.length
+
+    if (cardIds.length > 0 && enrollments.length > 0) {
+      const timer = setTimeout(() => {
+        adminPendingJobs.delete(assignment.id)
+        rollbackOrphanedAssignment(prisma, assignment.id)
+      }, 60_000)
+      adminPendingJobs.set(assignment.id, {
+        enrollments,
+        cardIds,
+        className: cls.name,
+        totalInstances,
+        enrollmentCount,
+        timer,
+      })
+    }
+
+    res.status(201).json({
+      assignmentId: assignment.id,
+      cardSetName: cs.name,
+      totalInstances,
+      enrollmentCount,
+      needsStream: cardIds.length > 0 && enrollments.length > 0,
+    })
   },
 )
+
+// GET /api/admin/classes/:id/assignments/:assignmentId/progress  (SSE)
+router.get('/classes/:id/assignments/:assignmentId/progress', async (req: Request, res: Response) => {
+  const job = adminPendingJobs.get(p(req, 'assignmentId'))
+  if (!job) {
+    res.status(404).json({ error: 'No pending job found for this assignment' }); return
+  }
+  clearTimeout(job.timer)
+  adminPendingJobs.delete(p(req, 'assignmentId'))
+  await streamCardInstanceCreation(prisma, res, job.enrollments, job.cardIds, job.className)
+})
 
 export default router

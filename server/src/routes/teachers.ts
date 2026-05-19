@@ -7,7 +7,7 @@ import prisma from '../lib/prisma'
 import { requireAuth, requireTeacher } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { enrollStudents, validateEnrollRows } from '../services/enrollment.service'
-import { createClassAssignment } from '../services/assignment.service'
+import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
 import teacherStatsRouter from './stats.teacher'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
@@ -20,6 +20,8 @@ router.use(requireAuth, requireTeacher)
 async function getTeacher(userId: string) {
   return prisma.teacher.findUnique({ where: { userId } })
 }
+
+const p = (req: Request, key: string) => req.params[key] as string
 
 // ─────────────────────────────────────────────
 // Classes — teacher manages own classes
@@ -60,7 +62,7 @@ router.get('/classes/:id', async (req: Request, res: Response) => {
     return
   }
   const cls = await prisma.class.findUnique({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     include: {
       subjectGrade: { include: { department: { select: { id: true, name: true } } } },
       _count: { select: { enrollments: true, assignments: true } },
@@ -115,13 +117,13 @@ router.patch('/classes/:id', validate(PatchClassSchema), async (req: Request, re
     res.status(403).json({ error: 'No teacher profile found' })
     return
   }
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' })
     return
   }
   const updated = await prisma.class.update({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     data: { name: req.body.name },
   })
   res.json(updated)
@@ -134,13 +136,13 @@ router.delete('/classes/:id', async (req: Request, res: Response) => {
     res.status(403).json({ error: 'No teacher profile found' })
     return
   }
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' })
     return
   }
   const updated = await prisma.class.update({
-    where: { id: req.params.id },
+    where: { id: p(req, 'id') },
     data: { archivedAt: new Date() },
   })
   res.json(updated)
@@ -162,7 +164,7 @@ router.post('/classes/:id/students', validate(AddStudentSchema), async (req: Req
     res.status(403).json({ error: 'No teacher profile found' })
     return
   }
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' })
     return
@@ -188,7 +190,7 @@ router.post(
       res.status(403).json({ error: 'No teacher profile found' })
       return
     }
-    const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+    const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
     if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
       res.status(404).json({ error: 'Class not found' })
       return
@@ -229,7 +231,7 @@ router.get('/classes/:id/students', async (req: Request, res: Response) => {
     res.status(403).json({ error: 'No teacher profile found' })
     return
   }
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' })
     return
@@ -284,7 +286,7 @@ router.get('/classes/:id/assignments', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' }); return
   }
@@ -296,7 +298,22 @@ router.get('/classes/:id/assignments', async (req: Request, res: Response) => {
   res.json(assignments)
 })
 
+// In-memory store: assignmentId → pending enrollment job for SSE streaming.
+// Entries are consumed once by the SSE endpoint and cleaned up after 60 s.
+type PendingJob = {
+  enrollments: Awaited<ReturnType<typeof createClassAssignment>>['enrollments']
+  cardIds: string[]
+  className: string
+  totalInstances: number
+  enrollmentCount: number
+  timer: ReturnType<typeof setTimeout>
+}
+const pendingAssignmentJobs = new Map<string, PendingJob>()
+
 // POST /api/teachers/classes/:id/assignments
+// Creates the Assignment record and queues the CardInstance work.
+// Returns immediately with { assignmentId, totalInstances, enrollmentCount }
+// so the client can open the SSE stream.
 router.post(
   '/classes/:id/assignments',
   validate(CreateAssignmentSchema),
@@ -304,7 +321,7 @@ router.post(
     const teacher = await getTeacher(req.user!.sub)
     if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-    const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+    const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
     if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
       res.status(404).json({ error: 'Class not found' }); return
     }
@@ -328,7 +345,7 @@ router.post(
       res.status(409).json({ error: 'CardSet already assigned to this class' }); return
     }
 
-    const assignment = await createClassAssignment(
+    const { assignment, enrollments, cardIds } = await createClassAssignment(
       prisma,
       cls.id,
       cs.id,
@@ -336,20 +353,64 @@ router.post(
       req.body.priority,
       req.user!.sub,
     )
-    res.status(201).json(assignment)
+
+    const totalInstances = enrollments.filter((e) => e.deck).length * cardIds.length
+    const enrollmentCount = enrollments.length
+
+    if (cardIds.length > 0 && enrollments.length > 0) {
+      // Park the job for the SSE endpoint to pick up; auto-expire after 60 s
+      const timer = setTimeout(() => {
+        pendingAssignmentJobs.delete(assignment.id)
+        rollbackOrphanedAssignment(prisma, assignment.id)
+      }, 60_000)
+      pendingAssignmentJobs.set(assignment.id, {
+        enrollments,
+        cardIds,
+        className: cls.name,
+        totalInstances,
+        enrollmentCount,
+        timer,
+      })
+    }
+
+    res.status(201).json({
+      assignmentId: assignment.id,
+      cardSetName: cs.name,
+      totalInstances,
+      enrollmentCount,
+      needsStream: cardIds.length > 0 && enrollments.length > 0,
+    })
   },
 )
+
+// GET /api/teachers/classes/:id/assignments/:assignmentId/progress  (SSE)
+// Streams CardInstance creation progress for a pending MANDATORY assignment.
+router.get('/classes/:id/assignments/:assignmentId/progress', async (req: Request, res: Response) => {
+  const teacher = await getTeacher(req.user!.sub)
+  if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
+
+  const job = pendingAssignmentJobs.get(p(req, 'assignmentId'))
+  if (!job) {
+    res.status(404).json({ error: 'No pending job found for this assignment' }); return
+  }
+
+  // Consume the job immediately so duplicate SSE connections don't double-create
+  clearTimeout(job.timer)
+  pendingAssignmentJobs.delete(p(req, 'assignmentId'))
+
+  await streamCardInstanceCreation(prisma, res, job.enrollments, job.cardIds, job.className)
+})
 
 // DELETE /api/teachers/classes/:id/assignments/:assignmentId
 router.delete('/classes/:id/assignments/:assignmentId', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' }); return
   }
-  const assignment = await prisma.assignment.findUnique({ where: { id: req.params.assignmentId } })
+  const assignment = await prisma.assignment.findUnique({ where: { id: p(req, 'assignmentId') } })
   if (!assignment || assignment.classId !== cls.id) {
     res.status(404).json({ error: 'Assignment not found' }); return
   }
@@ -366,13 +427,13 @@ router.get('/classes/:id/students/:studentId/cards', async (req: Request, res: R
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' }); return
   }
   // Find the student's enrollment in this class
   const enrollment = await prisma.enrollment.findFirst({
-    where: { classId: cls.id, student: { id: req.params.studentId } },
+    where: { classId: cls.id, student: { id: p(req, 'studentId') } },
     include: { personalCardSet: { include: { cards: { orderBy: { createdAt: 'desc' } } } } },
   })
   if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
@@ -397,7 +458,7 @@ router.get('/classes/:id/homework', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' }); return
   }
@@ -413,7 +474,7 @@ router.post('/classes/:id/homework', validate(HomeworkSchema), async (req: Reque
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cls = await prisma.class.findUnique({ where: { id: req.params.id } })
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
     res.status(404).json({ error: 'Class not found' }); return
   }
