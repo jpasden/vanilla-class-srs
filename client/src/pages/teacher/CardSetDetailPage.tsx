@@ -1,9 +1,9 @@
-import { useState, FormEvent } from 'react'
+import { useState, useRef, FormEvent, ChangeEvent } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { api, ApiError } from '../../utils/api'
+import { api, ApiError, uploadFile } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
-import { CsvImportModal } from '../../components/CsvImportModal'
+import { CardImportHelpModal } from '../../components/CardImportHelpModal'
 
 interface Card {
   id: string
@@ -24,6 +24,44 @@ interface CardSet {
 type CardFormData = { word: string; pos: string; definitionL2: string; definitionL1: string; exampleSentence: string }
 const emptyForm: CardFormData = { word: '', pos: '', definitionL2: '', definitionL1: '', exampleSentence: '' }
 
+interface CsvRowError { row: number; word?: string; error: string }
+
+function validateCsvRows(rows: Record<string, string>[]): CsvRowError[] {
+  const errors: CsvRowError[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    if (!r.word?.trim()) {
+      errors.push({ row: i + 1, error: 'word is required' })
+      continue
+    }
+    if (!r.definition_l2?.trim() && !r.definition_l1?.trim()) {
+      errors.push({ row: i + 1, word: r.word, error: 'at least one definition (definition_l2 or definition_l1) is required' })
+    }
+  }
+  return errors
+}
+
+async function parseCsvFile(file: File): Promise<{ rows: Record<string, string>[] } | { parseError: string }> {
+  const text = await file.text()
+  const lines = text.split(/\r?\n/).filter((l) => l.trim())
+  if (lines.length < 2) return { parseError: 'CSV must have a header row and at least one data row.' }
+
+  const headers = lines[0].split(',').map((h) => h.trim().toLowerCase())
+  if (!headers.includes('word')) return { parseError: 'CSV is missing a "word" column header.' }
+
+  const rows: Record<string, string>[] = []
+  for (let i = 1; i < lines.length; i++) {
+    // Basic CSV split — handles quoted fields
+    const values = lines[i].match(/("(?:[^"]|"")*"|[^,]*)/g)?.map((v) =>
+      v.startsWith('"') ? v.slice(1, -1).replace(/""/g, '"') : v
+    ) ?? []
+    const row: Record<string, string> = {}
+    headers.forEach((h, j) => { row[h] = (values[j] ?? '').trim() })
+    rows.push(row)
+  }
+  return { rows }
+}
+
 export default function TeacherCardSetDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { data: cs, loading, reload } = useApi<CardSet>(() => api.get(`/teachers/cardsets/${id}`), [id])
@@ -32,9 +70,16 @@ export default function TeacherCardSetDetailPage() {
   const [form, setForm] = useState<CardFormData>(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [showImport, setShowImport] = useState(false)
   const [showRename, setShowRename] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [csName, setCsName] = useState('')
+
+  // CSV import state
+  const csvInputRef = useRef<HTMLInputElement>(null)
+  const [csvErrors, setCsvErrors] = useState<CsvRowError[] | null>(null)
+  const [csvSuccess, setCsvSuccess] = useState<number | null>(null)
+  const [csvUploading, setCsvUploading] = useState(false)
+  const [csvParseError, setCsvParseError] = useState<string | null>(null)
 
   const isEditable = cs?.status === 'PRIVATE'
 
@@ -94,6 +139,51 @@ export default function TeacherCardSetDetailPage() {
     finally { setSaving(false) }
   }
 
+  const handleCsvFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!csvInputRef.current) csvInputRef.current!.value = ''
+    if (!file) return
+
+    setCsvErrors(null)
+    setCsvSuccess(null)
+    setCsvParseError(null)
+
+    const parsed = await parseCsvFile(file)
+    if ('parseError' in parsed) {
+      setCsvParseError(parsed.parseError)
+      return
+    }
+
+    const errors = validateCsvRows(parsed.rows)
+    if (errors.length > 0) {
+      setCsvErrors(errors)
+      return
+    }
+
+    // All valid — upload
+    setCsvUploading(true)
+    try {
+      const result = await uploadFile<{ created: number }>(`/teachers/cardsets/${id}/cards/import`, file)
+      setCsvSuccess(result.created)
+      reload()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        try {
+          const parsed = JSON.parse(err.message)
+          if (parsed.validationErrors) setCsvErrors(parsed.validationErrors)
+          else setCsvParseError(parsed.error ?? 'Upload failed')
+        } catch {
+          setCsvParseError(err.message)
+        }
+      } else {
+        setCsvParseError('Upload failed')
+      }
+    } finally {
+      setCsvUploading(false)
+      if (csvInputRef.current) csvInputRef.current.value = ''
+    }
+  }
+
   if (loading) return <div className="spinner" />
 
   return (
@@ -144,15 +234,7 @@ export default function TeacherCardSetDetailPage() {
           </form>
         </Modal>
       )}
-      {showImport && (
-        <CsvImportModal
-          title="Import Cards from CSV"
-          endpoint={`/teachers/cardsets/${id}/cards/import`}
-          onSuccess={() => { setShowImport(false); reload() }}
-          onClose={() => setShowImport(false)}
-          templateHint='CSV columns: word,pos,definition_l2,definition_l1,example_sentence — at least one definition required per row.'
-        />
-      )}
+      {showHelp && <CardImportHelpModal onClose={() => setShowHelp(false)} />}
 
       <div style={{ marginBottom: 20 }}>
         <Link to="/teacher/cardsets" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>← CardSets</Link>
@@ -163,42 +245,102 @@ export default function TeacherCardSetDetailPage() {
             <span className={`badge badge-${cs?.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`} style={{ marginTop: 4 }}>{cs?.status}</span>
           </div>
           {isEditable && (
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button className="btn btn-secondary btn-sm" onClick={() => { setCsName(cs?.name ?? ''); setFormError(null); setShowRename(true) }}>Rename</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowImport(true)}>Import CSV</button>
-              <button className="btn btn-primary btn-sm" onClick={openCreate}>+ Add Card</button>
+              <button className="btn btn-secondary btn-sm" onClick={openCreate}>+ Add Card</button>
             </div>
           )}
         </div>
       </div>
 
+      {/* CSV import section — primary workflow for PRIVATE cardsets */}
+      {isEditable && (
+        <div className="card" style={{ marginBottom: 24, maxWidth: 480 }}>
+          <div style={{ marginBottom: 12 }}>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>Import word data by CSV</span>
+            {' '}
+            <button
+              onClick={() => setShowHelp(true)}
+              style={{ background: 'none', border: 'none', color: 'var(--color-link, #2563eb)', cursor: 'pointer', fontSize: 13, padding: 0, textDecoration: 'underline' }}
+            >
+              How do I do this?
+            </button>
+          </div>
+
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            style={{ display: 'none' }}
+            onChange={handleCsvFileChange}
+          />
+          <button
+            className="btn btn-primary"
+            disabled={csvUploading}
+            onClick={() => {
+              setCsvErrors(null)
+              setCsvSuccess(null)
+              setCsvParseError(null)
+              csvInputRef.current?.click()
+            }}
+          >
+            {csvUploading ? 'Uploading…' : 'Choose CSV file to import'}
+          </button>
+
+          {csvParseError && (
+            <div className="alert alert-danger" style={{ marginTop: 12 }}>{csvParseError}</div>
+          )}
+          {csvErrors && csvErrors.length > 0 && (
+            <div className="alert alert-danger" style={{ marginTop: 12 }}>
+              <strong>Fix these errors in your CSV and try again:</strong>
+              <ul style={{ marginTop: 6, paddingLeft: 20 }}>
+                {csvErrors.map((e, i) => (
+                  <li key={i} style={{ marginBottom: 2 }}>
+                    Row {e.row}{e.word ? ` ("${e.word}")` : ''}: {e.error}
+                  </li>
+                ))}
+              </ul>
+              <p style={{ marginTop: 6, fontSize: 12, color: 'inherit' }}>
+                The import was not saved. Fix all errors and re-upload.
+              </p>
+            </div>
+          )}
+          {csvSuccess !== null && (
+            <div className="alert alert-success" style={{ marginTop: 12 }}>
+              Imported {csvSuccess} card{csvSuccess !== 1 ? 's' : ''} successfully.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cards table */}
       <div className="table-scroll">
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Word</th><th>POS</th><th>L2 Definition</th><th>L1 Definition</th><th>Example</th>
-            {isEditable && <th style={{ width: 100 }}>Actions</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {!cs?.cards.length && <tr><td colSpan={6} className="table-empty">No cards yet. Add one or import a CSV.</td></tr>}
-          {cs?.cards.map((c) => (
-            <tr key={c.id}>
-              <td style={{ fontWeight: 500 }}>{c.word}</td>
-              <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{c.pos ?? '—'}</td>
-              <td style={{ fontSize: 13 }}>{c.definitionL2 ?? '—'}</td>
-              <td style={{ fontSize: 13 }}>{c.definitionL1 ?? '—'}</td>
-              <td style={{ fontSize: 13 }}>{c.exampleSentence ?? '—'}</td>
-              {isEditable && (
-                <td>
-                  <button className="btn btn-secondary btn-sm" onClick={() => openEdit(c)} style={{ marginRight: 4 }}>Edit</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c)}>Delete</button>
-                </td>
-              )}
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Word</th><th>POS</th><th>L2 Definition</th><th>L1 Definition</th><th>Example</th>
+              {isEditable && <th style={{ width: 100 }}>Actions</th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {!cs?.cards.length && <tr><td colSpan={6} className="table-empty">No cards yet. Import a CSV or add cards one at a time.</td></tr>}
+            {cs?.cards.map((c) => (
+              <tr key={c.id}>
+                <td style={{ fontWeight: 500 }}>{c.word}</td>
+                <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{c.pos ?? '—'}</td>
+                <td style={{ fontSize: 13 }}>{c.definitionL2 ?? '—'}</td>
+                <td style={{ fontSize: 13 }}>{c.definitionL1 ?? '—'}</td>
+                <td style={{ fontSize: 13 }}>{c.exampleSentence ?? '—'}</td>
+                {isEditable && (
+                  <td>
+                    <button className="btn btn-secondary btn-sm" onClick={() => openEdit(c)} style={{ marginRight: 4 }}>Edit</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c)}>Delete</button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
