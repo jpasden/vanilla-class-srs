@@ -282,6 +282,7 @@ export default function TeacherClassDetailPage() {
               )}
             </div>
           </div>
+          <div className="card">
           <div className="table-scroll">
           <table className="table">
             <thead><tr><th>Name</th><th>Email</th><th>Cards in Deck</th><th>Actions</th></tr></thead>
@@ -289,7 +290,7 @@ export default function TeacherClassDetailPage() {
               {!enrollments?.length && <tr><td colSpan={4} className="table-empty">No students enrolled.</td></tr>}
               {enrollments?.map((enr) => (
                 <tr key={enr.id}>
-                  <td>{enr.student.user.name}</td>
+                  <td><Link to={`/teacher/classes/${id}/students/${enr.student.id}/stats`} state={{ studentName: enr.student.user.name }}>{enr.student.user.name}</Link></td>
                   <td>{enr.student.user.email}</td>
                   <td>{enr.deck?._count.instances ?? 0}</td>
                   <td style={{ display: 'flex', gap: 4 }}>
@@ -303,6 +304,7 @@ export default function TeacherClassDetailPage() {
               ))}
             </tbody>
           </table>
+          </div>
           </div>
         </div>
       )}
@@ -388,6 +390,7 @@ export default function TeacherClassDetailPage() {
           <div style={{ marginBottom: 16 }}>
             <button className="btn btn-primary btn-sm" onClick={() => { setFormError(null); setAssignForm({ cardSetId: '', type: 'MANDATORY', priority: 0 }); setShowAddAssignment(true) }}>+ Assign CardSet</button>
           </div>
+          <div className="card">
           <div className="table-scroll">
           <table className="table">
             <thead><tr><th>CardSet</th><th>Type</th><th>Priority</th><th>Cards</th><th>Actions</th></tr></thead>
@@ -404,6 +407,7 @@ export default function TeacherClassDetailPage() {
               ))}
             </tbody>
           </table>
+          </div>
           </div>
         </div>
       )}
