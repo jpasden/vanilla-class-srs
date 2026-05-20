@@ -8,20 +8,20 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
 
   server:
-    build: ./server
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     depends_on:
       - db
     env_file: .env
-    ports:
-      - "${PORT:-3000}:3000"
 
   client:
-    build: ./client
+    build:
+      context: .
+      dockerfile: client/Dockerfile
     restart: unless-stopped
     ports:
       - "80:80"
