@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { SimpleBarChart, AccuracyLineChart } from '../../components/Charts'
@@ -144,7 +145,11 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
               return (
                 <tr key={s.studentId}>
                   <td style={{ color: 'var(--color-text-muted)' }}>{i + 1}</td>
-                  <td>{s.name}</td>
+                  <td>
+                    <Link to={`/teacher/classes/${classId}/students/${s.studentId}/stats`} state={{ studentName: s.name }}>
+                      {s.name}
+                    </Link>
+                  </td>
                   <td>{s.totalReps}</td>
                   <td>{pct(s.accuracyRate)}</td>
                   <td>

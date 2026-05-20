@@ -26,6 +26,7 @@ import TeacherClassDetailPage from './pages/teacher/ClassDetailPage'
 import TeacherStudentCardsPage from './pages/teacher/StudentCardsPage'
 import TeacherCardSetsPage from './pages/teacher/CardSetsPage'
 import TeacherCardSetDetailPage from './pages/teacher/CardSetDetailPage'
+import TeacherStudentStatsPage from './pages/teacher/StudentStatsPage'
 
 // Student pages
 import EnrollmentPickerPage from './pages/student/EnrollmentPickerPage'
@@ -83,6 +84,7 @@ export default function App() {
               <Route path="classes" element={<TeacherClassesPage />} />
               <Route path="classes/:id" element={<TeacherClassDetailPage />} />
               <Route path="classes/:id/students/:studentId" element={<TeacherStudentCardsPage />} />
+              <Route path="classes/:classId/students/:studentId/stats" element={<TeacherStudentStatsPage />} />
               <Route path="cardsets" element={<TeacherCardSetsPage />} />
               <Route path="cardsets/:id" element={<TeacherCardSetDetailPage />} />
             </Route>

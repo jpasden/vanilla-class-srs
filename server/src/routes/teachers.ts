@@ -10,6 +10,7 @@ import { enrollStudents, validateEnrollRows } from '../services/enrollment.servi
 import { generateTempPassword, hashPassword } from '../services/auth.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
 import teacherStatsRouter from './stats.teacher'
+import teacherStudentStatsRouter from './stats.teacher-student'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
@@ -571,5 +572,8 @@ router.post('/classes/:id/homework', validate(HomeworkSchema), async (req: Reque
 
 // Mount the stats sub-router so it has access to :id param
 router.use('/classes/:id/stats', teacherStatsRouter)
+
+// Student stats — teacher read-only view (mirrors student stats routes)
+router.use('/classes/:classId/students/:studentId/stats', teacherStudentStatsRouter)
 
 export default router
