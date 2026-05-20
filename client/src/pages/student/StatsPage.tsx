@@ -313,6 +313,7 @@ export default function StudentStatsPage() {
 
       {tab === 'sessions' && (
         <div>
+          <div className="card">
           {sessLoad && <div className="spinner" />}
           <div className="table-scroll">
           <table className="table">
@@ -331,6 +332,7 @@ export default function StudentStatsPage() {
               ))}
             </tbody>
           </table>
+          </div>
           </div>
         </div>
       )}
