@@ -114,7 +114,7 @@ export default function TeacherStudentStatsPage() {
 
   const base = `/teachers/classes/${classId}/students/${studentId}/stats`
 
-  const { data: summary, loading: sumLoad } = useApi<Summary>(
+  const { data: summary, loading: sumLoad, error: sumError } = useApi<Summary>(
     () => api.get(`${base}/summary?tz=${tz}`),
     [classId, studentId]
   )
@@ -153,13 +153,21 @@ export default function TeacherStudentStatsPage() {
         <h1 className="page-title">My Stats ({studentName})</h1>
       </div>
 
-      <div className="tabs">
-        <button className={`tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
-        <button className={`tab${tab === 'accuracy' ? ' active' : ''}`} onClick={() => setTab('accuracy')}>Accuracy Trend</button>
-        <button className={`tab${tab === 'sessions' ? ' active' : ''}`} onClick={() => setTab('sessions')}>Session Log</button>
-      </div>
+      {!sumError && (
+        <div className="tabs">
+          <button className={`tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
+          <button className={`tab${tab === 'accuracy' ? ' active' : ''}`} onClick={() => setTab('accuracy')}>Accuracy Trend</button>
+          <button className={`tab${tab === 'sessions' ? ' active' : ''}`} onClick={() => setTab('sessions')}>Session Log</button>
+        </div>
+      )}
 
-      {tab === 'overview' && (
+      {sumError && (
+        <div className="alert alert-danger">
+          You do not have permission to view this student's stats.
+        </div>
+      )}
+
+      {tab === 'overview' && !sumError && (
         <div>
           {sumLoad && <div className="spinner" />}
           {summary && (

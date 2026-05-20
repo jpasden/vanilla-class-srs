@@ -7,23 +7,28 @@
  */
 
 import { Router, Request, Response } from 'express'
+import { Role } from '@prisma/client'
 import prisma from '../lib/prisma'
 
 const router = Router({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
 
-// ── Helper: verify teacher owns class and student is enrolled ─────────────────
+// ── Helper: verify access and student is enrolled ─────────────────────────────
+// Admins can view any class; teachers only classes they own.
 
 async function getEnrollmentForTeacher(
-  teacherUserId: string,
+  userId: string,
+  userRole: Role,
   classId: string,
   studentId: string,
 ) {
-  const teacher = await prisma.teacher.findUnique({ where: { userId: teacherUserId } })
-  if (!teacher) return null
-
   const cls = await prisma.class.findUnique({ where: { id: classId } })
-  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) return null
+  if (!cls || cls.archivedAt) return null
+
+  if (userRole !== Role.ADMIN) {
+    const teacher = await prisma.teacher.findUnique({ where: { userId } })
+    if (!teacher || cls.teacherId !== teacher.id) return null
+  }
 
   const enrollment = await prisma.enrollment.findFirst({
     where: { classId, student: { id: studentId } },
@@ -42,7 +47,7 @@ function daysAgo(n: number) {
 // ── GET /stats/summary ────────────────────────────────────────────────────────
 
 router.get('/summary', async (req: Request, res: Response) => {
-  const enrollment = await getEnrollmentForTeacher(req.user!.sub, p(req, 'classId'), p(req, 'studentId'))
+  const enrollment = await getEnrollmentForTeacher(req.user!.sub, req.user!.role, p(req, 'classId'), p(req, 'studentId'))
   if (!enrollment) { res.status(404).json({ error: 'Enrollment not found' }); return }
   if (!enrollment.deck) { res.status(404).json({ error: 'Deck not found' }); return }
 
@@ -136,7 +141,7 @@ router.get('/summary', async (req: Request, res: Response) => {
 // ── GET /stats/daily ──────────────────────────────────────────────────────────
 
 router.get('/daily', async (req: Request, res: Response) => {
-  const enrollment = await getEnrollmentForTeacher(req.user!.sub, p(req, 'classId'), p(req, 'studentId'))
+  const enrollment = await getEnrollmentForTeacher(req.user!.sub, req.user!.role, p(req, 'classId'), p(req, 'studentId'))
   if (!enrollment?.deck) { res.status(404).json({ error: 'Enrollment not found' }); return }
 
   const days = Math.min(365, Math.max(1, parseInt(req.query.days as string ?? '30') || 30))
@@ -166,7 +171,7 @@ router.get('/daily', async (req: Request, res: Response) => {
 // ── GET /stats/accuracy ───────────────────────────────────────────────────────
 
 router.get('/accuracy', async (req: Request, res: Response) => {
-  const enrollment = await getEnrollmentForTeacher(req.user!.sub, p(req, 'classId'), p(req, 'studentId'))
+  const enrollment = await getEnrollmentForTeacher(req.user!.sub, req.user!.role, p(req, 'classId'), p(req, 'studentId'))
   if (!enrollment?.deck) { res.status(404).json({ error: 'Enrollment not found' }); return }
 
   const deckId = enrollment.deck.id
@@ -194,7 +199,7 @@ router.get('/accuracy', async (req: Request, res: Response) => {
 // ── GET /stats/forecast ───────────────────────────────────────────────────────
 
 router.get('/forecast', async (req: Request, res: Response) => {
-  const enrollment = await getEnrollmentForTeacher(req.user!.sub, p(req, 'classId'), p(req, 'studentId'))
+  const enrollment = await getEnrollmentForTeacher(req.user!.sub, req.user!.role, p(req, 'classId'), p(req, 'studentId'))
   if (!enrollment?.deck) { res.status(404).json({ error: 'Enrollment not found' }); return }
 
   const deckId = enrollment.deck.id
@@ -225,7 +230,7 @@ router.get('/forecast', async (req: Request, res: Response) => {
 // ── GET /stats/sessions ───────────────────────────────────────────────────────
 
 router.get('/sessions', async (req: Request, res: Response) => {
-  const enrollment = await getEnrollmentForTeacher(req.user!.sub, p(req, 'classId'), p(req, 'studentId'))
+  const enrollment = await getEnrollmentForTeacher(req.user!.sub, req.user!.role, p(req, 'classId'), p(req, 'studentId'))
   if (!enrollment?.deck) { res.status(404).json({ error: 'Enrollment not found' }); return }
 
   const sessions = await prisma.reviewSession.findMany({
@@ -247,7 +252,7 @@ router.get('/sessions', async (req: Request, res: Response) => {
 // ── GET /stats/growth ─────────────────────────────────────────────────────────
 
 router.get('/growth', async (req: Request, res: Response) => {
-  const enrollment = await getEnrollmentForTeacher(req.user!.sub, p(req, 'classId'), p(req, 'studentId'))
+  const enrollment = await getEnrollmentForTeacher(req.user!.sub, req.user!.role, p(req, 'classId'), p(req, 'studentId'))
   if (!enrollment?.deck) { res.status(404).json({ error: 'Enrollment not found' }); return }
 
   const days = Math.min(365, Math.max(1, parseInt(req.query.days as string ?? '30') || 30))
