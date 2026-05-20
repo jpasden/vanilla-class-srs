@@ -135,6 +135,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
 
       {/* Student Leaderboard — §14.2 + §14.3 */}
       {tab === 'leaderboard' && (
+        <div className="card">
         <div className="table-scroll">
         <table className="table">
           <thead><tr><th>#</th><th>Student</th><th>Total Reps</th><th>Accuracy</th><th>Flag</th></tr></thead>
@@ -163,10 +164,12 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
           </tbody>
         </table>
         </div>
+        </div>
       )}
 
       {/* Card Leaderboard — §14.4 */}
       {tab === 'cards' && (
+        <div className="card">
         <div className="table-scroll">
         <table className="table">
           <thead><tr><th>Word</th><th>Avg Accuracy</th><th>Reviewed By</th><th>Enrolled</th><th>Problem?</th></tr></thead>
@@ -184,6 +187,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
           </tbody>
         </table>
         </div>
+        </div>
       )}
 
       {/* Activity charts — §14.7 */}
@@ -192,7 +196,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
           stats.masteryMatrix.students.map((s) => [s.studentId, s.name])
         )
         return (
-          <div>
+          <div className="card">
             <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Cards Reviewed Per Day</h3>
             <SimpleBarChart data={stats.dailyChart.map((d) => ({ label: d.date.slice(5), value: d.cardsReviewed }))} />
 
@@ -290,6 +294,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
                   {stats.homeworkCompliance.requirement.daysRemaining} days remaining
                 </div>
               </div>
+              <div className="card">
               <div className="table-scroll">
               <table className="table">
                 <thead><tr><th>Student</th><th>Sessions Done</th><th>Required</th><th>Status</th></tr></thead>
@@ -309,6 +314,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
                 </tbody>
               </table>
               </div>
+              </div>
             </>
           )}
         </div>
@@ -316,6 +322,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
 
       {/* Recent student additions — §14.5 */}
       {tab === 'additions' && (
+        <div className="card">
         <div className="table-scroll">
         <table className="table">
           <thead><tr><th>Student</th><th>Word</th><th>L2 Definition</th><th>Added</th></tr></thead>
@@ -331,6 +338,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
             ))}
           </tbody>
         </table>
+        </div>
         </div>
       )}
     </div>
