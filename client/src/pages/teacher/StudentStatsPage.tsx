@@ -280,7 +280,7 @@ export default function TeacherStudentStatsPage() {
         </div>
       )}
 
-      {tab === 'accuracy' && (
+      {tab === 'accuracy' && !sumError && (
         <div>
           <div className="card">
             <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 4 }}>Rolling 7-Day Accuracy Rate</h2>
@@ -309,7 +309,7 @@ export default function TeacherStudentStatsPage() {
         </div>
       )}
 
-      {tab === 'sessions' && (
+      {tab === 'sessions' && !sumError && (
         <div>
           {sessLoad && <div className="spinner" />}
           <div className="table-scroll">
