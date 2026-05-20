@@ -85,7 +85,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
 
       {/* Mastery Matrix — §14.1 */}
       {tab === 'matrix' && (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="card" style={{ overflowX: 'auto' }}>
           {stats.masteryMatrix.cards.length === 0 ? (
             <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>No card data yet.</p>
           ) : (
