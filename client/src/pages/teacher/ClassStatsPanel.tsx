@@ -47,7 +47,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
     () => api.get(`/teachers/classes/${classId}/stats?days=${days}`),
     [classId, days]
   )
-  const [tab, setTab] = useState<StatsTab>('matrix')
+  const [tab, setTab] = useState<StatsTab>('leaderboard')
   const [expandedAdoption, setExpandedAdoption] = useState<Set<string>>(new Set())
 
   const statsBar = (
@@ -71,12 +71,12 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
       {statsBar}
       <div className="tabs">
         {([
-          ['matrix', 'Mastery Matrix'],
           ['leaderboard', 'Leaderboard'],
-          ['cards', 'Card Stats'],
           ['activity', 'Activity'],
           ['compliance', 'Compliance'],
+          ['cards', 'Card Stats'],
           ['additions', 'Student Additions'],
+          ['matrix', 'Mastery Matrix'],
         ] as [StatsTab, string][]).map(([t, label]) => (
           <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{label}</button>
         ))}
