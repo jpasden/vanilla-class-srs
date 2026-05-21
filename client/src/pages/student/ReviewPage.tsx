@@ -22,11 +22,17 @@ interface SessionResponse {
 
 type Phase = 'idle' | 'loading' | 'reviewing' | 'done' | 'empty'
 
-const GRADE_LABELS: Record<number, string> = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' }
+const GRADE_LABELS: Record<number, string> = {
+  1: "I don't know at all.",
+  2: 'Very hard to remember.',
+  3: 'Yes, I know it.',
+  4: 'Wow, super easy!',
+}
 const GRADE_COLORS: Record<number, string> = {
   1: 'var(--color-danger)',
   2: 'var(--color-warning)',
   3: 'var(--color-accent-alt)',
+  4: 'var(--color-info)',
 }
 
 export default function ReviewPage() {
@@ -259,25 +265,19 @@ export default function ReviewPage() {
             )}
           </div>
 
-          {/* Grade buttons — 2×2 grid so all four fit on 375px */}
+          {/* Grade buttons — vertically stacked, full width */}
           {flipped && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
               {[1, 2, 3, 4].map((g) => (
                 <button
                   key={g}
                   className="btn"
-                  style={g === 4 ? {
-                    background: 'var(--color-surface)',
-                    color: 'var(--color-accent-alt)',
-                    border: '2px solid var(--color-accent-alt)',
-                    fontSize: 'var(--text-base)',
-                    padding: '12px 8px',
-                    justifyContent: 'center',
-                  } : {
+                  style={{
                     background: GRADE_COLORS[g],
                     color: 'var(--color-vanilla)',
                     fontSize: 'var(--text-base)',
-                    padding: '14px 8px',
+                    padding: '14px 16px',
+                    width: '100%',
                     justifyContent: 'center',
                   }}
                   disabled={grading}
