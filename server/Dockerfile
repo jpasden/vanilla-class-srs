@@ -3,6 +3,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /build
 
+# OpenSSL 1.1 required by Prisma
+RUN apk add --no-cache openssl
+
 # Copy workspace manifests first for layer caching
 COPY package.json package-lock.json ./
 COPY server/package.json ./server/
@@ -27,6 +30,9 @@ RUN npm run build -w server
 FROM node:22-alpine
 
 WORKDIR /app
+
+# OpenSSL 1.1 required by Prisma query engine on Alpine
+RUN apk add --no-cache openssl
 
 # Copy workspace manifests
 COPY package.json package-lock.json ./
