@@ -32,8 +32,8 @@ COPY package.json package-lock.json ./
 COPY server/package.json ./server/
 COPY shared/package.json ./shared/
 
-# Production deps only
-RUN npm ci --omit=dev --ignore-scripts
+# Production deps only — must NOT use --ignore-scripts so bcrypt native binding compiles
+RUN npm ci --omit=dev
 
 # Copy compiled output and prisma schema/migrations
 COPY --from=builder /build/server/dist ./server/dist
