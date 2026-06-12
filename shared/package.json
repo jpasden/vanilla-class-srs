@@ -2,12 +2,12 @@
   "name": "@vanilla-srs/shared",
   "version": "0.1.0",
   "private": true,
-  "main": "index.ts",
-  "types": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./index.ts",
-    "./fsrs": "./fsrs/index.ts",
-    "./types": "./types/index.ts"
+    ".": "./dist/index.js",
+    "./fsrs": "./dist/fsrs/index.js",
+    "./types": "./dist/types/index.js"
   },
   "scripts": {
     "build": "tsc",

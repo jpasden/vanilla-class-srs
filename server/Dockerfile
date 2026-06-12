@@ -19,7 +19,8 @@ COPY prisma/ ./prisma/
 # Generate Prisma client
 RUN npx prisma generate --schema=prisma/schema.prisma
 
-# Compile server TypeScript
+# Compile shared first, then server
+RUN npm run build -w shared
 RUN npm run build -w server
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
@@ -40,8 +41,9 @@ COPY --from=builder /build/server/dist ./server/dist
 COPY --from=builder /build/node_modules/.prisma ./node_modules/.prisma
 COPY prisma/ ./prisma/
 
-# shared types are referenced at runtime via the workspace — copy compiled if needed
-COPY --from=builder /build/shared ./shared
+# Copy compiled shared package so workspace resolution finds dist/
+COPY --from=builder /build/shared/dist ./shared/dist
+COPY --from=builder /build/shared/package.json ./shared/package.json
 
 ENV NODE_ENV=production
 
