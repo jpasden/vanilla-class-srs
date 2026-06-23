@@ -52,7 +52,8 @@ export default function StudentLayout() {
             </NavLink>
           ))}
         </div>
-        <div style={{ padding: '8px 16px' }}>
+        <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <NavLink to="/change-password" className="sidebar-nav-link">Change Password</NavLink>
           <button
             className="btn btn-secondary btn-sm"
             onClick={async () => { setActive(null); await logout(); navigate('/login') }}

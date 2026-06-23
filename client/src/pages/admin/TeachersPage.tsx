@@ -15,6 +15,7 @@ export default function AdminTeachersPage() {
   const { data: sgs } = useApi<SubjectGrade[]>(() => api.get('/admin/subject-grades'))
   const [showCreate, setShowCreate] = useState(false)
   const [showAssign, setShowAssign] = useState<Teacher | null>(null)
+  const [createdCreds, setCreatedCreds] = useState<{ email: string; tempPassword: string } | null>(null)
   const [form, setForm] = useState({ name: '', email: '', subjectGradeIds: [] as string[] })
   const [assignSgId, setAssignSgId] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
@@ -25,8 +26,9 @@ export default function AdminTeachersPage() {
     setSaving(true)
     setFormError(null)
     try {
-      await api.post('/admin/teachers', form)
+      const result = await api.post<{ teacherId: string; tempPassword: string }>('/admin/teachers', form)
       setShowCreate(false)
+      setCreatedCreds({ email: form.email, tempPassword: result.tempPassword })
       reload()
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : 'Create failed')
@@ -83,6 +85,23 @@ export default function AdminTeachersPage() {
               <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Creating…' : 'Create'}</button>
             </div>
           </form>
+        </Modal>
+      )}
+      {createdCreds && (
+        <Modal title="Teacher Created" onClose={() => setCreatedCreds(null)}>
+          <div className="alert alert-success" style={{ marginBottom: 16 }}>
+            Account created for <strong>{createdCreds.email}</strong>.
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 4 }}>Temporary password:</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 600, letterSpacing: 1 }}>{createdCreds.tempPassword}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
+              This password is shown only once. The teacher must change it on first login.
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-primary" onClick={() => setCreatedCreds(null)}>Done</button>
+          </div>
         </Modal>
       )}
       {showAssign && (
