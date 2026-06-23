@@ -11,7 +11,21 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+// Serializes concurrent refresh attempts so simultaneous 401s don't each fire their own
+// /auth/refresh call — they all await the same in-flight promise.
+let refreshPromise: Promise<boolean> | null = null
+
+async function tryRefresh(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
+      .then((res) => res.ok)
+      .catch(() => false)
+      .finally(() => { refreshPromise = null })
+  }
+  return refreshPromise
+}
+
+async function request<T>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
   const opts: RequestInit = {
     method,
     credentials: 'include',
@@ -20,6 +34,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   const res = await fetch(`/api${path}`, opts)
   if (!res.ok) {
+    // Access token expired mid-session — silently refresh via the refresh_token cookie
+    // and retry once. Skip for the refresh/login endpoints themselves to avoid loops.
+    if (res.status === 401 && !isRetry && path !== '/auth/refresh' && path !== '/auth/login') {
+      const refreshed = await tryRefresh()
+      if (refreshed) return request<T>(method, path, body, true)
+    }
     let msg = res.statusText
     try { const j = await res.json(); msg = j.error ?? msg } catch { /* ignore */ }
     throw new ApiError(res.status, msg)
@@ -38,7 +58,7 @@ export const api = {
 }
 
 /** Upload a file via multipart form data */
-export async function uploadFile<T>(path: string, file: File, fieldName = 'file'): Promise<T> {
+export async function uploadFile<T>(path: string, file: File, fieldName = 'file', isRetry = false): Promise<T> {
   const form = new FormData()
   form.append(fieldName, file)
   const res = await fetch(`/api${path}`, {
@@ -47,6 +67,10 @@ export async function uploadFile<T>(path: string, file: File, fieldName = 'file'
     body: form,
   })
   if (!res.ok) {
+    if (res.status === 401 && !isRetry) {
+      const refreshed = await tryRefresh()
+      if (refreshed) return uploadFile<T>(path, file, fieldName, true)
+    }
     let msg = res.statusText
     try { const j = await res.json(); msg = j.error ?? msg } catch { /* ignore */ }
     throw new ApiError(res.status, msg)

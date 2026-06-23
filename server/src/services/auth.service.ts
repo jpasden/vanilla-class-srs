@@ -5,8 +5,8 @@ import { Response } from 'express'
 import { Role } from '@prisma/client'
 
 const BCRYPT_ROUNDS = 12
-const ACCESS_TOKEN_TTL = '15m'
-const REFRESH_TOKEN_TTL = '7d'
+const ACCESS_TOKEN_TTL = '1h'
+const REFRESH_TOKEN_TTL = '30d'
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 60 // 1 hour
 
 // ─── JWT ────────────────────────────────────────────────────────────────────
@@ -45,14 +45,14 @@ export function setAuthCookies(res: Response, userId: string, role: Role): void 
     httpOnly: true,
     secure: IS_PROD,
     sameSite: 'lax',
-    maxAge: 1000 * 60 * 15, // 15 min
+    maxAge: 1000 * 60 * 60, // 1 hour
   })
 
   res.cookie('refresh_token', refreshToken, {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
     path: '/api/auth/refresh',
   })
 }
