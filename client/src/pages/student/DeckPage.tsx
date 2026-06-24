@@ -52,7 +52,7 @@ export default function StudentDeckPage() {
   const [historyData, setHistoryData] = useState<CardHistory | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [addForm, setAddForm] = useState({ word: '', pos: '', definitionL2: '', definitionL1: '', exampleSentence: '' })
-  const [editSentence, setEditSentence] = useState('')
+  const [editForm, setEditForm] = useState({ word: '', pos: '', definitionL2: '', definitionL1: '', exampleSentence: '' })
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -83,18 +83,39 @@ export default function StudentDeckPage() {
     }
   }
 
-  const handleEditSentence = async (e: FormEvent) => {
+  const isOwnCard = (inst: CardInstance) => inst.origin === 'STUDENT_ADDED'
+
+  const handleEditSave = async (e: FormEvent) => {
     e.preventDefault()
     if (!editModal) return
+    if (isOwnCard(editModal)) {
+      if (!editForm.definitionL2.trim() && !editForm.definitionL1.trim()) {
+        setFormError('At least one definition (L1 or L2) is required.'); return
+      }
+    }
     setSaving(true)
+    setFormError(null)
     try {
-      await api.patch(`/students/deck/cards/${editModal.id}`, { exampleSentence: editSentence })
+      const payload = isOwnCard(editModal)
+        ? editForm
+        : { definitionL1: editForm.definitionL1, exampleSentence: editForm.exampleSentence }
+      await api.patch(`/students/deck/cards/${editModal.id}`, payload)
       setEditModal(null)
       reload()
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : 'Failed')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async (inst: CardInstance) => {
+    if (!confirm(`Delete "${inst.card.word}" from your deck? This cannot be undone.`)) return
+    try {
+      await api.delete(`/students/deck/cards/${inst.id}`)
+      reload()
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Failed')
     }
   }
 
@@ -157,16 +178,56 @@ export default function StudentDeckPage() {
         </Modal>
       )}
 
-      {editModal && (
-        <Modal title={`Edit Example — "${editModal.card.word}"`} onClose={() => setEditModal(null)}>
+      {editModal && isOwnCard(editModal) && (
+        <Modal title={`Edit "${editModal.card.word}"`} onClose={() => setEditModal(null)}>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            You can personalise the example sentence. Leave blank to use the teacher's version.
+            This is a card you added yourself, so you can edit anything on it.
           </p>
-          <form onSubmit={handleEditSentence}>
+          <form onSubmit={handleEditSave}>
             {formError && <div className="alert alert-danger">{formError}</div>}
             <div className="form-group">
+              <label className="form-label">Word *</label>
+              <input className="form-input" value={editForm.word} onChange={(e) => setEditForm({ ...editForm, word: e.target.value })} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Part of Speech</label>
+              <input className="form-input" value={editForm.pos} onChange={(e) => setEditForm({ ...editForm, pos: e.target.value })} placeholder="noun, verb, adj…" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Definition (L2 — target language)</label>
+              <textarea className="form-textarea" value={editForm.definitionL2} onChange={(e) => setEditForm({ ...editForm, definitionL2: e.target.value })} rows={2} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Definition (L1 — native language)</label>
+              <textarea className="form-textarea" value={editForm.definitionL1} onChange={(e) => setEditForm({ ...editForm, definitionL1: e.target.value })} rows={2} />
+            </div>
+            <div className="form-group">
               <label className="form-label">Example Sentence</label>
-              <textarea className="form-textarea" value={editSentence} onChange={(e) => setEditSentence(e.target.value)} rows={3} placeholder={editModal.card.exampleSentence ?? 'No example on card'} />
+              <textarea className="form-textarea" value={editForm.exampleSentence} onChange={(e) => setEditForm({ ...editForm, exampleSentence: e.target.value })} rows={2} />
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setEditModal(null)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {editModal && !isOwnCard(editModal) && (
+        <Modal title={`Edit — "${editModal.card.word}"`} onClose={() => setEditModal(null)}>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+            You can personalise the example sentence, and fill in a native-language (L1) definition for your own
+            reference. Leave the example blank to use the teacher's version.
+          </p>
+          <form onSubmit={handleEditSave}>
+            {formError && <div className="alert alert-danger">{formError}</div>}
+            <div className="form-group">
+              <label className="form-label">Definition (L1 — native language)</label>
+              <textarea className="form-textarea" value={editForm.definitionL1} onChange={(e) => setEditForm({ ...editForm, definitionL1: e.target.value })} rows={2} placeholder={editModal.card.definitionL1 ?? 'No L1 definition yet'} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Example Sentence</label>
+              <textarea className="form-textarea" value={editForm.exampleSentence} onChange={(e) => setEditForm({ ...editForm, exampleSentence: e.target.value })} rows={3} placeholder={editModal.card.exampleSentence ?? 'No example on card'} />
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={() => setEditModal(null)}>Cancel</button>
@@ -263,10 +324,23 @@ export default function StudentDeckPage() {
                   </button>
                   <button
                     className="btn btn-secondary btn-sm"
-                    onClick={() => { setEditSentence(inst.exampleSentence ?? ''); setFormError(null); setEditModal(inst) }}
+                    onClick={() => {
+                      setEditForm({
+                        word: inst.card.word,
+                        pos: inst.card.pos ?? '',
+                        definitionL2: inst.card.definitionL2 ?? '',
+                        definitionL1: inst.card.definitionL1 ?? '',
+                        exampleSentence: isOwnCard(inst) ? (inst.card.exampleSentence ?? '') : (inst.exampleSentence ?? ''),
+                      })
+                      setFormError(null)
+                      setEditModal(inst)
+                    }}
                   >
                     Edit
                   </button>
+                  {isOwnCard(inst) && (
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(inst)}>Delete</button>
+                  )}
                 </td>
               </tr>
             ))}

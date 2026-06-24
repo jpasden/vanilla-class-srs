@@ -157,12 +157,72 @@ router.post('/deck/cards', validate(AddOwnCardSchema), async (req: Request, res:
   res.status(201).json(result)
 })
 
-// PATCH /api/students/deck/cards/:instanceId  — edit exampleSentence only (spec §11)
+// PATCH /api/students/deck/cards/:instanceId  — spec §11
+// STUDENT_ADDED cards: student owns the underlying Card (it lives in their personal
+// CardSet, which is 1:1 with their Enrollment), so they may edit any field directly.
+// Teacher-assigned/optional cards: student may only edit their own exampleSentence
+// override (CardInstance) and the shared Card's L1 (native-language) definition,
+// which teachers typically leave blank for students to fill in themselves.
 const PatchInstanceSchema = z.object({
-  exampleSentence: z.string(),
+  word: z.string().min(1).optional(),
+  pos: z.string().optional(),
+  definitionL2: z.string().optional(),
+  definitionL1: z.string().optional(),
+  exampleSentence: z.string().optional(),
 })
 
 router.patch('/deck/cards/:instanceId', validate(PatchInstanceSchema), async (req: Request, res: Response) => {
+  const student = await getStudent(req.user!.sub)
+  if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
+
+  const instance = await prisma.cardInstance.findUnique({
+    where: { id: p(req, 'instanceId') },
+    include: { deck: { include: { enrollment: true } }, card: true },
+  })
+  if (!instance || instance.deck.enrollment.studentId !== student.id) {
+    res.status(404).json({ error: 'Card instance not found' }); return
+  }
+
+  const isOwnCard = instance.origin === CardOrigin.STUDENT_ADDED
+
+  if (isOwnCard) {
+    const mergedL2 = req.body.definitionL2 !== undefined ? req.body.definitionL2 : instance.card.definitionL2
+    const mergedL1 = req.body.definitionL1 !== undefined ? req.body.definitionL1 : instance.card.definitionL1
+    if (!mergedL2?.trim() && !mergedL1?.trim()) {
+      res.status(400).json({ error: 'At least one definition (L1 or L2) is required.' }); return
+    }
+    await prisma.card.update({
+      where: { id: instance.cardId },
+      data: {
+        word: req.body.word ?? instance.card.word,
+        pos: req.body.pos !== undefined ? (req.body.pos || null) : instance.card.pos,
+        definitionL2: req.body.definitionL2 !== undefined ? (req.body.definitionL2 || null) : instance.card.definitionL2,
+        definitionL1: req.body.definitionL1 !== undefined ? (req.body.definitionL1 || null) : instance.card.definitionL1,
+        exampleSentence: req.body.exampleSentence !== undefined ? (req.body.exampleSentence || null) : instance.card.exampleSentence,
+      },
+    })
+  } else if (req.body.definitionL1 !== undefined) {
+    // Shared Card field — visible to everyone else with this card, but L1 is
+    // typically blank and intended for students to fill in for their own benefit.
+    await prisma.card.update({
+      where: { id: instance.cardId },
+      data: { definitionL1: req.body.definitionL1 || null },
+    })
+  }
+
+  const updated = await prisma.cardInstance.update({
+    where: { id: instance.id },
+    data: isOwnCard ? {} : (req.body.exampleSentence !== undefined ? { exampleSentence: req.body.exampleSentence || null } : {}),
+    include: { card: true },
+  })
+  res.json(updated)
+})
+
+// DELETE /api/students/deck/cards/:instanceId  — students may only delete their own
+// self-added cards. Deletes the CardInstance and the underlying Card (safe: it lives
+// in the student's personal CardSet, 1:1 with their Enrollment — nothing else
+// references it).
+router.delete('/deck/cards/:instanceId', async (req: Request, res: Response) => {
   const student = await getStudent(req.user!.sub)
   if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
 
@@ -173,13 +233,16 @@ router.patch('/deck/cards/:instanceId', validate(PatchInstanceSchema), async (re
   if (!instance || instance.deck.enrollment.studentId !== student.id) {
     res.status(404).json({ error: 'Card instance not found' }); return
   }
+  if (instance.origin !== CardOrigin.STUDENT_ADDED) {
+    res.status(403).json({ error: 'You can only delete cards you added yourself' }); return
+  }
 
-  const updated = await prisma.cardInstance.update({
-    where: { id: instance.id },
-    data: { exampleSentence: req.body.exampleSentence || null },
-    include: { card: true },
-  })
-  res.json(updated)
+  await prisma.$transaction([
+    prisma.reviewEvent.deleteMany({ where: { cardInstanceId: instance.id } }),
+    prisma.cardInstance.delete({ where: { id: instance.id } }),
+    prisma.card.delete({ where: { id: instance.cardId } }),
+  ])
+  res.json({ ok: true })
 })
 
 // ─────────────────────────────────────────────
