@@ -107,7 +107,7 @@ export default function LoginPage() {
           </h2>
           <ul style={{ fontSize: 16, lineHeight: 1.6, opacity: 0.9, paddingLeft: 20, marginBottom: 16 }}>
             <li>Teachers assign vocabulary for students to review</li>
-            <li>Students can freely add their own vocabulary, and teachers can see what they add</li>
+            <li>Students can freely add their own vocabulary, and teachers can see what their own students add</li>
             <li>Students review on their own; teachers can see the stats</li>
             <li>Leaderboards for each class and student streak stats are generated automatically</li>
             <li>
