@@ -269,6 +269,11 @@ model CardInstance {
   // Student override of exampleSentence. If null, fall back to Card.exampleSentence at render time.
   exampleSentence String?
 
+  // Student override of definitionL1 (native-language definition). If null, fall back
+  // to Card.definitionL1 at render time. Same pattern as exampleSentence — per-student,
+  // never visible to or shared with other students who have this same Card.
+  definitionL1 String?
+
   // How this instance arrived in the student's deck
   origin CardOrigin @default(TEACHER_ASSIGNED)
 

@@ -201,18 +201,20 @@ router.patch('/deck/cards/:instanceId', validate(PatchInstanceSchema), async (re
         exampleSentence: req.body.exampleSentence !== undefined ? (req.body.exampleSentence || null) : instance.card.exampleSentence,
       },
     })
-  } else if (req.body.definitionL1 !== undefined) {
-    // Shared Card field — visible to everyone else with this card, but L1 is
-    // typically blank and intended for students to fill in for their own benefit.
-    await prisma.card.update({
-      where: { id: instance.cardId },
-      data: { definitionL1: req.body.definitionL1 || null },
-    })
+  }
+
+  const instanceData: { exampleSentence?: string | null; definitionL1?: string | null } = {}
+  if (!isOwnCard) {
+    // Per-student overrides on CardInstance, same pattern as exampleSentence — never
+    // written to the shared Card, so one student's L1 translation never affects anyone
+    // else who has this same card.
+    if (req.body.exampleSentence !== undefined) instanceData.exampleSentence = req.body.exampleSentence || null
+    if (req.body.definitionL1 !== undefined) instanceData.definitionL1 = req.body.definitionL1 || null
   }
 
   const updated = await prisma.cardInstance.update({
     where: { id: instance.id },
-    data: isOwnCard ? {} : (req.body.exampleSentence !== undefined ? { exampleSentence: req.body.exampleSentence || null } : {}),
+    data: instanceData,
     include: { card: true },
   })
   res.json(updated)
@@ -372,7 +374,7 @@ router.get('/deck/export', async (req: Request, res: Response) => {
     orderBy: { createdAt: 'asc' },
   })
 
-  // Build CSV: student's exampleSentence takes priority over card's
+  // Build CSV: student's exampleSentence/definitionL1 override takes priority over card's
   const esc = (v: string | null | undefined) => {
     if (!v) return ''
     if (v.includes(',') || v.includes('"') || v.includes('\n')) return `"${v.replace(/"/g, '""')}"`
@@ -380,12 +382,13 @@ router.get('/deck/export', async (req: Request, res: Response) => {
   }
   const header = 'word,pos,definition_l2,definition_l1,example_sentence'
   const rows = instances.map((inst) => {
+    const definitionL1 = inst.definitionL1 ?? inst.card.definitionL1 ?? null
     const example = inst.exampleSentence ?? inst.card.exampleSentence ?? null
     return [
       esc(inst.card.word),
       esc(inst.card.pos),
       esc(inst.card.definitionL2),
-      esc(inst.card.definitionL1),
+      esc(definitionL1),
       esc(example),
     ].join(',')
   })

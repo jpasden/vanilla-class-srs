@@ -11,6 +11,7 @@ interface CardInstance {
   due: string
   origin: string
   exampleSentence: string | null
+  definitionL1: string | null
   card: {
     word: string
     pos: string | null
@@ -329,7 +330,7 @@ export default function StudentDeckPage() {
                         word: inst.card.word,
                         pos: inst.card.pos ?? '',
                         definitionL2: inst.card.definitionL2 ?? '',
-                        definitionL1: inst.card.definitionL1 ?? '',
+                        definitionL1: isOwnCard(inst) ? (inst.card.definitionL1 ?? '') : (inst.definitionL1 ?? ''),
                         exampleSentence: isOwnCard(inst) ? (inst.card.exampleSentence ?? '') : (inst.exampleSentence ?? ''),
                       })
                       setFormError(null)
