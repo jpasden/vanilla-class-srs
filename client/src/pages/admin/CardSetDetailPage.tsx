@@ -286,31 +286,33 @@ export default function AdminCardSetDetailPage() {
       </div>
 
       {/* Cards table */}
-      <div className="table-scroll">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Word</th><th>POS</th><th>L2 Definition</th><th>L1 Definition</th><th>Example</th>
-              <th style={{ width: 100 }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!cs?.cards.length && <tr><td colSpan={6} className="table-empty">No cards yet. Import a CSV or add cards one at a time.</td></tr>}
-            {cs?.cards.map((c) => (
-              <tr key={c.id}>
-                <td style={{ fontWeight: 500 }}>{c.word}</td>
-                <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{c.pos ?? '—'}</td>
-                <td style={{ fontSize: 13 }}>{c.definitionL2 ?? '—'}</td>
-                <td style={{ fontSize: 13 }}>{c.definitionL1 ?? '—'}</td>
-                <td style={{ fontSize: 13 }}>{c.exampleSentence ?? '—'}</td>
-                <td>
-                  <button className="btn btn-secondary btn-sm" onClick={() => openEdit(c)} style={{ marginRight: 4 }}>Edit</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c)}>Delete</button>
-                </td>
+      <div className="card">
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Word</th><th>POS</th><th>L2 Definition</th><th>L1 Definition</th><th>Example</th>
+                <th style={{ width: 100 }}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {!cs?.cards.length && <tr><td colSpan={6} className="table-empty">No cards yet. Import a CSV or add cards one at a time.</td></tr>}
+              {cs?.cards.map((c) => (
+                <tr key={c.id}>
+                  <td style={{ fontWeight: 500 }}>{c.word}</td>
+                  <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{c.pos ?? '—'}</td>
+                  <td style={{ fontSize: 13 }}>{c.definitionL2 ?? '—'}</td>
+                  <td style={{ fontSize: 13 }}>{c.definitionL1 ?? '—'}</td>
+                  <td style={{ fontSize: 13 }}>{c.exampleSentence ?? '—'}</td>
+                  <td>
+                    <button className="btn btn-secondary btn-sm" onClick={() => openEdit(c)} style={{ marginRight: 4 }}>Edit</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c)}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )
