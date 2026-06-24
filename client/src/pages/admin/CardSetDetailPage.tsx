@@ -4,6 +4,7 @@ import { api, ApiError, uploadFile } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
 import { CardImportHelpModal } from '../../components/CardImportHelpModal'
+import { cardSetStatusLabel } from '../../utils/cardSetLabels'
 
 interface Card {
   id: string
@@ -232,7 +233,7 @@ export default function AdminCardSetDetailPage() {
           <div>
             <h1 className="page-title">{cs?.name}</h1>
             {cs?.description && <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{cs.description}</p>}
-            <span className={`badge badge-${cs?.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`} style={{ marginTop: 4 }}>{cs?.status}</span>
+            <span className={`badge badge-${cs?.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`} style={{ marginTop: 4 }}>{cs && cardSetStatusLabel(cs.status)}</span>
             {' '}
             <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
               {cs?.status === 'DEPARTMENTAL' ? cs?.subjectGrade?.name : cs?.teacher?.user.name}

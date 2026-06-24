@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
+import { cardSetStatusLabel } from '../../utils/cardSetLabels'
 
 interface SubjectGrade { id: string; name: string }
 interface CardSet {
@@ -81,7 +82,7 @@ export default function AdminCardSetsPage() {
             {css.map((cs) => (
               <tr key={cs.id}>
                 <td><Link to={`/admin/cardsets/${cs.id}`}>{cs.name}</Link></td>
-                <td><span className={`badge badge-${cs.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`}>{cs.status}</span></td>
+                <td><span className={`badge badge-${cs.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`}>{cardSetStatusLabel(cs.status)}</span></td>
                 <td>
                   {cs.status === 'DEPARTMENTAL' ? cs.subjectGrade?.name ?? '—' : cs.teacher?.user.name ?? '—'}
                 </td>

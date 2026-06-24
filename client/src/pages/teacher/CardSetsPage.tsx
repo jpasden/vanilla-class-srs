@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
+import { cardSetStatusLabel } from '../../utils/cardSetLabels'
 
 interface CardSet {
   id: string
@@ -80,7 +81,7 @@ export default function TeacherCardSetsPage() {
                   <div style={{ fontWeight: 600 }}>{cs.name}</div>
                   {cs.description && <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 2 }}>{cs.description}</div>}
                 </div>
-                <span className={`badge badge-${cs.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`}>{cs.status}</span>
+                <span className={`badge badge-${cs.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`}>{cardSetStatusLabel(cs.status)}</span>
               </div>
               <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
                 <img src="/Vanilla-card.png" alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
