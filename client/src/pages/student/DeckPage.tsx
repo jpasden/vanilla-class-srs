@@ -339,9 +339,7 @@ export default function StudentDeckPage() {
                   >
                     Edit
                   </button>
-                  {isOwnCard(inst) && (
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(inst)}>Delete</button>
-                  )}
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(inst)}>Delete</button>
                 </td>
               </tr>
             ))}

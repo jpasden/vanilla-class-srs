@@ -220,10 +220,14 @@ router.patch('/deck/cards/:instanceId', validate(PatchInstanceSchema), async (re
   res.json(updated)
 })
 
-// DELETE /api/students/deck/cards/:instanceId  — students may only delete their own
-// self-added cards. Deletes the CardInstance and the underlying Card (safe: it lives
-// in the student's personal CardSet, 1:1 with their Enrollment — nothing else
-// references it).
+// DELETE /api/students/deck/cards/:instanceId
+// Students may remove any card from their own deck — self-added, teacher-assigned
+// (MANDATORY), or opted-in OPTIONAL. This only ever deletes the student's own
+// CardInstance (their personal copy/progress). The underlying Card is only deleted
+// alongside it for STUDENT_ADDED cards, since that Card lives in the student's
+// personal CardSet (1:1 with their Enrollment) and nothing else references it.
+// For TEACHER_ASSIGNED/OPTIONAL cards the Card is shared — other students (or other
+// decks) may have their own CardInstance pointing at it, so it must be left alone.
 router.delete('/deck/cards/:instanceId', async (req: Request, res: Response) => {
   const student = await getStudent(req.user!.sub)
   if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
@@ -235,15 +239,19 @@ router.delete('/deck/cards/:instanceId', async (req: Request, res: Response) => 
   if (!instance || instance.deck.enrollment.studentId !== student.id) {
     res.status(404).json({ error: 'Card instance not found' }); return
   }
-  if (instance.origin !== CardOrigin.STUDENT_ADDED) {
-    res.status(403).json({ error: 'You can only delete cards you added yourself' }); return
-  }
 
-  await prisma.$transaction([
-    prisma.reviewEvent.deleteMany({ where: { cardInstanceId: instance.id } }),
-    prisma.cardInstance.delete({ where: { id: instance.id } }),
-    prisma.card.delete({ where: { id: instance.cardId } }),
-  ])
+  if (instance.origin === CardOrigin.STUDENT_ADDED) {
+    await prisma.$transaction([
+      prisma.reviewEvent.deleteMany({ where: { cardInstanceId: instance.id } }),
+      prisma.cardInstance.delete({ where: { id: instance.id } }),
+      prisma.card.delete({ where: { id: instance.cardId } }),
+    ])
+  } else {
+    await prisma.$transaction([
+      prisma.reviewEvent.deleteMany({ where: { cardInstanceId: instance.id } }),
+      prisma.cardInstance.delete({ where: { id: instance.id } }),
+    ])
+  }
   res.json({ ok: true })
 })
 
