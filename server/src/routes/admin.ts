@@ -9,6 +9,7 @@ import { validate } from '../middleware/validate'
 import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows } from '../services/enrollment.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
+import { validateCardRows, normaliseCardRow } from '../services/card.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
@@ -706,6 +707,134 @@ router.get('/cardsets/:id', async (req: Request, res: Response) => {
     res.status(404).json({ error: 'CardSet not found' }); return
   }
   res.json(cs)
+})
+
+// ─────────────────────────────────────────────
+// Cards within a CardSet — admin may edit PRIVATE or DEPARTMENTAL sets
+// ─────────────────────────────────────────────
+
+const CreateCardSchema = z.object({
+  word: z.string().min(1),
+  pos: z.string().optional(),
+  definitionL2: z.string().optional(),
+  definitionL1: z.string().optional(),
+  exampleSentence: z.string().optional(),
+}).refine(
+  (d) => !!d.definitionL2?.trim() || !!d.definitionL1?.trim(),
+  { message: 'At least one definition (L1 or L2) is required.' },
+)
+
+const PatchCardSchema = z.object({
+  word: z.string().min(1).optional(),
+  pos: z.string().optional(),
+  definitionL2: z.string().optional(),
+  definitionL1: z.string().optional(),
+  exampleSentence: z.string().optional(),
+})
+
+async function getAdminEditableCardSet(cardSetId: string) {
+  const cs = await prisma.cardSet.findUnique({ where: { id: cardSetId } })
+  if (!cs || cs.archivedAt || cs.isPersonal) return null
+  return cs
+}
+
+// POST /api/admin/cardsets/:id/cards  — single card add
+router.post('/cardsets/:id/cards', validate(CreateCardSchema), async (req: Request, res: Response) => {
+  const cs = await getAdminEditableCardSet(p(req, 'id'))
+  if (!cs) { res.status(404).json({ error: 'CardSet not found' }); return }
+
+  const card = await prisma.card.create({
+    data: {
+      cardSetId: cs.id,
+      word: req.body.word,
+      pos: req.body.pos ?? null,
+      definitionL2: req.body.definitionL2 ?? null,
+      definitionL1: req.body.definitionL1 ?? null,
+      exampleSentence: req.body.exampleSentence ?? null,
+    },
+  })
+  res.status(201).json(card)
+})
+
+// POST /api/admin/cardsets/:id/cards/import  — CSV bulk import
+router.post(
+  '/cardsets/:id/cards/import',
+  upload.single('file'),
+  async (req: Request, res: Response) => {
+    const cs = await getAdminEditableCardSet(p(req, 'id'))
+    if (!cs) { res.status(404).json({ error: 'CardSet not found' }); return }
+
+    if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return }
+
+    let rows: Record<string, string>[]
+    try {
+      rows = parse(req.file.buffer, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+      }) as Record<string, string>[]
+    } catch {
+      res.status(400).json({ error: 'Invalid CSV format' }); return
+    }
+
+    if (rows.length === 0) {
+      res.status(400).json({ error: 'CSV contains no data rows' }); return
+    }
+
+    const errors = validateCardRows(rows)
+    if (errors.length > 0) {
+      res.status(400).json({ error: 'CSV validation failed', validationErrors: errors }); return
+    }
+
+    const cards = await prisma.card.createMany({
+      data: rows.map((r) => ({ ...normaliseCardRow(r), cardSetId: cs.id })),
+    })
+    res.status(201).json({ created: cards.count })
+  },
+)
+
+// PATCH /api/admin/cardsets/:csId/cards/:cardId
+router.patch('/cardsets/:csId/cards/:cardId', validate(PatchCardSchema), async (req: Request, res: Response) => {
+  const cs = await getAdminEditableCardSet(p(req, 'csId'))
+  if (!cs) { res.status(404).json({ error: 'CardSet not found' }); return }
+
+  const card = await prisma.card.findUnique({ where: { id: p(req, 'cardId') } })
+  if (!card || card.cardSetId !== cs.id) { res.status(404).json({ error: 'Card not found' }); return }
+
+  const mergedL2 = req.body.definitionL2 !== undefined ? req.body.definitionL2 : card.definitionL2
+  const mergedL1 = req.body.definitionL1 !== undefined ? req.body.definitionL1 : card.definitionL1
+  if (!mergedL2?.trim() && !mergedL1?.trim()) {
+    res.status(400).json({ error: 'At least one definition (L1 or L2) is required.' }); return
+  }
+
+  const updated = await prisma.card.update({
+    where: { id: card.id },
+    data: {
+      word: req.body.word ?? card.word,
+      pos: req.body.pos !== undefined ? (req.body.pos || null) : card.pos,
+      definitionL2: req.body.definitionL2 !== undefined ? (req.body.definitionL2 || null) : card.definitionL2,
+      definitionL1: req.body.definitionL1 !== undefined ? (req.body.definitionL1 || null) : card.definitionL1,
+      exampleSentence: req.body.exampleSentence !== undefined ? (req.body.exampleSentence || null) : card.exampleSentence,
+    },
+  })
+  res.json(updated)
+})
+
+// DELETE /api/admin/cardsets/:csId/cards/:cardId
+router.delete('/cardsets/:csId/cards/:cardId', async (req: Request, res: Response) => {
+  const cs = await getAdminEditableCardSet(p(req, 'csId'))
+  if (!cs) { res.status(404).json({ error: 'CardSet not found' }); return }
+
+  const card = await prisma.card.findUnique({ where: { id: p(req, 'cardId') } })
+  if (!card || card.cardSetId !== cs.id) { res.status(404).json({ error: 'Card not found' }); return }
+
+  const instanceCount = await prisma.cardInstance.count({ where: { cardId: card.id } })
+  if (instanceCount > 0) {
+    res.status(409).json({ error: 'Card is in use in student decks and cannot be deleted' }); return
+  }
+
+  await prisma.card.delete({ where: { id: card.id } })
+  res.json({ ok: true })
 })
 
 // ─────────────────────────────────────────────

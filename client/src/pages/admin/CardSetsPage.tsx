@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
@@ -73,7 +74,7 @@ export default function AdminCardSetsPage() {
             {css.length === 0 && <tr><td colSpan={5} className="table-empty">No cardsets found.</td></tr>}
             {css.map((cs) => (
               <tr key={cs.id}>
-                <td>{cs.name}</td>
+                <td><Link to={`/admin/cardsets/${cs.id}`}>{cs.name}</Link></td>
                 <td><span className={`badge badge-${cs.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`}>{cs.status}</span></td>
                 <td>
                   {cs.status === 'DEPARTMENTAL' ? cs.subjectGrade?.name ?? '—' : cs.teacher?.user.name ?? '—'}
