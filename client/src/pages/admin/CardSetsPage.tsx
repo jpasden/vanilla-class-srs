@@ -38,6 +38,12 @@ export default function AdminCardSetsPage() {
     }
   }
 
+  const handleDelete = async (cs: CardSet) => {
+    if (!confirm(`Delete "${cs.name}"? Students who already have cards from this set keep them and their review history — this just removes the set from active lists and prevents new assignments.`)) return
+    try { await api.delete(`/admin/cardsets/${cs.id}`); reload() }
+    catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
+  }
+
   return (
     <div>
       {promoting && (
@@ -80,7 +86,7 @@ export default function AdminCardSetsPage() {
                   {cs.status === 'DEPARTMENTAL' ? cs.subjectGrade?.name ?? '—' : cs.teacher?.user.name ?? '—'}
                 </td>
                 <td>{cs._count.cards}</td>
-                <td>
+                <td style={{ display: 'flex', gap: 4 }}>
                   {cs.status === 'PRIVATE' && (
                     <button
                       className="btn btn-secondary btn-sm"
@@ -89,6 +95,7 @@ export default function AdminCardSetsPage() {
                       Promote to Departmental
                     </button>
                   )}
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(cs)}>Delete</button>
                 </td>
               </tr>
             ))}

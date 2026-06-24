@@ -709,6 +709,32 @@ router.get('/cardsets/:id', async (req: Request, res: Response) => {
   res.json(cs)
 })
 
+// DELETE /api/admin/cardsets/:id  — archives (soft delete). Existing CardInstances in
+// student decks are untouched; the set just drops out of active lists and can no
+// longer be newly assigned. Existing class Assignments referencing it are left as-is.
+router.delete('/cardsets/:id', async (req: Request, res: Response) => {
+  const cs = await prisma.cardSet.findUnique({ where: { id: p(req, 'id') } })
+  if (!cs || cs.archivedAt || cs.isPersonal) {
+    res.status(404).json({ error: 'CardSet not found' }); return
+  }
+  const updated = await prisma.cardSet.update({
+    where: { id: cs.id },
+    data: { archivedAt: new Date() },
+  })
+  res.json(updated)
+})
+
+// POST /api/admin/cardsets/:id/unarchive
+router.post('/cardsets/:id/unarchive', async (req: Request, res: Response) => {
+  const cs = await prisma.cardSet.findUnique({ where: { id: p(req, 'id') } })
+  if (!cs) { res.status(404).json({ error: 'CardSet not found' }); return }
+  const updated = await prisma.cardSet.update({
+    where: { id: cs.id },
+    data: { archivedAt: null },
+  })
+  res.json(updated)
+})
+
 // ─────────────────────────────────────────────
 // Cards within a CardSet — admin may edit PRIVATE or DEPARTMENTAL sets
 // ─────────────────────────────────────────────

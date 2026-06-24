@@ -1,5 +1,5 @@
 import { useState, useRef, FormEvent, ChangeEvent } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { api, ApiError, uploadFile } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
@@ -66,6 +66,7 @@ async function parseCsvFile(file: File): Promise<{ rows: Record<string, string>[
 
 export default function AdminCardSetDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { data: cs, loading, reload } = useApi<CardSet>(() => api.get(`/admin/cardsets/${id}`), [id])
   const [editing, setEditing] = useState<Card | null>(null)
   const [creating, setCreating] = useState(false)
@@ -128,6 +129,17 @@ export default function AdminCardSetDetailPage() {
     if (!confirm(`Delete card "${c.word}"? This cannot be undone.`)) return
     try { await api.delete(`/admin/cardsets/${id}/cards/${c.id}`); reload() }
     catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
+  }
+
+  const handleDeleteCardSet = async () => {
+    if (!cs) return
+    if (!confirm(`Delete "${cs.name}"? Students who already have cards from this set keep them and their review history — this just removes the set from active lists and prevents new assignments.`)) return
+    try {
+      await api.delete(`/admin/cardsets/${id}`)
+      navigate('/admin/cardsets')
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Failed')
+    }
   }
 
   const handleCsvFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -226,7 +238,10 @@ export default function AdminCardSetDetailPage() {
               {cs?.status === 'DEPARTMENTAL' ? cs?.subjectGrade?.name : cs?.teacher?.user.name}
             </span>
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={openCreate}>+ Add Card</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={openCreate}>+ Add Card</button>
+            <button className="btn btn-danger btn-sm" onClick={handleDeleteCardSet}>Delete CardSet</button>
+          </div>
         </div>
       </div>
 
