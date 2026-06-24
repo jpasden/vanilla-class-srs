@@ -85,6 +85,7 @@ export default function StudentDeckPage() {
   }
 
   const isOwnCard = (inst: CardInstance) => inst.origin === 'STUDENT_ADDED'
+  const isDeletable = (inst: CardInstance) => inst.origin !== 'TEACHER_ASSIGNED'
 
   const handleEditSave = async (e: FormEvent) => {
     e.preventDefault()
@@ -339,7 +340,9 @@ export default function StudentDeckPage() {
                   >
                     Edit
                   </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(inst)}>Delete</button>
+                  {isDeletable(inst) && (
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(inst)}>Delete</button>
+                  )}
                 </td>
               </tr>
             ))}
