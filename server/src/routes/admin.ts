@@ -9,7 +9,7 @@ import { validate } from '../middleware/validate'
 import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows } from '../services/enrollment.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
-import { validateCardRows, normaliseCardRow } from '../services/card.service'
+import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
@@ -743,6 +743,12 @@ router.post('/cardsets/:id/cards', validate(CreateCardSchema), async (req: Reque
   const cs = await getAdminEditableCardSet(p(req, 'id'))
   if (!cs) { res.status(404).json({ error: 'CardSet not found' }); return }
 
+  const existing = await prisma.card.findMany({ where: { cardSetId: cs.id }, select: { word: true, pos: true } })
+  const newKey = cardDedupeKey(req.body.word, req.body.pos ?? null)
+  if (existing.some((c) => cardDedupeKey(c.word, c.pos) === newKey)) {
+    res.status(409).json({ error: `"${req.body.word}" already exists in this CardSet${req.body.pos ? ` as ${req.body.pos}` : ''}.` }); return
+  }
+
   const card = await prisma.card.create({
     data: {
       cardSetId: cs.id,
@@ -786,10 +792,16 @@ router.post(
       res.status(400).json({ error: 'CSV validation failed', validationErrors: errors }); return
     }
 
-    const cards = await prisma.card.createMany({
-      data: rows.map((r) => ({ ...normaliseCardRow(r), cardSetId: cs.id })),
-    })
-    res.status(201).json({ created: cards.count })
+    const existingCards = await prisma.card.findMany({ where: { cardSetId: cs.id }, select: { word: true, pos: true } })
+    const existingKeys = new Set(existingCards.map((c) => cardDedupeKey(c.word, c.pos)))
+    const normalised = rows.map(normaliseCardRow)
+    const { toInsert, skipped } = partitionDuplicateRows(normalised, existingKeys)
+
+    const cards = toInsert.length > 0
+      ? await prisma.card.createMany({ data: toInsert.map((r) => ({ ...r, cardSetId: cs.id })) })
+      : { count: 0 }
+
+    res.status(201).json({ created: cards.count, skipped })
   },
 )
 
@@ -805,6 +817,19 @@ router.patch('/cardsets/:csId/cards/:cardId', validate(PatchCardSchema), async (
   const mergedL1 = req.body.definitionL1 !== undefined ? req.body.definitionL1 : card.definitionL1
   if (!mergedL2?.trim() && !mergedL1?.trim()) {
     res.status(400).json({ error: 'At least one definition (L1 or L2) is required.' }); return
+  }
+
+  const mergedWord = req.body.word ?? card.word
+  const mergedPos = req.body.pos !== undefined ? (req.body.pos || null) : card.pos
+  const newKey = cardDedupeKey(mergedWord, mergedPos)
+  if (newKey !== cardDedupeKey(card.word, card.pos)) {
+    const others = await prisma.card.findMany({
+      where: { cardSetId: cs.id, id: { not: card.id } },
+      select: { word: true, pos: true },
+    })
+    if (others.some((c) => cardDedupeKey(c.word, c.pos) === newKey)) {
+      res.status(409).json({ error: `"${mergedWord}" already exists in this CardSet${mergedPos ? ` as ${mergedPos}` : ''}.` }); return
+    }
   }
 
   const updated = await prisma.card.update({

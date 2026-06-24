@@ -53,3 +53,38 @@ export function normaliseCardRow(r: Record<string, string>) {
     exampleSentence: r.example_sentence?.trim() || null,
   }
 }
+
+/** Case-insensitive match key: word + part of speech. Distinct POS (e.g. "bank" noun vs. verb) is not a duplicate. */
+export function cardDedupeKey(word: string, pos: string | null): string {
+  return `${word.trim().toLowerCase()}::${(pos ?? '').trim().toLowerCase()}`
+}
+
+export interface SkippedDuplicate {
+  row: number
+  word: string
+}
+
+/**
+ * Splits normalised rows into ones to insert vs. ones skipped as duplicates —
+ * either of an existing card in the set, or of an earlier row in the same import.
+ */
+export function partitionDuplicateRows<T extends { word: string; pos: string | null }>(
+  rows: T[],
+  existingKeys: Set<string>,
+): { toInsert: T[]; skipped: SkippedDuplicate[] } {
+  const seen = new Set(existingKeys)
+  const toInsert: T[] = []
+  const skipped: SkippedDuplicate[] = []
+
+  rows.forEach((row, i) => {
+    const key = cardDedupeKey(row.word, row.pos)
+    if (seen.has(key)) {
+      skipped.push({ row: i + 1, word: row.word })
+      return
+    }
+    seen.add(key)
+    toInsert.push(row)
+  })
+
+  return { toInsert, skipped }
+}

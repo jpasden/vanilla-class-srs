@@ -78,6 +78,7 @@ export default function AdminCardSetDetailPage() {
   const csvInputRef = useRef<HTMLInputElement>(null)
   const [csvErrors, setCsvErrors] = useState<CsvRowError[] | null>(null)
   const [csvSuccess, setCsvSuccess] = useState<number | null>(null)
+  const [csvSkipped, setCsvSkipped] = useState<{ row: number; word: string }[] | null>(null)
   const [csvUploading, setCsvUploading] = useState(false)
   const [csvParseError, setCsvParseError] = useState<string | null>(null)
 
@@ -136,6 +137,7 @@ export default function AdminCardSetDetailPage() {
 
     setCsvErrors(null)
     setCsvSuccess(null)
+    setCsvSkipped(null)
     setCsvParseError(null)
 
     const parsed = await parseCsvFile(file)
@@ -153,8 +155,9 @@ export default function AdminCardSetDetailPage() {
     // All valid — upload
     setCsvUploading(true)
     try {
-      const result = await uploadFile<{ created: number }>(`/admin/cardsets/${id}/cards/import`, file)
+      const result = await uploadFile<{ created: number; skipped: { row: number; word: string }[] }>(`/admin/cardsets/${id}/cards/import`, file)
       setCsvSuccess(result.created)
+      setCsvSkipped(result.skipped.length > 0 ? result.skipped : null)
       reload()
     } catch (err) {
       if (err instanceof ApiError) {
@@ -239,6 +242,10 @@ export default function AdminCardSetDetailPage() {
             How do I do this?
           </button>
         </div>
+        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+          This adds new cards to <strong>{cs?.name}</strong> — it never replaces or removes existing cards.
+          Words already in this CardSet (matched by word + part of speech) are automatically skipped.
+        </p>
 
         <input
           ref={csvInputRef}
@@ -253,6 +260,7 @@ export default function AdminCardSetDetailPage() {
           onClick={() => {
             setCsvErrors(null)
             setCsvSuccess(null)
+            setCsvSkipped(null)
             setCsvParseError(null)
             csvInputRef.current?.click()
           }}
@@ -281,6 +289,16 @@ export default function AdminCardSetDetailPage() {
         {csvSuccess !== null && (
           <div className="alert alert-success" style={{ marginTop: 12 }}>
             Imported {csvSuccess} card{csvSuccess !== 1 ? 's' : ''} successfully.
+          </div>
+        )}
+        {csvSkipped && csvSkipped.length > 0 && (
+          <div className="alert alert-warning" style={{ marginTop: 12 }}>
+            <strong>Skipped {csvSkipped.length} duplicate{csvSkipped.length !== 1 ? 's' : ''} already in this CardSet:</strong>
+            <ul style={{ marginTop: 6, paddingLeft: 20 }}>
+              {csvSkipped.map((s, i) => (
+                <li key={i} style={{ marginBottom: 2 }}>Row {s.row} ("{s.word}")</li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
