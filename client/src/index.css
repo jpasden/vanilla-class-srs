@@ -384,10 +384,85 @@ button, input, select, textarea {
 .login-split-panel:first-child { border-radius: var(--radius) 0 0 var(--radius); }
 .login-split-panel:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
 
+/* ── Mobile topbar + drawer nav ───────────────────────────────────────────── */
+
+.app-topbar-toggle {
+  display: none;
+}
+
+.app-drawer-overlay {
+  display: none;
+}
+
 @media (max-width: 700px) {
-  .app-layout { flex-direction: column; }
-  .app-sidebar { width: 100%; }
-  .app-main { padding: 16px; }
+  .app-layout { flex-direction: column; height: 100vh; }
+  .app-sidebar { display: none; }
+  .app-main { padding: 16px; padding-top: 20px; }
+
+  .app-topbar-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    flex-shrink: 0;
+    padding: 12px 16px;
+    background: var(--color-sidebar-bg);
+    color: var(--color-sidebar-text);
+    border: none;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .hamburger {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    width: 22px;
+    height: 16px;
+  }
+  .hamburger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: var(--color-sidebar-text);
+    border-radius: 1px;
+    transition: transform 0.2s, opacity 0.2s;
+  }
+  .hamburger.is-open span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  .hamburger.is-open span:nth-child(2) { opacity: 0; }
+  .hamburger.is-open span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+  .app-drawer-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 100;
+    animation: drawer-fade-in 0.15s ease-out;
+  }
+
+  .app-drawer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 80%;
+    max-width: 300px;
+    overflow-y: auto;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.25);
+    animation: drawer-slide-in 0.18s ease-out;
+  }
+
+  @keyframes drawer-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes drawer-slide-in {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .modal { max-width: calc(100vw - 32px); padding: 16px; }
   .page-header { flex-direction: column; align-items: flex-start; }
