@@ -372,6 +372,9 @@ button, input, select, textarea {
   width: 220px;
   flex-shrink: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .app-main {
@@ -452,6 +455,20 @@ button, input, select, textarea {
     overflow-y: auto;
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.25);
     animation: drawer-slide-in 0.18s ease-out;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .app-drawer-close {
+    background: none;
+    border: none;
+    color: var(--color-sidebar-text);
+    font-size: var(--text-lg);
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+    flex-shrink: 0;
   }
 
   @keyframes drawer-fade-in {

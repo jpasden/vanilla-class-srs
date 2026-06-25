@@ -24,12 +24,21 @@ export default function AppShell({ roleLabel, userName, navItems, extra, footerE
   // Close the drawer on every navigation so it never stays open after picking a link.
   useEffect(() => { setDrawerOpen(false) }, [location.pathname])
 
-  const sidebarContent = (
+  const renderSidebarContent = (closeButton?: boolean) => (
     <>
       <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid var(--color-sidebar-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <img src="/Vanilla-card.png" alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} />
-          <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 'var(--text-2xl)', color: 'var(--color-sidebar-text)' }}>Vanilla SRS</div>
+          <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 'var(--text-2xl)', color: 'var(--color-sidebar-text)', flex: 1 }}>Vanilla SRS</div>
+          {closeButton && (
+            <button
+              className="app-drawer-close"
+              aria-label="Close menu"
+              onClick={() => setDrawerOpen(false)}
+            >
+              ✕
+            </button>
+          )}
         </div>
         <div style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-sidebar-text)' }}>{userName}</div>
         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-sidebar-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 2 }}>{roleLabel}</div>
@@ -63,30 +72,18 @@ export default function AppShell({ roleLabel, userName, navItems, extra, footerE
         <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 'var(--text-lg)' }}>Vanilla SRS</span>
       </button>
 
-      <nav className="app-sidebar" style={{
-        background: 'var(--color-sidebar-bg)',
-        color: 'var(--color-sidebar-text)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'stretch',
-      }}>
-        {sidebarContent}
+      <nav className="app-sidebar" style={{ background: 'var(--color-sidebar-bg)', color: 'var(--color-sidebar-text)' }}>
+        {renderSidebarContent()}
       </nav>
 
       {drawerOpen && (
         <div className="app-drawer-overlay" onClick={() => setDrawerOpen(false)}>
           <nav
             className="app-drawer"
-            style={{
-              background: 'var(--color-sidebar-bg)',
-              color: 'var(--color-sidebar-text)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'stretch',
-            }}
+            style={{ background: 'var(--color-sidebar-bg)', color: 'var(--color-sidebar-text)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {sidebarContent}
+            {renderSidebarContent(true)}
           </nav>
         </div>
       )}
