@@ -9,6 +9,7 @@ import { validate } from '../middleware/validate'
 import { enrollStudents, validateEnrollRows } from '../services/enrollment.service'
 import { generateTempPassword, hashPassword } from '../services/auth.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
+import { labelsForClass } from '../services/departmentLabels.service'
 import teacherStatsRouter from './stats.teacher'
 import teacherStudentStatsRouter from './stats.teacher-student'
 
@@ -503,7 +504,8 @@ router.get('/classes/:id/students/:studentId/cards', async (req: Request, res: R
   })
   if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
 
-  res.json(enrollment.personalCardSet?.cards ?? [])
+  const labels = await labelsForClass(prisma, cls.id)
+  res.json({ cards: enrollment.personalCardSet?.cards ?? [], ...labels })
 })
 
 // ─────────────────────────────────────────────

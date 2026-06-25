@@ -16,6 +16,7 @@ import prisma from '../lib/prisma'
 import { requireAuth, requireTeacher } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { validateCardRows, normaliseCardRow } from '../services/card.service'
+import { labelsForCardSet } from '../services/departmentLabels.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -108,7 +109,8 @@ router.get('/:id', async (req: Request, res: Response) => {
     if (!membership) { res.status(404).json({ error: 'CardSet not found' }); return }
   }
 
-  res.json(cs)
+  const labels = await labelsForCardSet(prisma, cs)
+  res.json({ ...cs, ...labels })
 })
 
 // POST /api/teachers/cardsets

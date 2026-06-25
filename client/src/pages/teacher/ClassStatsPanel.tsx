@@ -27,6 +27,8 @@ interface StatsData {
     summary: string
     students: { studentId: string; name: string; sessionsCompleted: number; sessionsRequired?: number; status: string }[]
   } | null
+  definitionL2Label: string
+  definitionL1Label: string
 }
 
 type StatsTab = 'matrix' | 'leaderboard' | 'cards' | 'activity' | 'compliance' | 'additions'
@@ -325,7 +327,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
         <div className="card">
         <div className="table-scroll">
         <table className="table">
-          <thead><tr><th>Student</th><th>Word</th><th>L2 Definition</th><th>Added</th></tr></thead>
+          <thead><tr><th>Student</th><th>Word</th><th>{stats.definitionL2Label}</th><th>Added</th></tr></thead>
           <tbody>
             {stats.recentStudentAdditions.length === 0 && <tr><td colSpan={4} className="table-empty">No student additions in this period.</td></tr>}
             {stats.recentStudentAdditions.map((a, i) => (

@@ -16,6 +16,7 @@ import StudentLayout from './pages/student/StudentLayout'
 
 // Admin pages
 import AdminDepartmentsPage from './pages/admin/DepartmentsPage'
+import AdminDepartmentSettingsPage from './pages/admin/DepartmentSettingsPage'
 import AdminSubjectGradesPage from './pages/admin/SubjectGradesPage'
 import AdminTeachersPage from './pages/admin/TeachersPage'
 import AdminCardSetsPage from './pages/admin/CardSetsPage'
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="/admin" element={<RequireAuth role="ADMIN"><AdminLayout /></RequireAuth>}>
               <Route index element={<Navigate to="/admin/departments" replace />} />
               <Route path="departments" element={<AdminDepartmentsPage />} />
+              <Route path="departments/:id/settings" element={<AdminDepartmentSettingsPage />} />
               <Route path="subject-grades" element={<AdminSubjectGradesPage />} />
               <Route path="teachers" element={<AdminTeachersPage />} />
               <Route path="cardsets" element={<AdminCardSetsPage />} />

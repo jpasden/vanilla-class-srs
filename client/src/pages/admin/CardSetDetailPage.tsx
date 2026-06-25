@@ -22,6 +22,8 @@ interface CardSet {
   teacher?: { user: { name: string } }
   subjectGrade?: { name: string }
   cards: Card[]
+  definitionL2Label: string
+  definitionL1Label: string
 }
 
 type CardFormData = { word: string; pos: string; definitionL2: string; definitionL1: string; exampleSentence: string }
@@ -207,11 +209,11 @@ export default function AdminCardSetDetailPage() {
               <input className="form-input" value={form.pos} onChange={(e) => setForm({ ...form, pos: e.target.value })} placeholder="noun, verb, adj…" />
             </div>
             <div className="form-group">
-              <label className="form-label">Definition (L2 — target language)</label>
+              <label className="form-label">{cs?.definitionL2Label ?? 'L2 Definition'}</label>
               <textarea className="form-textarea" value={form.definitionL2} onChange={(e) => setForm({ ...form, definitionL2: e.target.value })} rows={2} />
             </div>
             <div className="form-group">
-              <label className="form-label">Definition (L1 — native language)</label>
+              <label className="form-label">{cs?.definitionL1Label ?? 'L1 Definition'}</label>
               <textarea className="form-textarea" value={form.definitionL1} onChange={(e) => setForm({ ...form, definitionL1: e.target.value })} rows={2} />
             </div>
             <div className="form-group">
@@ -325,7 +327,7 @@ export default function AdminCardSetDetailPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>Word</th><th>POS</th><th>L2 Definition</th><th>L1 Definition</th><th>Example</th>
+                <th>Word</th><th>POS</th><th>{cs?.definitionL2Label ?? 'L2 Definition'}</th><th>{cs?.definitionL1Label ?? 'L1 Definition'}</th><th>Example</th>
                 <th style={{ width: 100 }}>Actions</th>
               </tr>
             </thead>

@@ -82,6 +82,12 @@ model Department {
   createdAt     DateTime       @default(now())
   archivedAt    DateTime?
   subjectGrades SubjectGrade[]
+
+  // Per-department label overrides shown everywhere a Card's L2/L1 definition is
+  // labeled (admin, teacher, and student views). Null = use the default label
+  // ("L2 Definition" / "L1 Definition").
+  definitionL2Label String?
+  definitionL1Label String?
 }
 
 model SubjectGrade {

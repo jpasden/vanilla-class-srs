@@ -13,6 +13,7 @@
 
 import { Router, Request, Response } from 'express'
 import prisma from '../lib/prisma'
+import { labelsForClass } from '../services/departmentLabels.service'
 
 const router = Router({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -380,6 +381,8 @@ router.get('/', async (req: Request, res: Response) => {
     }
   }
 
+  const labels = await labelsForClass(prisma, cls.id)
+
   res.json({
     classId: cls.id,
     className: cls.name,
@@ -392,6 +395,7 @@ router.get('/', async (req: Request, res: Response) => {
     dailyChart,
     forecastDaily,
     accuracyTrend,
+    ...labels,
     overdueByStudent,
     deckGrowthDaily,
     homeworkCompliance,

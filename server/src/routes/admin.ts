@@ -10,6 +10,7 @@ import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows } from '../services/enrollment.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
+import { labelsForCardSet } from '../services/departmentLabels.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
@@ -23,6 +24,8 @@ router.use(requireAuth, requireAdmin)
 
 const DepartmentSchema = z.object({
   name: z.string().min(1),
+  definitionL2Label: z.string().optional(),
+  definitionL1Label: z.string().optional(),
 })
 
 // GET /api/admin/departments
@@ -61,6 +64,8 @@ router.post('/departments', validate(DepartmentSchema), async (req: Request, res
 })
 
 // PATCH /api/admin/departments/:id
+// Accepts name and/or the two definition-label overrides. Used by both the quick
+// rename modal (name only) and the full Department Settings page (name + labels).
 router.patch('/departments/:id', validate(DepartmentSchema), async (req: Request, res: Response) => {
   const dept = await prisma.department.findUnique({ where: { id: p(req, 'id') } })
   if (!dept || dept.archivedAt) {
@@ -69,7 +74,11 @@ router.patch('/departments/:id', validate(DepartmentSchema), async (req: Request
   }
   const updated = await prisma.department.update({
     where: { id: p(req, 'id') },
-    data: { name: req.body.name },
+    data: {
+      name: req.body.name,
+      definitionL2Label: req.body.definitionL2Label !== undefined ? (req.body.definitionL2Label.trim() || null) : dept.definitionL2Label,
+      definitionL1Label: req.body.definitionL1Label !== undefined ? (req.body.definitionL1Label.trim() || null) : dept.definitionL1Label,
+    },
   })
   res.json(updated)
 })
@@ -706,7 +715,8 @@ router.get('/cardsets/:id', async (req: Request, res: Response) => {
   if (!cs || cs.archivedAt || cs.isPersonal) {
     res.status(404).json({ error: 'CardSet not found' }); return
   }
-  res.json(cs)
+  const labels = await labelsForCardSet(prisma, cs)
+  res.json({ ...cs, ...labels })
 })
 
 // DELETE /api/admin/cardsets/:id  — archives (soft delete). Existing CardInstances in

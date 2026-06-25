@@ -21,6 +21,12 @@ interface BrowseCard {
   exampleSentence: string | null
 }
 
+interface BrowseCardsResponse {
+  cards: BrowseCard[]
+  definitionL2Label: string
+  definitionL1Label: string
+}
+
 export default function OptionalSetsPage() {
   const { active } = useEnrollment()
   const navigate = useNavigate()
@@ -33,6 +39,10 @@ export default function OptionalSetsPage() {
   const [justAdded, setJustAdded] = useState<Record<string, number>>({})
   const [browseSet, setBrowseSet] = useState<{ id: string; name: string } | null>(null)
   const [browseCards, setBrowseCards] = useState<BrowseCard[] | null>(null)
+  const [browseLabels, setBrowseLabels] = useState<{ definitionL2Label: string; definitionL1Label: string }>({
+    definitionL2Label: 'L2 Definition',
+    definitionL1Label: 'L1 Definition',
+  })
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseError, setBrowseError] = useState<string | null>(null)
 
@@ -42,8 +52,9 @@ export default function OptionalSetsPage() {
     setBrowseError(null)
     setBrowseLoading(true)
     try {
-      const cards = await api.get<BrowseCard[]>(`/students/deck/optional/${cs.id}/cards?enrollmentId=${active?.enrollmentId}`)
-      setBrowseCards(cards)
+      const result = await api.get<BrowseCardsResponse>(`/students/deck/optional/${cs.id}/cards?enrollmentId=${active?.enrollmentId}`)
+      setBrowseCards(result.cards)
+      setBrowseLabels({ definitionL2Label: result.definitionL2Label, definitionL1Label: result.definitionL1Label })
     } catch (e) {
       setBrowseError(e instanceof ApiError ? e.message : 'Failed to load cards')
     } finally {
@@ -128,8 +139,8 @@ export default function OptionalSetsPage() {
                     <tr>
                       <th>Word</th>
                       <th>POS</th>
-                      <th>Definition (L2)</th>
-                      <th>Definition (L1)</th>
+                      <th>{browseLabels.definitionL2Label}</th>
+                      <th>{browseLabels.definitionL1Label}</th>
                       <th>Example</th>
                     </tr>
                   </thead>

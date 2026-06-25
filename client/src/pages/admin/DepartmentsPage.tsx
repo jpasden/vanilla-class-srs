@@ -1,4 +1,5 @@
 import { useState, FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
@@ -10,6 +11,7 @@ interface Department {
 }
 
 export default function AdminDepartmentsPage() {
+  const navigate = useNavigate()
   const { data: depts, loading, error, reload } = useApi<Department[]>(() => api.get('/admin/departments'))
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<Department | null>(null)
@@ -58,11 +60,22 @@ export default function AdminDepartmentsPage() {
           <label className="form-label">Name</label>
           <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
-        <div className="modal-footer">
-          <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+        <div className="modal-footer" style={{ justifyContent: editing ? 'space-between' : 'flex-end' }}>
+          {editing && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => navigate(`/admin/departments/${editing.id}/settings`)}
+            >
+              Settings
+            </button>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
         </div>
       </form>
     </Modal>

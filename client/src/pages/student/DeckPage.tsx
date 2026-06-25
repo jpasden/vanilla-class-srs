@@ -28,6 +28,12 @@ interface CardHistory {
   events: { reviewedAt: string; grade: number; responseTimeMs: number | null }[]
 }
 
+interface DeckResponse {
+  instances: CardInstance[]
+  definitionL2Label: string
+  definitionL1Label: string
+}
+
 const stateColors: Record<string, string> = {
   NEW: 'badge-gray',
   LEARNING: 'badge-yellow',
@@ -41,10 +47,13 @@ const gradeColors: Record<number, string> = { 1: 'var(--color-accent)', 2: 'var(
 export default function StudentDeckPage() {
   const { active } = useEnrollment()
   const navigate = useNavigate()
-  const { data: instances, loading, error, reload } = useApi<CardInstance[]>(
+  const { data: deckData, loading, error, reload } = useApi<DeckResponse>(
     () => api.get(`/students/deck?enrollmentId=${active?.enrollmentId}`),
     [active?.enrollmentId]
   )
+  const instances = deckData?.instances
+  const definitionL2Label = deckData?.definitionL2Label ?? 'L2 Definition'
+  const definitionL1Label = deckData?.definitionL1Label ?? 'L1 Definition'
   const [filter, setFilter] = useState<string>('ALL')
   const [search, setSearch] = useState('')
   const [addModal, setAddModal] = useState(false)
@@ -161,11 +170,11 @@ export default function StudentDeckPage() {
               <input className="form-input" value={addForm.pos} onChange={(e) => setAddForm({ ...addForm, pos: e.target.value })} placeholder="noun, verb, adj…" />
             </div>
             <div className="form-group">
-              <label className="form-label">Definition (L2 — target language)</label>
+              <label className="form-label">{definitionL2Label}</label>
               <textarea className="form-textarea" value={addForm.definitionL2} onChange={(e) => setAddForm({ ...addForm, definitionL2: e.target.value })} rows={2} />
             </div>
             <div className="form-group">
-              <label className="form-label">Definition (L1 — native language)</label>
+              <label className="form-label">{definitionL1Label}</label>
               <textarea className="form-textarea" value={addForm.definitionL1} onChange={(e) => setAddForm({ ...addForm, definitionL1: e.target.value })} rows={2} />
             </div>
             <div className="form-group">
@@ -196,11 +205,11 @@ export default function StudentDeckPage() {
               <input className="form-input" value={editForm.pos} onChange={(e) => setEditForm({ ...editForm, pos: e.target.value })} placeholder="noun, verb, adj…" />
             </div>
             <div className="form-group">
-              <label className="form-label">Definition (L2 — target language)</label>
+              <label className="form-label">{definitionL2Label}</label>
               <textarea className="form-textarea" value={editForm.definitionL2} onChange={(e) => setEditForm({ ...editForm, definitionL2: e.target.value })} rows={2} />
             </div>
             <div className="form-group">
-              <label className="form-label">Definition (L1 — native language)</label>
+              <label className="form-label">{definitionL1Label}</label>
               <textarea className="form-textarea" value={editForm.definitionL1} onChange={(e) => setEditForm({ ...editForm, definitionL1: e.target.value })} rows={2} />
             </div>
             <div className="form-group">
@@ -218,13 +227,13 @@ export default function StudentDeckPage() {
       {editModal && !isOwnCard(editModal) && (
         <Modal title={`Edit — "${editModal.card.word}"`} onClose={() => setEditModal(null)}>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            You can personalise the example sentence, and fill in a native-language (L1) definition for your own
+            You can personalise the example sentence, and fill in a {definitionL1Label.toLowerCase()} for your own
             reference. Leave the example blank to use the teacher's version.
           </p>
           <form onSubmit={handleEditSave}>
             {formError && <div className="alert alert-danger">{formError}</div>}
             <div className="form-group">
-              <label className="form-label">Definition (L1 — native language)</label>
+              <label className="form-label">{definitionL1Label}</label>
               <textarea className="form-textarea" value={editForm.definitionL1} onChange={(e) => setEditForm({ ...editForm, definitionL1: e.target.value })} rows={2} placeholder={editModal.card.definitionL1 ?? 'No L1 definition yet'} />
             </div>
             <div className="form-group">

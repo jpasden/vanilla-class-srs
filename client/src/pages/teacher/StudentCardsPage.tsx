@@ -16,12 +16,19 @@ interface Card {
   createdAt: string
 }
 
+interface StudentCardsResponse {
+  cards: Card[]
+  definitionL2Label: string
+  definitionL1Label: string
+}
+
 export default function TeacherStudentCardsPage() {
   const { id: classId, studentId } = useParams<{ id: string; studentId: string }>()
-  const { data: cards, loading, error } = useApi<Card[]>(
+  const { data, loading, error } = useApi<StudentCardsResponse>(
     () => api.get(`/teachers/classes/${classId}/students/${studentId}/cards`),
     [classId, studentId]
   )
+  const cards = data?.cards
 
   return (
     <div>
@@ -46,8 +53,8 @@ export default function TeacherStudentCardsPage() {
             <tr>
               <th>Word</th>
               <th>POS</th>
-              <th>L2 Definition</th>
-              <th>L1 Definition</th>
+              <th>{data?.definitionL2Label ?? 'L2 Definition'}</th>
+              <th>{data?.definitionL1Label ?? 'L1 Definition'}</th>
               <th>Example Sentence</th>
               <th>Added</th>
             </tr>

@@ -5,6 +5,7 @@ import prisma from '../lib/prisma'
 import { requireAuth, requireStudent } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { startSession, startRestudy, gradeCard, finishSession } from '../services/review.service'
+import { labelsForClass } from '../services/departmentLabels.service'
 import studentStatsRouter from './stats.student'
 
 const router = Router()
@@ -82,7 +83,8 @@ router.get('/deck', async (req: Request, res: Response) => {
     include: { card: true },
     orderBy: { due: 'asc' },
   })
-  res.json(instances)
+  const labels = await labelsForClass(prisma, enrollment.classId)
+  res.json({ instances, ...labels })
 })
 
 // ─────────────────────────────────────────────
@@ -325,7 +327,8 @@ router.get('/deck/optional/:cardSetId/cards', async (req: Request, res: Response
     orderBy: { word: 'asc' },
   })
 
-  res.json(cards)
+  const labels = await labelsForClass(prisma, enrollment.classId)
+  res.json({ cards, ...labels })
 })
 
 // POST /api/students/deck/optional/:cardSetId  — opt in
