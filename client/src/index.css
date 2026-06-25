@@ -359,6 +359,12 @@ button, input, select, textarea {
   color: var(--color-vanilla);
   background: var(--color-sidebar-active-bg);
 }
+.sidebar-nav-link-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+.sidebar-nav-link-disabled:hover { color: var(--color-sidebar-muted); }
 
 /* ── Responsive app layout ────────────────────────────────────────────────── */
 

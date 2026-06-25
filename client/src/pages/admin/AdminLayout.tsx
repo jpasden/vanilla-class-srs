@@ -3,6 +3,7 @@ import { useAuth } from '../../utils/auth'
 import AppShell from '../../components/AppShell'
 
 const navItems = [
+  { to: '/admin/study', label: 'Study', disabled: true, disabledReason: 'Coming soon — admin study view is not yet available' },
   { to: '/admin/departments', label: 'Departments' },
   { to: '/admin/subject-grades', label: 'Subject Grades' },
   { to: '/admin/teachers', label: 'Teachers' },

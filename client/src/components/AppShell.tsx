@@ -4,6 +4,8 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom'
 interface NavItem {
   to: string
   label: string
+  disabled?: boolean
+  disabledReason?: string
 }
 
 interface AppShellProps {
@@ -45,11 +47,17 @@ export default function AppShell({ roleLabel, userName, navItems, extra, footerE
       </div>
       {extra}
       <div style={{ display: 'flex', flexDirection: 'column', padding: '4px 8px', gap: 2 }}>
-        {navItems.map((item) => (
-          <NavLink key={item.to} to={item.to} className="sidebar-nav-link">
-            {item.label}
-          </NavLink>
-        ))}
+        {navItems.map((item) =>
+          item.disabled ? (
+            <span key={item.to} className="sidebar-nav-link sidebar-nav-link-disabled" title={item.disabledReason}>
+              {item.label}
+            </span>
+          ) : (
+            <NavLink key={item.to} to={item.to} className="sidebar-nav-link">
+              {item.label}
+            </NavLink>
+          )
+        )}
       </div>
       {footerExtra}
       <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
