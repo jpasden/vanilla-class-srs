@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Confetti + Checkmark — Jazzy Variations — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .finish-stage {
+    width: 100%; max-width: 600px; min-height: 320px; position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden; border-radius: 12px; border: 1px dashed var(--color-border);
+  }
+  .finish-content { text-align: center; padding: 32px 16px; position: relative; z-index: 2; }
+
+  .confetti-piece {
+    position: absolute; z-index: 1; opacity: 0.95;
+  }
+
+  .check-circle-svg { width: 80px; height: 80px; margin-bottom: 12px; }
+  .check-circle { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 166; stroke-dashoffset: 166; }
+  .check-mark { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 48; stroke-dashoffset: 48; }
+  @keyframes check-circle-draw { to { stroke-dashoffset: 0; } }
+  @keyframes check-mark-draw { to { stroke-dashoffset: 0; } }
+
+  .stat-block { position: relative; }
+  .stat-value { display: inline-block; }
+
+  /* Number reveal animations — applied to .stat-value spans */
+  @keyframes num-flyup {
+    from { transform: translateY(40px) scale(0.5); opacity: 0; }
+    to   { transform: translateY(0) scale(1); opacity: 1; }
+  }
+  @keyframes num-flydown {
+    from { transform: translateY(-40px) scale(0.5); opacity: 0; }
+    to   { transform: translateY(0) scale(1); opacity: 1; }
+  }
+  @keyframes num-pop-overshoot {
+    0%   { transform: scale(0); opacity: 0; }
+    60%  { transform: scale(1.35); opacity: 1; }
+    80%  { transform: scale(0.9); }
+    100% { transform: scale(1); }
+  }
+  @keyframes num-spin-in {
+    from { transform: rotate(-25deg) scale(0.4); opacity: 0; }
+    to   { transform: rotate(0deg) scale(1); opacity: 1; }
+  }
+  @keyframes num-flyup-rotate {
+    from { transform: translateY(50px) rotate(15deg) scale(0.5); opacity: 0; }
+    to   { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+  }
+  @keyframes num-shake-settle {
+    0%   { transform: scale(0) ; opacity: 0; }
+    50%  { transform: scale(1.2) rotate(-6deg); opacity: 1; }
+    65%  { transform: scale(1.1) rotate(5deg); }
+    80%  { transform: scale(1.05) rotate(-3deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  @keyframes num-bounce-in {
+    0%   { transform: translateY(-60px) scale(0.6); opacity: 0; }
+    50%  { transform: translateY(0) scale(1.1); opacity: 1; }
+    65%  { transform: translateY(-12px) scale(0.97); }
+    80%  { transform: translateY(0) scale(1.03); }
+    100% { transform: translateY(0) scale(1); }
+  }
+  @keyframes num-glow-pop {
+    0%   { transform: scale(0.3); opacity: 0; text-shadow: none; }
+    50%  { transform: scale(1.3); opacity: 1; text-shadow: 0 0 16px var(--color-accent); }
+    100% { transform: scale(1); text-shadow: 0 0 0 transparent; }
+  }
+  .glow-color { color: var(--color-accent); }
+
+  .stat-label-pop { animation: label-fade 0.3s ease forwards; opacity: 0; }
+  @keyframes label-fade { to { opacity: 1; } }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Confetti + Checkmark — Jazzy Number Variations</h1>
+    <p>All 10 use "confetti + checkmark together," with confetti now falling and settling on the ground (piling up) instead of fading away. The number reveal is different in each — flying in, popping, spinning, bouncing. Click Replay on each.</p>
+  </div>
+
+  <!-- 1 -->
+  <div class="demo-section">
+    <h2>1. Fly up from below</h2>
+    <p class="demo-desc">Numbers rise up into place from below their final position, like they're launching up out of the stat block.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage1"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg1"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n1a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n1b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run(1,'num-flyup')">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="demo-section">
+    <h2>2. Fly down from above</h2>
+    <p class="demo-desc">Opposite direction — numbers drop in from above, like they're falling into place alongside the confetti.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage2"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg2"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n2a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n2b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run(2,'num-flydown')">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="demo-section">
+    <h2>3. Pop with overshoot</h2>
+    <p class="demo-desc">Numbers scale up past their final size (1.35x) then snap back down to rest — a bouncy "ta-da!" pop, no directional movement.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage3"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg3"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n3a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n3b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run(3,'num-pop-overshoot')">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="demo-section">
+    <h2>4. Spin in</h2>
+    <p class="demo-desc">Numbers rotate in from a slight angle while scaling up — playful, a bit "cartoonish."</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage4"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg4"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n4a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n4b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run(4,'num-spin-in')">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="demo-section">
+    <h2>5. Fly up + rotate</h2>
+    <p class="demo-desc">Combines #1's upward flight with a slight rotation that straightens out as it lands — more dynamic than a straight fly-up.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage5"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg5"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n5a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n5b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run(5,'num-flyup-rotate')">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="demo-section">
+    <h2>6. Shake &amp; settle</h2>
+    <p class="demo-desc">Numbers pop in big, then wobble side-to-side a couple times before settling flat — like they're a little too excited to hold still.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage6"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg6"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n6a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n6b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run(6,'num-shake-settle')">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="demo-section">
+    <h2>7. Bounce in from above</h2>
+    <p class="demo-desc">Numbers drop from above and bounce like a ball before settling — combines vertical motion with a literal bounce, feels the most "physical."</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage7"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg7"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n7a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n7b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run(7,'num-bounce-in')">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <div class="demo-section">
+    <h2>8. Glow pop</h2>
+    <p class="demo-desc">Numbers pop in with a brief accent-colored glow (text-shadow) that fades as they settle to normal color — adds a little "sparkle" without any extra particles.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage8"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg8"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n8a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n8b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run(8,'num-glow-pop',true)">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <div class="demo-section">
+    <h2>9. Count-up THEN pop (combo)</h2>
+    <p class="demo-desc">Numbers count up from 0 normally first, and once they hit the final value, they punch with the overshoot-pop from #3 — count-up gives a sense of "calculating," the pop marks "done."</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage9"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg9"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n9a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n9b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runCountThenPop(9)">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 10 -->
+  <div class="demo-section">
+    <h2>10. Staggered double-pop (cards then accuracy)</h2>
+    <p class="demo-desc">"Cards Reviewed" pops in first (shake-and-settle style), then a beat later "Accuracy" pops in too — staggering draws your eye to each number individually instead of both appearing at once.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage10"><div class="finish-content">
+        <svg class="check-circle-svg" id="svg10"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+        <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+        <div style="display:flex;gap:24px;justify-content:center;">
+          <div class="stat-block"><span class="stat-value" id="n10a">0</span><div class="stat-label">Cards Reviewed</div></div>
+          <div class="stat-block"><span class="stat-value" id="n10b">0%</span><div class="stat-label">Accuracy</div></div>
+        </div>
+      </div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runStaggered(10)">Replay</button></div>
+    </div>
+  </div>
+
+  <script>
+    const COLORS = ['#E8698A', '#6BAF92', '#FFE4C4', '#5B9BD5', '#D4900A']
+
+    // Confetti that falls and settles on the ground (stays piled at the bottom instead of fading)
+    function dropConfettiSettle(stage) {
+      stage.querySelectorAll('.confetti-piece').forEach((el) => el.remove())
+      const stageHeight = stage.clientHeight || 320
+      const groundY = stageHeight - 14
+      for (let i = 0; i < 55; i++) {
+        const piece = document.createElement('div')
+        piece.className = 'confetti-piece'
+        const startX = Math.random() * 100
+        const restX = Math.max(2, Math.min(98, startX + (Math.random() - 0.5) * 8))
+        const size = 7 + Math.random() * 4
+        const isCircle = Math.random() > 0.5
+        piece.style.width = size + 'px'
+        piece.style.height = (isCircle ? size : size * 1.7) + 'px'
+        piece.style.borderRadius = isCircle ? '50%' : '2px'
+        piece.style.background = COLORS[Math.floor(Math.random() * COLORS.length)]
+        piece.style.left = startX + '%'
+        piece.style.top = '-10px'
+        const fallDur = 0.9 + Math.random() * 0.6
+        const delay = Math.random() * 0.35
+        const finalRot = Math.round((Math.random() - 0.5) * 100)
+        piece.style.transition = `top ${fallDur}s cubic-bezier(0.3,0.6,0.7,1) ${delay}s, left ${fallDur}s ease ${delay}s, transform ${fallDur}s ease ${delay}s`
+        stage.appendChild(piece)
+        requestAnimationFrame(() => {
+          piece.style.top = (groundY - size) + 'px'
+          piece.style.left = restX + '%'
+          piece.style.transform = `rotate(${finalRot}deg)`
+        })
+      }
+    }
+
+    function drawCheck(svgId) {
+      const svg = document.getElementById(svgId)
+      const circle = svg.querySelector('.check-circle')
+      const mark = svg.querySelector('.check-mark')
+      circle.style.animation = 'none'; mark.style.animation = 'none'
+      requestAnimationFrame(() => {
+        circle.style.animation = 'check-circle-draw 0.5s ease-out forwards'
+        mark.style.animation = 'check-mark-draw 0.3s 0.4s ease-out forwards'
+      })
+    }
+
+    function popNumbers(idx, animName, glow) {
+      const a = document.getElementById('n' + idx + 'a')
+      const b = document.getElementById('n' + idx + 'b')
+      a.textContent = '12'; b.textContent = '83%'
+      ;[a, b].forEach((el, i) => {
+        el.style.animation = 'none'
+        if (glow) el.classList.remove('glow-color')
+        requestAnimationFrame(() => {
+          el.style.animation = `${animName} 0.55s ${0.15 + i * 0.08}s cubic-bezier(0.3,1.1,0.4,1) both`
+          if (glow) setTimeout(() => el.classList.add('glow-color'), (0.15 + i * 0.08) * 1000 + 550)
+        })
+      })
+    }
+
+    function run(idx, animName, glow) {
+      const stage = document.getElementById('stage' + idx)
+      drawCheck('svg' + idx)
+      dropConfettiSettle(stage)
+      popNumbers(idx, animName, glow)
+    }
+
+    function countUp(el, to, suffix, duration) {
+      return new Promise((resolve) => {
+        const start = performance.now()
+        function tick(now) {
+          const t = Math.min(1, (now - start) / duration)
+          el.textContent = Math.round(t * to) + suffix
+          if (t < 1) requestAnimationFrame(tick)
+          else resolve()
+        }
+        requestAnimationFrame(tick)
+      })
+    }
+
+    async function runCountThenPop(idx) {
+      const stage = document.getElementById('stage' + idx)
+      drawCheck('svg' + idx)
+      dropConfettiSettle(stage)
+      const a = document.getElementById('n' + idx + 'a')
+      const b = document.getElementById('n' + idx + 'b')
+      a.style.animation = ''; b.style.animation = ''
+      await Promise.all([countUp(a, 12, '', 650), countUp(b, 83, '%', 650)])
+      ;[a, b].forEach((el) => {
+        el.style.animation = 'none'
+        requestAnimationFrame(() => { el.style.animation = 'num-pop-overshoot 0.4s cubic-bezier(0.3,1.1,0.4,1)' })
+      })
+    }
+
+    function runStaggered(idx) {
+      const stage = document.getElementById('stage' + idx)
+      drawCheck('svg' + idx)
+      dropConfettiSettle(stage)
+      const a = document.getElementById('n' + idx + 'a')
+      const b = document.getElementById('n' + idx + 'b')
+      a.textContent = '12'; b.textContent = '83%'
+      a.style.animation = 'none'; b.style.animation = 'none'
+      requestAnimationFrame(() => { a.style.animation = 'num-shake-settle 0.5s cubic-bezier(0.3,1.1,0.4,1) both' })
+      setTimeout(() => { b.style.animation = 'num-shake-settle 0.5s cubic-bezier(0.3,1.1,0.4,1) both' }, 350)
+    }
+
+    // Auto-run all on load
+    run(1,'num-flyup'); run(2,'num-flydown'); run(3,'num-pop-overshoot'); run(4,'num-spin-in');
+    run(5,'num-flyup-rotate'); run(6,'num-shake-settle'); run(7,'num-bounce-in'); run(8,'num-glow-pop',true);
+    runCountThenPop(9); runStaggered(10);
+  </script>
+</body>
+</html>

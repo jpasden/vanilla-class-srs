@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Final Finish Screen — Creative Round — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .finish-stage {
+    width: 100%; max-width: 600px; min-height: 340px; position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden; border-radius: 12px; border: 1px dashed var(--color-border);
+    padding: 16px;
+  }
+  .finish-content { text-align: center; padding: 20px 16px; position: relative; z-index: 2; width: 100%; }
+  .confetti-piece { position: absolute; z-index: 1; opacity: 0.95; }
+  .check-circle-svg { width: 80px; height: 80px; margin-bottom: 8px; }
+  .check-circle { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 166; stroke-dashoffset: 166; }
+  .check-mark { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 48; stroke-dashoffset: 48; }
+  @keyframes check-circle-draw { to { stroke-dashoffset: 0; } }
+  @keyframes check-mark-draw { to { stroke-dashoffset: 0; } }
+
+  .big-stats { display: flex; gap: 28px; justify-content: center; align-items: flex-end; margin: 12px 0; flex-wrap: wrap; }
+  .big-stat-value {
+    display: inline-block;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: clamp(34px, 11vw, 52px);
+    line-height: 1;
+  }
+  .big-stat-label { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+  @keyframes shake-glow-settle {
+    0%   { transform: scale(0); opacity: 0; text-shadow: none; }
+    45%  { transform: scale(1.25) rotate(-7deg); opacity: 1; text-shadow: 0 0 22px var(--glow-color, var(--color-accent)); }
+    60%  { transform: scale(1.12) rotate(5deg); }
+    75%  { transform: scale(1.06) rotate(-3deg); }
+    100% { transform: scale(1) rotate(0deg); text-shadow: 0 0 0 transparent; }
+  }
+
+  .reward-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: var(--text-2xl);
+    margin-bottom: 4px;
+  }
+  .reward-subtitle { color: var(--color-text-muted); font-size: var(--text-sm); margin-bottom: 4px; }
+
+  /* 6. Badge */
+  .badge-medal {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; margin: 0 auto 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+    animation: medal-drop 0.5s cubic-bezier(0.3,1.4,0.4,1) both;
+  }
+  @keyframes medal-drop { from { transform: translateY(-40px) scale(0.5) rotate(-15deg); opacity: 0; } to { transform: translateY(0) scale(1) rotate(0); opacity: 1; } }
+
+  /* 7. Streak flame */
+  .streak-flame { font-size: 40px; display: inline-block; animation: flame-flicker 1.4s ease-in-out infinite; }
+  @keyframes flame-flicker { 0%,100% { transform: scale(1) rotate(-2deg); } 50% { transform: scale(1.08) rotate(2deg); } }
+
+  /* 8. Receipt-style ticker */
+  .receipt-line {
+    display: flex; justify-content: space-between; font-size: var(--text-sm);
+    padding: 6px 0; border-bottom: 1px dashed var(--color-border);
+    opacity: 0; transform: translateX(-12px);
+  }
+  .receipt-line.shown { animation: receipt-in 0.3s ease forwards; }
+  @keyframes receipt-in { to { opacity: 1; transform: translateX(0); } }
+  .receipt-box { max-width: 280px; margin: 12px auto; text-align: left; }
+  .receipt-total { font-weight: 700; font-size: var(--text-lg); border-bottom: none !important; }
+
+  /* 9. Progress ring fill */
+  .ring-wrap { position: relative; width: 110px; height: 110px; margin: 0 auto 8px; }
+  .ring-wrap svg { transform: rotate(-90deg); }
+  .ring-bg { stroke: var(--color-border); stroke-width: 8; fill: none; }
+  .ring-fg { stroke: var(--color-accent-alt); stroke-width: 8; fill: none; stroke-linecap: round; }
+  .ring-center-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-weight: 700; font-size: 26px; }
+
+  /* 10. Sticker stamp */
+  .stamp {
+    display: inline-block; border: 4px solid var(--color-accent); color: var(--color-accent);
+    border-radius: 10px; padding: 6px 18px; font-family: var(--font-heading); font-weight: 700;
+    font-size: var(--text-lg); text-transform: uppercase; letter-spacing: 1px;
+    transform: scale(3) rotate(-18deg); opacity: 0;
+  }
+  .stamp.slam { animation: stamp-slam 0.35s cubic-bezier(0.1,0.8,0.3,1) forwards; }
+  @keyframes stamp-slam { 60% { transform: scale(0.85) rotate(-8deg); opacity: 1; } 80% { transform: scale(1.08) rotate(-10deg); } 100% { transform: scale(1) rotate(-8deg); opacity: 1; } }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Final Finish Screen — Creative Round</h1>
+    <p>Confetti (settles on ground) and the checkmark draw are unchanged throughout. The numbers are bigger and use "shake & settle" + "glow pop" combined, randomized accent colors, and performance-based emoji. Each variation below changes everything <em>around</em> that combo to make the whole screen feel like a distinct reward moment, not just an animated number. Click Replay on each — a few even change based on a (fake, randomized) performance tier so you can see the good/bad variants.</p>
+  </div>
+
+  <!-- 1 -->
+  <div class="demo-section">
+    <h2>1. Baseline: big shake-glow numbers + color/emoji by performance</h2>
+    <p class="demo-desc">Just the core ask on its own: numbers ~3x bigger than before, shake+glow combined, glow color picked from the palette at random, and an emoji next to the heading that reflects accuracy (🔥 90%+, 👍 70-89%, 💪 below 70%).</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage1"><div class="finish-content" id="content1"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run1()">Replay (random performance)</button></div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="demo-section">
+    <h2>2. Personal best banner</h2>
+    <p class="demo-desc">If the (randomized, fake) session beats a "previous best" accuracy, a small gold ribbon banner slides in above the stats: "New personal best!" — ties the reward to genuine progress, not just "you finished," and only appears when actually earned.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage2"><div class="finish-content" id="content2"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run2()">Replay (random — sometimes a new best)</button></div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="demo-section">
+    <h2>3. Streak flame counter</h2>
+    <p class="demo-desc">A flickering flame emoji + "Day streak" counter sits beside the main stats, counting up its own number on a slight delay — taps into daily-habit motivation (Duolingo-style) rather than just this one session's score.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage3"><div class="finish-content" id="content3"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run3()">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="demo-section">
+    <h2>4. Encouraging line that reacts to the actual numbers</h2>
+    <p class="demo-desc">Instead of a generic "Session Complete," the headline text itself changes based on performance — "Nailed it!" / "Solid work." / "Keep going — you'll get there." — feels like the app is actually responding to how you did, not showing the same screen regardless.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage4"><div class="finish-content" id="content4"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run4()">Replay (random performance)</button></div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="demo-section">
+    <h2>5. Mascot reaction (deck icon "looks at" your score)</h2>
+    <p class="demo-desc">The app's own Vanilla-deck mascot icon appears bigger, and tilts/bounces differently depending on performance (excited bounce for a great session, a gentler nod for an okay one) — reuses existing brand art instead of generic icons, gives the screen a "character" reacting to you.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage5"><div class="finish-content" id="content5"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run5()">Replay (random performance)</button></div>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="demo-section">
+    <h2>6. Medal/badge drop</h2>
+    <p class="demo-desc">A small circular medal (🥇/🥈/🥉 by accuracy tier) drops in from above and lands with a bounce above the stats, like an actual achievement badge — most "gamified" option, clearest sense of tiered reward.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage6"><div class="finish-content" id="content6"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run6()">Replay (random tier)</button></div>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="demo-section">
+    <h2>7. Receipt-style line-item reveal</h2>
+    <p class="demo-desc">Instead of two stat blocks appearing at once, results print out one line at a time like a receipt ("Cards reviewed... 12", "Correct on first try... 9", "Accuracy... 83%"), each sliding in just after the last — builds a little suspense/rhythm before the final number lands, and surfaces more detail than just two numbers.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage7"><div class="finish-content" id="content7"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run7()">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <div class="demo-section">
+    <h2>8. Filling progress ring around the accuracy number</h2>
+    <p class="demo-desc">Accuracy is shown as a circular ring that fills clockwise from 0 to its final value (instead of a plain stat block) with the percentage glowing/popping in the center once the ring finishes — accuracy gets visual weight as the "headline" stat, cards-reviewed becomes a smaller secondary line below.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage8"><div class="finish-content" id="content8"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run8()">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <div class="demo-section">
+    <h2>9. Rubber-stamp "PASSED" / tier stamp</h2>
+    <p class="demo-desc">A bordered text stamp (like a customs/passport stamp) slams down at an angle onto the screen — "GREAT JOB" / "WELL DONE" / "KEEP PRACTICING" depending on accuracy tier — punchy, single decisive beat rather than a string of small animations.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage9"><div class="finish-content" id="content9"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run9()">Replay (random tier)</button></div>
+    </div>
+  </div>
+
+  <!-- 10 -->
+  <div class="demo-section">
+    <h2>10. Everything combined (the "full reward" screen)</h2>
+    <p class="demo-desc">Mascot reaction + medal + reactive headline + glow numbers + confetti, all at once — the most elaborate option. Best reserved for genuinely good sessions (e.g. only show the full version above some accuracy threshold, with a quieter version otherwise) rather than firing at full intensity every time.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage10"><div class="finish-content" id="content10"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run10()">Replay (random performance)</button></div>
+    </div>
+  </div>
+
+  <script>
+    const COLORS = ['#E8698A', '#6BAF92', '#5B9BD5', '#D4900A', '#C45C3A']
+    function rand(min, max) { return min + Math.random() * (max - min) }
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)] }
+    function randomSession() {
+      const reviewed = Math.round(rand(8, 22))
+      const accuracy = Math.round(rand(45, 100))
+      return { reviewed, accuracy }
+    }
+    function tierOf(accuracy) {
+      if (accuracy >= 90) return 'great'
+      if (accuracy >= 70) return 'good'
+      return 'rough'
+    }
+
+    function dropConfettiSettle(stage) {
+      stage.querySelectorAll('.confetti-piece').forEach((el) => el.remove())
+      const stageHeight = stage.clientHeight || 340
+      const groundY = stageHeight - 14
+      for (let i = 0; i < 55; i++) {
+        const piece = document.createElement('div')
+        piece.className = 'confetti-piece'
+        const startX = Math.random() * 100
+        const restX = Math.max(2, Math.min(98, startX + (Math.random() - 0.5) * 8))
+        const size = 7 + Math.random() * 4
+        const isCircle = Math.random() > 0.5
+        piece.style.width = size + 'px'
+        piece.style.height = (isCircle ? size : size * 1.7) + 'px'
+        piece.style.borderRadius = isCircle ? '50%' : '2px'
+        piece.style.background = pick(COLORS)
+        piece.style.left = startX + '%'
+        piece.style.top = '-10px'
+        const fallDur = 0.9 + Math.random() * 0.6
+        const delay = Math.random() * 0.35
+        const finalRot = Math.round((Math.random() - 0.5) * 100)
+        piece.style.transition = `top ${fallDur}s cubic-bezier(0.3,0.6,0.7,1) ${delay}s, left ${fallDur}s ease ${delay}s, transform ${fallDur}s ease ${delay}s`
+        stage.appendChild(piece)
+        requestAnimationFrame(() => {
+          piece.style.top = (groundY - size) + 'px'
+          piece.style.left = restX + '%'
+          piece.style.transform = `rotate(${finalRot}deg)`
+        })
+      }
+    }
+
+    function checkSvg() {
+      return `<svg class="check-circle-svg"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>`
+    }
+    function drawCheck(container) {
+      const svg = container.querySelector('.check-circle-svg')
+      const circle = svg.querySelector('.check-circle')
+      const mark = svg.querySelector('.check-mark')
+      requestAnimationFrame(() => {
+        circle.style.animation = 'check-circle-draw 0.5s ease-out forwards'
+        mark.style.animation = 'check-mark-draw 0.3s 0.4s ease-out forwards'
+      })
+    }
+
+    function bigStatsHTML(reviewed, accuracy, idPrefix) {
+      return `
+        <div class="big-stats">
+          <div><span class="big-stat-value" id="${idPrefix}a">${reviewed}</span><div class="big-stat-label">Cards Reviewed</div></div>
+          <div><span class="big-stat-value" id="${idPrefix}b">${accuracy}%</span><div class="big-stat-label">Accuracy</div></div>
+        </div>`
+    }
+
+    function animateShakeGlow(idPrefix) {
+      const a = document.getElementById(idPrefix + 'a')
+      const b = document.getElementById(idPrefix + 'b')
+      ;[a, b].forEach((el, i) => {
+        el.style.setProperty('--glow-color', pick(COLORS))
+        el.style.animation = 'none'
+        requestAnimationFrame(() => {
+          el.style.animation = `shake-glow-settle 0.6s ${0.15 + i * 0.1}s cubic-bezier(0.3,1.1,0.4,1) both`
+        })
+      })
+    }
+
+    function emojiFor(tier) { return tier === 'great' ? '🔥' : tier === 'good' ? '👍' : '💪' }
+
+    // 1. Baseline
+    function run1() {
+      const { reviewed, accuracy } = randomSession()
+      const tier = tierOf(accuracy)
+      const stage = document.getElementById('stage1')
+      dropConfettiSettle(stage)
+      document.getElementById('content1').innerHTML = `
+        ${checkSvg()}
+        <h2 class="reward-title">Session Complete ${emojiFor(tier)}</h2>
+        ${bigStatsHTML(reviewed, accuracy, 'r1')}
+      `
+      drawCheck(document.getElementById('content1'))
+      animateShakeGlow('r1')
+    }
+
+    // 2. Personal best banner
+    function run2() {
+      const { reviewed, accuracy } = randomSession()
+      const isBest = accuracy >= 85 && Math.random() > 0.4
+      const stage = document.getElementById('stage2')
+      dropConfettiSettle(stage)
+      document.getElementById('content2').innerHTML = `
+        ${isBest ? '<div id="bestBanner" style="display:inline-block;background:linear-gradient(135deg,#D4900A,#FFE4C4);color:#4A3728;font-family:var(--font-heading);font-weight:700;font-size:var(--text-sm);padding:6px 16px;border-radius:999px;margin-bottom:10px;opacity:0;transform:translateY(-10px);">🏆 New personal best!</div><br>' : ''}
+        ${checkSvg()}
+        <h2 class="reward-title">Session Complete</h2>
+        ${bigStatsHTML(reviewed, accuracy, 'r2')}
+      `
+      drawCheck(document.getElementById('content2'))
+      animateShakeGlow('r2')
+      if (isBest) {
+        const banner = document.getElementById('bestBanner')
+        requestAnimationFrame(() => {
+          banner.style.transition = 'opacity 0.35s ease, transform 0.35s cubic-bezier(0.3,1.2,0.4,1)'
+          banner.style.opacity = 1
+          banner.style.transform = 'translateY(0)'
+        })
+      }
+    }
+
+    // 3. Streak flame
+    function run3() {
+      const { reviewed, accuracy } = randomSession()
+      const streak = Math.round(rand(2, 21))
+      const stage = document.getElementById('stage3')
+      dropConfettiSettle(stage)
+      document.getElementById('content3').innerHTML = `
+        ${checkSvg()}
+        <h2 class="reward-title">Session Complete</h2>
+        <div class="big-stats">
+          <div><span class="big-stat-value" id="r3a">${reviewed}</span><div class="big-stat-label">Cards Reviewed</div></div>
+          <div><span class="big-stat-value" id="r3b">${accuracy}%</span><div class="big-stat-label">Accuracy</div></div>
+          <div><span class="streak-flame">🔥</span><span class="big-stat-value" id="r3c" style="font-size: clamp(28px,9vw,40px); vertical-align: middle;">0</span><div class="big-stat-label">Day Streak</div></div>
+        </div>
+      `
+      drawCheck(document.getElementById('content3'))
+      animateShakeGlow('r3')
+      const streakEl = document.getElementById('r3c')
+      setTimeout(() => {
+        const start = performance.now()
+        function tick(now) {
+          const t = Math.min(1, (now - start) / 500)
+          streakEl.textContent = Math.round(t * streak)
+          if (t < 1) requestAnimationFrame(tick)
+        }
+        requestAnimationFrame(tick)
+      }, 350)
+    }
+
+    // 4. Reactive headline
+    function run4() {
+      const { reviewed, accuracy } = randomSession()
+      const tier = tierOf(accuracy)
+      const headline = tier === 'great' ? 'Nailed it!' : tier === 'good' ? 'Solid work.' : "Keep going — you'll get there."
+      const stage = document.getElementById('stage4')
+      dropConfettiSettle(stage)
+      document.getElementById('content4').innerHTML = `
+        ${checkSvg()}
+        <h2 class="reward-title">${headline}</h2>
+        <p class="reward-subtitle">Session Complete</p>
+        ${bigStatsHTML(reviewed, accuracy, 'r4')}
+      `
+      drawCheck(document.getElementById('content4'))
+      animateShakeGlow('r4')
+    }
+
+    // 5. Mascot reaction
+    function run5() {
+      const { reviewed, accuracy } = randomSession()
+      const tier = tierOf(accuracy)
+      const anim = tier === 'great' ? 'mascot-excited 0.6s ease infinite' : tier === 'good' ? 'mascot-nod 1.4s ease infinite' : 'mascot-still 2s ease infinite'
+      const stage = document.getElementById('stage5')
+      dropConfettiSettle(stage)
+      document.getElementById('content5').innerHTML = `
+        <style>
+          @keyframes mascot-excited { 0%,100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-10px) rotate(4deg); } }
+          @keyframes mascot-nod { 0%,100% { transform: rotate(0deg); } 50% { transform: rotate(-6deg); } }
+          @keyframes mascot-still { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+        </style>
+        <img src="../../client/public/Vanilla-deck.png" alt="" style="width:84px;height:84px;object-fit:contain;animation:${anim};margin-bottom:4px;">
+        <h2 class="reward-title">Session Complete</h2>
+        ${bigStatsHTML(reviewed, accuracy, 'r5')}
+      `
+      drawCheck(document.getElementById('content5'))
+      // no checkSvg here since mascot takes its place — re-run shake glow only
+      animateShakeGlow('r5')
+    }
+
+    // 6. Medal drop
+    function run6() {
+      const { reviewed, accuracy } = randomSession()
+      const tier = tierOf(accuracy)
+      const medal = tier === 'great' ? { emoji: '🥇', bg: '#FFE4C4' } : tier === 'good' ? { emoji: '🥈', bg: '#E8D5C0' } : { emoji: '🥉', bg: '#FAEBD7' }
+      const stage = document.getElementById('stage6')
+      dropConfettiSettle(stage)
+      document.getElementById('content6').innerHTML = `
+        <div class="badge-medal" style="background:${medal.bg}">${medal.emoji}</div>
+        <h2 class="reward-title">Session Complete</h2>
+        ${bigStatsHTML(reviewed, accuracy, 'r6')}
+      `
+      animateShakeGlow('r6')
+    }
+
+    // 7. Receipt reveal
+    function run7() {
+      const { reviewed, accuracy } = randomSession()
+      const firstTry = Math.max(0, reviewed - Math.round(rand(1, 5)))
+      const stage = document.getElementById('stage7')
+      dropConfettiSettle(stage)
+      document.getElementById('content7').innerHTML = `
+        ${checkSvg()}
+        <h2 class="reward-title">Session Complete</h2>
+        <div class="receipt-box" id="receipt7">
+          <div class="receipt-line"><span>Cards reviewed</span><span>${reviewed}</span></div>
+          <div class="receipt-line"><span>Correct on first try</span><span>${firstTry}</span></div>
+          <div class="receipt-line receipt-total"><span>Accuracy</span><span>${accuracy}%</span></div>
+        </div>
+      `
+      drawCheck(document.getElementById('content7'))
+      const lines = document.querySelectorAll('#receipt7 .receipt-line')
+      lines.forEach((line, i) => {
+        setTimeout(() => line.classList.add('shown'), 350 + i * 220)
+      })
+    }
+
+    // 8. Progress ring
+    function run8() {
+      const { reviewed, accuracy } = randomSession()
+      const stage = document.getElementById('stage8')
+      dropConfettiSettle(stage)
+      const r = 47, c = 2 * Math.PI * r
+      document.getElementById('content8').innerHTML = `
+        <div class="ring-wrap">
+          <svg width="110" height="110">
+            <circle class="ring-bg" cx="55" cy="55" r="${r}"/>
+            <circle class="ring-fg" id="ringFg" cx="55" cy="55" r="${r}" stroke-dasharray="${c}" stroke-dashoffset="${c}"/>
+          </svg>
+          <div class="ring-center-num" id="ringNum">0%</div>
+        </div>
+        <h2 class="reward-title">Session Complete</h2>
+        <p class="reward-subtitle"><strong id="r8a">${reviewed}</strong> cards reviewed</p>
+      `
+      const ringFg = document.getElementById('ringFg')
+      const ringNum = document.getElementById('ringNum')
+      ringFg.style.transition = 'stroke-dashoffset 0.9s cubic-bezier(0.3,0.6,0.3,1)'
+      requestAnimationFrame(() => { ringFg.style.strokeDashoffset = c - (c * accuracy / 100) })
+      const start = performance.now()
+      function tick(now) {
+        const t = Math.min(1, (now - start) / 900)
+        ringNum.textContent = Math.round(t * accuracy) + '%'
+        if (t < 1) requestAnimationFrame(tick)
+        else {
+          ringNum.style.animation = 'none'
+          requestAnimationFrame(() => { ringNum.style.animation = 'shake-glow-settle 0.5s cubic-bezier(0.3,1.1,0.4,1) both' })
+        }
+      }
+      requestAnimationFrame(tick)
+    }
+
+    // 9. Rubber stamp
+    function run9() {
+      const { reviewed, accuracy } = randomSession()
+      const tier = tierOf(accuracy)
+      const text = tier === 'great' ? 'GREAT JOB' : tier === 'good' ? 'WELL DONE' : 'KEEP PRACTICING'
+      const stage = document.getElementById('stage9')
+      dropConfettiSettle(stage)
+      document.getElementById('content9').innerHTML = `
+        <div class="stamp" id="stamp9">${text}</div>
+        <div style="margin-top:14px;">${bigStatsHTML(reviewed, accuracy, 'r9')}</div>
+      `
+      const stampEl = document.getElementById('stamp9')
+      requestAnimationFrame(() => stampEl.classList.add('slam'))
+      setTimeout(() => animateShakeGlow('r9'), 250)
+    }
+
+    // 10. Everything combined
+    function run10() {
+      const { reviewed, accuracy } = randomSession()
+      const tier = tierOf(accuracy)
+      const headline = tier === 'great' ? 'Nailed it!' : tier === 'good' ? 'Solid work.' : "Keep going — you'll get there."
+      const medal = tier === 'great' ? '🥇' : tier === 'good' ? '🥈' : '🥉'
+      const mascotAnim = tier === 'great' ? 'mascot-excited 0.6s ease infinite' : 'mascot-nod 1.4s ease infinite'
+      const stage = document.getElementById('stage10')
+      dropConfettiSettle(stage)
+      document.getElementById('content10').innerHTML = `
+        <style>
+          @keyframes mascot-excited { 0%,100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-10px) rotate(4deg); } }
+          @keyframes mascot-nod { 0%,100% { transform: rotate(0deg); } 50% { transform: rotate(-6deg); } }
+        </style>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;">
+          <img src="../../client/public/Vanilla-deck.png" alt="" style="width:56px;height:56px;object-fit:contain;animation:${mascotAnim};">
+          <span style="font-size:32px;">${medal}</span>
+        </div>
+        <h2 class="reward-title" style="margin-top:6px;">${headline}</h2>
+        <p class="reward-subtitle">Session Complete</p>
+        ${bigStatsHTML(reviewed, accuracy, 'r10')}
+      `
+      animateShakeGlow('r10')
+    }
+
+    run1(); run2(); run3(); run4(); run5(); run6(); run7(); run8(); run9(); run10();
+  </script>
+</body>
+</html>

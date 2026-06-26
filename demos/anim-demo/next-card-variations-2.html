@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Grade-Direction Swipe — Trajectory Variations — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .stack-wrap { width: 100%; max-width: 600px; position: relative; min-height: 220px; }
+  .nc-card {
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+    padding: clamp(20px,5vw,40px); text-align: center; min-height: 220px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-sm); position: absolute; top: 0; left: 0; width: 100%;
+  }
+  .nc-enter { animation: nc-enter-anim 0.3s cubic-bezier(0.2,0.7,0.3,1) forwards; }
+  @keyframes nc-enter-anim { from { transform: scale(0.92) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+  .grade-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Grade-Direction Swipe — Trajectory Variations</h1>
+    <p>Left/right still tied to grade (Again/Hard → left, Good/Easy → right), but each exit's exact trajectory (distance, rotation, arc, speed) is randomized within a range every time, so no two swipes look identical.</p>
+  </div>
+
+  <div class="demo-section">
+    <h2>1. Randomized rotation only (±range)</h2>
+    <p class="demo-desc">Direction fixed by grade, distance/speed fixed, but rotation angle randomizes each time within ±(4°–14°) — simplest variation, still clearly "tossed," never the exact same spin twice.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="g1Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="g1Progress">1 / 6</div>
+      <div class="grade-buttons">
+        <button class="btn" style="background:var(--color-danger);color:var(--color-vanilla)" onclick="run('g1', 'left', {rotRange:[4,14]})">Again</button>
+        <button class="btn" style="background:var(--color-warning);color:var(--color-vanilla)" onclick="run('g1', 'left', {rotRange:[4,14]})">Hard</button>
+        <button class="btn" style="background:var(--color-accent-alt);color:var(--color-vanilla)" onclick="run('g1', 'right', {rotRange:[4,14]})">Good</button>
+        <button class="btn" style="background:var(--color-info);color:var(--color-vanilla)" onclick="run('g1', 'right', {rotRange:[4,14]})">Easy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>2. Randomized vertical arc</h2>
+    <p class="demo-desc">Fixed left/right direction and rotation, but the card also drifts up or down by a random amount (±30px) as it exits — like it was thrown slightly off-angle vertically, not just sideways.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="g2Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="g2Progress">1 / 6</div>
+      <div class="grade-buttons">
+        <button class="btn" style="background:var(--color-danger);color:var(--color-vanilla)" onclick="run('g2', 'left', {rot:8, vArcRange:30})">Again</button>
+        <button class="btn" style="background:var(--color-warning);color:var(--color-vanilla)" onclick="run('g2', 'left', {rot:8, vArcRange:30})">Hard</button>
+        <button class="btn" style="background:var(--color-accent-alt);color:var(--color-vanilla)" onclick="run('g2', 'right', {rot:8, vArcRange:30})">Good</button>
+        <button class="btn" style="background:var(--color-info);color:var(--color-vanilla)" onclick="run('g2', 'right', {rot:8, vArcRange:30})">Easy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>3. Randomized speed + distance together</h2>
+    <p class="demo-desc">Exit duration varies 0.22s–0.36s and travel distance varies 100%–150% of card width — sometimes a quick short flick, sometimes a longer, slower throw. Direction/rotation fixed.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="g3Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="g3Progress">1 / 6</div>
+      <div class="grade-buttons">
+        <button class="btn" style="background:var(--color-danger);color:var(--color-vanilla)" onclick="run('g3', 'left', {rot:8, durRange:[0.22,0.36], distRange:[100,150]})">Again</button>
+        <button class="btn" style="background:var(--color-warning);color:var(--color-vanilla)" onclick="run('g3', 'left', {rot:8, durRange:[0.22,0.36], distRange:[100,150]})">Hard</button>
+        <button class="btn" style="background:var(--color-accent-alt);color:var(--color-vanilla)" onclick="run('g3', 'right', {rot:8, durRange:[0.22,0.36], distRange:[100,150]})">Good</button>
+        <button class="btn" style="background:var(--color-info);color:var(--color-vanilla)" onclick="run('g3', 'right', {rot:8, durRange:[0.22,0.36], distRange:[100,150]})">Easy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>4. Everything randomized (rotation + arc + speed + distance)</h2>
+    <p class="demo-desc">All of the above combined — direction is the only fixed thing per grade, everything else (rotation 5°–16°, vertical drift ±25px, speed 0.24s–0.34s, distance 110%–145%) rolls fresh each swipe. Feels the most "alive"/hand-thrown.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="g4Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="g4Progress">1 / 6</div>
+      <div class="grade-buttons">
+        <button class="btn" style="background:var(--color-danger);color:var(--color-vanilla)" onclick="run('g4', 'left', {rotRange:[5,16], vArcRange:25, durRange:[0.24,0.34], distRange:[110,145]})">Again</button>
+        <button class="btn" style="background:var(--color-warning);color:var(--color-vanilla)" onclick="run('g4', 'left', {rotRange:[5,16], vArcRange:25, durRange:[0.24,0.34], distRange:[110,145]})">Hard</button>
+        <button class="btn" style="background:var(--color-accent-alt);color:var(--color-vanilla)" onclick="run('g4', 'right', {rotRange:[5,16], vArcRange:25, durRange:[0.24,0.34], distRange:[110,145]})">Good</button>
+        <button class="btn" style="background:var(--color-info);color:var(--color-vanilla)" onclick="run('g4', 'right', {rotRange:[5,16], vArcRange:25, durRange:[0.24,0.34], distRange:[110,145]})">Easy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>5. Magnitude scales with grade strength</h2>
+    <p class="demo-desc">Same random-everything approach as #4, but "Again" (grade 1) and "Easy" (grade 4) throw harder/faster (more rotation, more distance, less duration) than the gentler "Hard"/"Good" (grades 2/3) — the swipe's intensity reflects how strongly you graded the card, not just its direction.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="g5Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="g5Progress">1 / 6</div>
+      <div class="grade-buttons">
+        <button class="btn" style="background:var(--color-danger);color:var(--color-vanilla)" onclick="run('g5', 'left', intensity(1))">Again</button>
+        <button class="btn" style="background:var(--color-warning);color:var(--color-vanilla)" onclick="run('g5', 'left', intensity(2))">Hard</button>
+        <button class="btn" style="background:var(--color-accent-alt);color:var(--color-vanilla)" onclick="run('g5', 'right', intensity(3))">Good</button>
+        <button class="btn" style="background:var(--color-info);color:var(--color-vanilla)" onclick="run('g5', 'right', intensity(4))">Easy</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const WORDS = ['蛋糕', '苹果', '老师', '学校', '朋友', '电脑']
+    const counters = {}
+    function bump(prefix) {
+      counters[prefix] = ((counters[prefix] ?? 0) + 1) % WORDS.length
+      document.getElementById(prefix + 'Progress').textContent = (counters[prefix] + 1) + ' / ' + WORDS.length
+      return WORDS[counters[prefix]]
+    }
+    function rand(min, max) { return min + Math.random() * (max - min) }
+
+    function intensity(grade) {
+      // grades 1 and 4 are "strong" (further from center), 2 and 3 are "mild"
+      const strong = grade === 1 || grade === 4
+      return strong
+        ? { rotRange: [10, 18], vArcRange: 30, durRange: [0.2, 0.26], distRange: [130, 160] }
+        : { rotRange: [3, 8], vArcRange: 12, durRange: [0.3, 0.38], distRange: [95, 115] }
+    }
+
+    function run(prefix, direction, opts) {
+      const card = document.getElementById(prefix + 'Card')
+      const sign = direction === 'left' ? -1 : 1
+
+      const rot = opts.rot != null ? opts.rot : rand(opts.rotRange[0], opts.rotRange[1])
+      const dist = opts.distRange ? rand(opts.distRange[0], opts.distRange[1]) : 120
+      const dur = opts.durRange ? rand(opts.durRange[0], opts.durRange[1]) : 0.3
+      const vArc = opts.vArcRange ? rand(-opts.vArcRange, opts.vArcRange) : 0
+
+      const exitName = 'exit-' + prefix
+      const styleEl = document.createElement('style')
+      styleEl.textContent = `
+        @keyframes ${exitName} {
+          to { transform: translate(${(sign * dist).toFixed(1)}%, ${vArc.toFixed(1)}px) rotate(${(sign * rot).toFixed(1)}deg); opacity: 0; }
+        }
+      `
+      document.head.appendChild(styleEl)
+      card.style.animation = `${exitName} ${dur.toFixed(2)}s ease forwards`
+
+      setTimeout(() => {
+        card.querySelector('.demo-card-word').textContent = bump(prefix)
+        card.style.animation = ''
+        card.className = 'nc-card nc-enter'
+        styleEl.remove()
+      }, dur * 1000)
+    }
+  </script>
+</body>
+</html>

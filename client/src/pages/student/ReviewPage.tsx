@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useEnrollment } from '../../utils/enrollment'
@@ -35,6 +35,38 @@ const GRADE_COLORS: Record<number, string> = {
   4: 'var(--color-info)',
 }
 
+// Each grade swipes off in its own diagonal direction (~30°), with "Again"/"Easy" thrown
+// harder & faster than "Hard"/"Good" — approved in demos/anim-demo/next-card-final-2.html.
+const SWIPE_DIRECTION: Record<number, { sx: 1 | -1; sy: 1 | -1; intense: boolean }> = {
+  1: { sx: -1, sy: 1, intense: true },   // Again: left-down
+  2: { sx: -1, sy: -1, intense: false }, // Hard: left-up
+  3: { sx: 1, sy: -1, intense: false },  // Good: right-up
+  4: { sx: 1, sy: 1, intense: true },    // Easy: right-down
+}
+
+const CONFETTI_COLORS = ['#E8698A', '#6BAF92', '#5B9BD5', '#D4900A', '#C45C3A']
+
+const ENCOURAGEMENT: Record<'great' | 'good' | 'rough', string[]> = {
+  great: ['Nailed it! 🎯', 'Outstanding work! 🌟', "You're on fire! 🔥", 'Flawless round! 💎', 'Incredible focus! 🧠✨'],
+  good: ['Solid work. 👍', 'Nice progress! 📈', "You're getting there. 🚀", 'Good effort! 💪', 'Steady improvement! 🌱'],
+  rough: ["Keep going — you'll get there. 🌤️", 'Practice makes progress. 📚', 'Every review counts. ✅', "Don't give up — you've got this. 💛", "Tomorrow's a new chance. 🌅"],
+}
+
+function accuracyTier(accuracyRate: number | null): 'great' | 'good' | 'rough' {
+  if (accuracyRate === null) return 'good'
+  if (accuracyRate >= 0.9) return 'great'
+  if (accuracyRate >= 0.7) return 'good'
+  return 'rough'
+}
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+function rand(min: number, max: number) {
+  return min + Math.random() * (max - min)
+}
+
 export default function ReviewPage() {
   const { active } = useEnrollment()
   const navigate = useNavigate()
@@ -42,16 +74,34 @@ export default function ReviewPage() {
   const [session, setSession] = useState<SessionResponse | null>(null)
   const [cardIndex, setCardIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
+  const [flipAnimClass, setFlipAnimClass] = useState('')
+  const [flipStyle, setFlipStyle] = useState<{ '--tilt'?: string; '--drift'?: string; '--dur'?: string }>({})
   const [grading, setGrading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [startTime, setStartTime] = useState<number>(0)
   const [completedCount, setCompletedCount] = useState(0)
   const [sessionResult, setSessionResult] = useState<{ cardsReviewed: number; accuracyRate: number | null } | null>(null)
+  const [headline, setHeadline] = useState('')
   const [confirmFinish, setConfirmFinish] = useState(false)
   // Cards graded < 3 this session, for "Keep Studying" re-drill
   const [weakCards, setWeakCards] = useState<SessionCard[]>([])
+  // Drives the grade-direction swipe-out / next-card-in animation
+  const [cardAnim, setCardAnim] = useState<{ exitStyle: CSSProperties; exitMs: number } | null>(null)
+  const [cardEntering, setCardEntering] = useState(false)
+  const finishStageRef = useRef<HTMLDivElement>(null)
 
   if (!active) { navigate('/student'); return null }
+
+  const flipCard = () => {
+    if (flipped) return
+    const mag = rand(0, 5)
+    const tilt = Math.random() > 0.5 ? mag : -mag
+    const drift = rand(-4, 4)
+    setFlipStyle({ '--tilt': `${tilt.toFixed(2)}deg`, '--drift': `${drift.toFixed(1)}px`, '--dur': '0.42s' })
+    setFlipAnimClass('review-pop-flip-fwd')
+    setFlipped(true)
+    setTimeout(() => setFlipAnimClass(''), 420)
+  }
 
   const startSession = async () => {
     setPhase('loading')
@@ -103,6 +153,28 @@ export default function ReviewPage() {
     if (!session || grading) return
     setGrading(true)
     const responseTimeMs = Date.now() - startTime
+
+    // Swipe the card off in its grade's direction — approved in
+    // demos/anim-demo/next-card-final-2.html. Fires immediately as feedback,
+    // independent of how long the grade API call takes.
+    const dir = SWIPE_DIRECTION[grade]
+    const angleDeg = rand(26, 34)
+    const radians = (angleDeg * Math.PI) / 180
+    const distPct = dir.intense ? rand(135, 165) : rand(95, 120)
+    const exitMs = (dir.intense ? rand(0.2, 0.26) : rand(0.3, 0.38)) * 1000
+    const rotDeg = dir.intense ? rand(10, 18) : rand(3, 8)
+    const dx = dir.sx * Math.cos(radians) * distPct
+    const dy = dir.sy * Math.sin(radians) * distPct * 0.6
+    const rotSigned = dir.sx * rotDeg
+    setCardAnim({
+      exitStyle: {
+        transform: `translate(${dx.toFixed(1)}%, ${dy.toFixed(1)}%) rotate(${rotSigned.toFixed(1)}deg)`,
+        opacity: 0,
+        transition: `transform ${exitMs}ms ease, opacity ${exitMs}ms ease`,
+      },
+      exitMs,
+    })
+
     try {
       const result = await api.post<{ requeue: boolean }>('/students/review/grade', {
         sessionId: session.sessionId,
@@ -127,21 +199,30 @@ export default function ReviewPage() {
         : session.cards
 
       const nextIndex = cardIndex + 1
+      const isLastCard = nextIndex >= newCards.length
 
-      if (nextIndex >= newCards.length) {
-        // Finished all cards — finish session
-        await finishSession(session.sessionId, newCompleted)
-      } else {
-        if (result.requeue) {
-          setSession({ ...session, cards: newCards })
+      // Let the swipe-out finish playing before swapping in the next card (or finishing).
+      setTimeout(async () => {
+        setCardAnim(null)
+        if (isLastCard) {
+          await finishSession(session.sessionId, newCompleted)
+        } else {
+          if (result.requeue) {
+            setSession({ ...session, cards: newCards })
+          }
+          setCardIndex(nextIndex)
+          setFlipped(false)
+          setFlipAnimClass('')
+          setFlipStyle({})
+          setStartTime(Date.now())
+          setCompletedCount(newCompleted)
+          setCardEntering(true)
+          setTimeout(() => setCardEntering(false), 300)
         }
-        setCardIndex(nextIndex)
-        setFlipped(false)
-        setStartTime(Date.now())
-        setCompletedCount(newCompleted)
-      }
+      }, exitMs)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to grade card')
+      setCardAnim(null)
     } finally {
       setGrading(false)
     }
@@ -151,6 +232,7 @@ export default function ReviewPage() {
     try {
       const result = await api.post<{ cardsReviewed: number; accuracyRate: number | null }>('/students/review/finish', { sessionId })
       setSessionResult(result)
+      setHeadline(pickRandom(ENCOURAGEMENT[accuracyTier(result.accuracyRate)]))
       setPhase('done')
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to finish session')
@@ -160,6 +242,44 @@ export default function ReviewPage() {
   const handleFinishEarly = () => setConfirmFinish(true)
 
   const currentCard = session?.cards[cardIndex]
+
+  // Confetti that falls and settles on the ground (piles up, doesn't fade away) —
+  // approved in demos/anim-demo/finish-final-2.html.
+  useEffect(() => {
+    if (phase !== 'done') return
+    const stage = finishStageRef.current
+    if (!stage) return
+    stage.querySelectorAll('.review-confetti-piece').forEach((el) => el.remove())
+    const stageHeight = stage.clientHeight || 320
+    const groundY = stageHeight - 14
+    const pieces: HTMLDivElement[] = []
+    for (let i = 0; i < 55; i++) {
+      const piece = document.createElement('div')
+      piece.className = 'review-confetti-piece'
+      const startX = Math.random() * 100
+      const restX = Math.max(2, Math.min(98, startX + (Math.random() - 0.5) * 8))
+      const size = 7 + Math.random() * 4
+      const isCircle = Math.random() > 0.5
+      piece.style.width = `${size}px`
+      piece.style.height = `${isCircle ? size : size * 1.7}px`
+      piece.style.borderRadius = isCircle ? '50%' : '2px'
+      piece.style.background = pickRandom(CONFETTI_COLORS)
+      piece.style.left = `${startX}%`
+      piece.style.top = '-10px'
+      const fallDur = 0.9 + Math.random() * 0.6
+      const delay = Math.random() * 0.35
+      const finalRot = Math.round((Math.random() - 0.5) * 100)
+      piece.style.transition = `top ${fallDur}s cubic-bezier(0.3,0.6,0.7,1) ${delay}s, left ${fallDur}s ease ${delay}s, transform ${fallDur}s ease ${delay}s`
+      stage.appendChild(piece)
+      pieces.push(piece)
+      requestAnimationFrame(() => {
+        piece.style.top = `${groundY - size}px`
+        piece.style.left = `${restX}%`
+        piece.style.transform = `rotate(${finalRot}deg)`
+      })
+    }
+    return () => { pieces.forEach((p) => p.remove()) }
+  }, [phase, completedCount])
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto' }}>
@@ -219,33 +339,44 @@ export default function ReviewPage() {
             <div className="progress-fill" style={{ width: `${((cardIndex + 1) / session!.cards.length) * 100}%` }} />
           </div>
 
-          {/* Card */}
+          {/* Card — 3D pop-flip with a slight random tilt/drift on each flip (demos/anim-demo/flip-final.html),
+              swiped off in a grade-specific diagonal direction when graded (demos/anim-demo/next-card-final-2.html) */}
           <div
-            style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 12,
-              padding: 'clamp(20px, 5vw, 40px) clamp(16px, 4vw, 32px)',
-              textAlign: 'center',
-              cursor: flipped ? 'default' : 'pointer',
-              minHeight: 220,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-            onClick={() => !flipped && setFlipped(true)}
+            className="review-flip-outer"
+            style={{ height: 260, ...(cardAnim ? cardAnim.exitStyle : {}) }}
           >
-            {/* Front */}
-            <div style={{ fontSize: 'clamp(24px, 7vw, 36px)', fontWeight: 700, marginBottom: 8, wordBreak: 'break-word' }}>{currentCard.word}</div>
-            {currentCard.pos && (
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{currentCard.pos}</div>
-            )}
+            <div
+              className={`review-flip-inner ${flipAnimClass} ${!flipAnimClass && flipped ? 'is-flipped-still' : ''} ${cardEntering ? 'review-card-enter' : ''}`}
+              style={{ height: '100%', ...flipStyle }}
+              onClick={flipCard}
+            >
+              {/* Front */}
+              <div
+                className="review-flip-face"
+                style={{
+                  background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12,
+                  padding: 'clamp(20px, 5vw, 40px) clamp(16px, 4vw, 32px)', textAlign: 'center', cursor: flipped ? 'default' : 'pointer',
+                  height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <div style={{ fontSize: 'clamp(24px, 7vw, 36px)', fontWeight: 700, marginBottom: 8, wordBreak: 'break-word' }}>{currentCard.word}</div>
+                {currentCard.pos && (
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{currentCard.pos}</div>
+                )}
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 24 }}>Tap to reveal</p>
+              </div>
 
-            {/* Back */}
-            {flipped && (
-              <div style={{ marginTop: 24, borderTop: '1px solid var(--color-border)', paddingTop: 20, width: '100%' }}>
+              {/* Back */}
+              <div
+                className="review-flip-face back"
+                style={{
+                  background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12,
+                  padding: 'clamp(20px, 5vw, 40px) clamp(16px, 4vw, 32px)', textAlign: 'center',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)', overflowY: 'auto',
+                }}
+              >
                 {currentCard.definitionL2 && (
                   <p style={{ fontSize: 'var(--text-lg)', marginBottom: 8 }}>{currentCard.definitionL2}</p>
                 )}
@@ -258,11 +389,7 @@ export default function ReviewPage() {
                   </p>
                 )}
               </div>
-            )}
-
-            {!flipped && (
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 24 }}>Tap to reveal</p>
-            )}
+            </div>
           </div>
 
           {/* Grade buttons — vertically stacked, full width */}
@@ -293,29 +420,42 @@ export default function ReviewPage() {
         </div>
       )}
 
-      {/* Done */}
+      {/* Done — confetti settles on the ground + drawn checkmark + big glowing stat numbers +
+          randomly-picked encouragement headline, approved in demos/anim-demo/finish-final-2.html.
+          (That demo's personal-best ribbon and streak counter are not wired in yet — no
+          backend data source for either exists; see project memory for the follow-up.) */}
       {phase === 'done' && (
-        <div style={{ textAlign: 'center', padding: '48px 16px' }}>
-          <img src="/Vanilla-deck.png" alt="" style={{ width: 96, height: 96, objectFit: 'contain', marginBottom: 16 }} />
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-          <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 8 }}>Session Complete</h2>
+        <div ref={finishStageRef} className="review-finish-stage" style={{ minHeight: 320, padding: '32px 16px' }}>
+          <svg className="review-check-svg" viewBox="0 0 80 80" key={`check-${completedCount}`}>
+            <circle className="review-check-circle draw" cx="40" cy="40" r="32" />
+            <path className="review-check-mark draw" d="M24 41 L35 52 L57 28" />
+          </svg>
+          <h2 className="review-reward-title">{headline}</h2>
           {sessionResult && (
-            <div style={{ display: 'flex', gap: 24, justifyContent: 'center', marginBottom: 24 }}>
-              <div className="stat-block">
-                <div className="stat-value">{sessionResult.cardsReviewed}</div>
-                <div className="stat-label">Cards Reviewed</div>
+            <div className="review-big-stats">
+              <div>
+                <span
+                  key={`stat-a-${completedCount}`}
+                  className="review-big-stat-value review-shake-glow-settle"
+                  style={{ '--glow-color': pickRandom(CONFETTI_COLORS) } as CSSProperties}
+                >
+                  {sessionResult.cardsReviewed}
+                </span>
+                <div className="review-big-stat-label">Cards Reviewed</div>
               </div>
-              <div className="stat-block">
-                <div className="stat-value">
-                  {sessionResult.accuracyRate !== null
-                    ? `${Math.round(sessionResult.accuracyRate * 100)}%`
-                    : '—'}
-                </div>
-                <div className="stat-label">Accuracy</div>
+              <div>
+                <span
+                  key={`stat-b-${completedCount}`}
+                  className="review-big-stat-value review-shake-glow-settle"
+                  style={{ '--glow-color': pickRandom(CONFETTI_COLORS), animationDelay: '0.1s' } as CSSProperties}
+                >
+                  {sessionResult.accuracyRate !== null ? `${Math.round(sessionResult.accuracyRate * 100)}%` : '—'}
+                </span>
+                <div className="review-big-stat-label">Accuracy</div>
               </div>
             </div>
           )}
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, position: 'relative', zIndex: 2 }}>
             {weakCards.length > 0 && (
               <button className="btn btn-primary" onClick={keepStudying}>
                 Keep Studying ({weakCards.length} weak {weakCards.length === 1 ? 'card' : 'cards'})

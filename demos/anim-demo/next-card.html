@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Next-Card Demos — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .stack-wrap { width: 100%; max-width: 600px; position: relative; min-height: 220px; }
+  .nc-card {
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+    padding: clamp(20px,5vw,40px); text-align: center; min-height: 220px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-sm); position: absolute; top: 0; left: 0; width: 100%;
+  }
+
+  /* 1. Slide-left-and-swap */
+  .slide-exit { animation: slide-exit 0.22s ease forwards; }
+  .slide-enter { animation: slide-enter 0.22s ease forwards; }
+  @keyframes slide-exit { to { transform: translateX(-60px); opacity: 0; } }
+  @keyframes slide-enter { from { transform: translateX(60px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* 2. Swipe-away (like Tinder) */
+  .swipe-exit { animation: swipe-exit 0.3s ease forwards; }
+  .swipe-enter { animation: swipe-enter 0.3s cubic-bezier(0.2,0.7,0.3,1) forwards; }
+  @keyframes swipe-exit { to { transform: translateX(-120%) rotate(-8deg); opacity: 0; } }
+  @keyframes swipe-enter { from { transform: scale(0.92) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+
+  /* 3. Card stack peel (next card already visible behind) */
+  .peel-back { position: absolute; top: 8px; left: 0; width: 100%; transform: scale(0.96); opacity: 0.6; z-index: 0; }
+  .peel-front { position: relative; z-index: 1; }
+  .peel-exit { animation: peel-exit 0.28s ease forwards; }
+  @keyframes peel-exit { to { transform: translateY(-30px) rotate(-4deg); opacity: 0; } }
+  .peel-settle { animation: peel-settle 0.25s ease forwards; }
+  @keyframes peel-settle { to { transform: scale(1) translateY(0); opacity: 1; } }
+
+  /* 4. Simple fade */
+  .simplefade-exit { animation: simplefade-exit 0.18s ease forwards; }
+  .simplefade-enter { animation: simplefade-enter 0.2s ease forwards; }
+  @keyframes simplefade-exit { to { opacity: 0; } }
+  @keyframes simplefade-enter { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Next-Card Transition Options</h1>
+    <p>Click "Grade & Next" repeatedly to cycle through cards and see each transition replay.</p>
+  </div>
+
+  <!-- 1 -->
+  <div class="demo-section">
+    <h2>1. Slide left & swap</h2>
+    <p class="demo-desc">Current card slides out to the left and fades; next card slides in from the right. Communicates forward progress through the deck.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap" id="slideStage">
+        <div class="nc-card" id="slideCard"><div class="demo-card-word">蛋糕</div></div>
+      </div>
+      <div class="demo-progress" id="slideProgress">1 / 6</div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="slideNext()">Grade &amp; Next</button></div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="demo-section">
+    <h2>2. Swipe away</h2>
+    <p class="demo-desc">Card flies off to the side with a slight rotation, like swiping a physical card off the deck. More playful/energetic.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap" id="swipeStage">
+        <div class="nc-card" id="swipeCard"><div class="demo-card-word">蛋糕</div></div>
+      </div>
+      <div class="demo-progress" id="swipeProgress">1 / 6</div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="swipeNext()">Grade &amp; Next</button></div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="demo-section">
+    <h2>3. Stack peel</h2>
+    <p class="demo-desc">A faint preview of the next card sits behind the current one at all times; grading peels the top card away to reveal it. Hints at deck depth/progress without extra UI.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap" id="peelStage" style="min-height: 240px;">
+        <div class="nc-card peel-back" id="peelBackCard"><div class="demo-card-word" style="font-size: 28px;">下一个</div></div>
+        <div class="nc-card peel-front" id="peelFrontCard"><div class="demo-card-word">蛋糕</div></div>
+      </div>
+      <div class="demo-progress" id="peelProgress">1 / 6</div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="peelNext()">Grade &amp; Next</button></div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="demo-section">
+    <h2>4. Simple fade (minimal)</h2>
+    <p class="demo-desc">Quick fade-out/fade-in only, no movement. Lowest-distraction option, fastest to execute — good if frequent transitions (many cards/session) should stay unobtrusive.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap" id="fadeStage">
+        <div class="nc-card" id="fadeNcCard"><div class="demo-card-word">蛋糕</div></div>
+      </div>
+      <div class="demo-progress" id="fadeProgress">1 / 6</div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="fadeNcNext()">Grade &amp; Next</button></div>
+    </div>
+  </div>
+
+  <script>
+    const WORDS = ['蛋糕', '苹果', '老师', '学校', '朋友', '电脑']
+    function makeCounter(prefix) {
+      let i = 0
+      return () => { i = (i + 1) % WORDS.length; document.getElementById(prefix + 'Progress').textContent = (i + 1) + ' / ' + WORDS.length; return WORDS[i] }
+    }
+
+    // 1. Slide
+    const slideWord = makeCounter('slide')
+    function slideNext() {
+      const card = document.getElementById('slideCard')
+      card.className = 'nc-card slide-exit'
+      setTimeout(() => {
+        card.querySelector('.demo-card-word').textContent = slideWord()
+        card.className = 'nc-card slide-enter'
+      }, 220)
+    }
+
+    // 2. Swipe
+    const swipeWord = makeCounter('swipe')
+    function swipeNext() {
+      const card = document.getElementById('swipeCard')
+      card.className = 'nc-card swipe-exit'
+      setTimeout(() => {
+        card.querySelector('.demo-card-word').textContent = swipeWord()
+        card.className = 'nc-card swipe-enter'
+      }, 300)
+    }
+
+    // 3. Peel
+    const peelWord = makeCounter('peel')
+    let peelUpcomingIdx = 1
+    function peelNext() {
+      const front = document.getElementById('peelFrontCard')
+      const back = document.getElementById('peelBackCard')
+      front.className = 'nc-card peel-front peel-exit'
+      setTimeout(() => {
+        front.querySelector('.demo-card-word').textContent = back.querySelector('.demo-card-word').textContent
+        front.querySelector('.demo-card-word').style.fontSize = ''
+        front.className = 'nc-card peel-front peel-settle'
+        peelWord()
+        peelUpcomingIdx = (peelUpcomingIdx + 1) % WORDS.length
+        back.querySelector('.demo-card-word').textContent = WORDS[peelUpcomingIdx]
+      }, 280)
+    }
+
+    // 4. Simple fade
+    const fadeNcWord = makeCounter('fade')
+    function fadeNcNext() {
+      const card = document.getElementById('fadeNcCard')
+      card.className = 'nc-card simplefade-exit'
+      setTimeout(() => {
+        card.querySelector('.demo-card-word').textContent = fadeNcWord()
+        card.className = 'nc-card simplefade-enter'
+      }, 180)
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Final Finish Screen v2 — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .finish-stage {
+    width: 100%; max-width: 600px; min-height: 380px; position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden; border-radius: 12px; border: 1px dashed var(--color-border);
+    padding: 16px;
+  }
+  .finish-content { text-align: center; padding: 20px 16px; position: relative; z-index: 2; width: 100%; }
+  .confetti-piece { position: absolute; z-index: 1; opacity: 0.95; }
+  .check-circle-svg { width: 80px; height: 80px; margin-bottom: 8px; }
+  .check-circle { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 166; stroke-dashoffset: 166; }
+  .check-mark { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 48; stroke-dashoffset: 48; }
+  @keyframes check-circle-draw { to { stroke-dashoffset: 0; } }
+  @keyframes check-mark-draw { to { stroke-dashoffset: 0; } }
+
+  .big-stats { display: flex; gap: 28px; justify-content: center; align-items: flex-end; margin: 12px 0; flex-wrap: wrap; }
+  .big-stat-value {
+    display: inline-block;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: clamp(34px, 11vw, 52px);
+    line-height: 1;
+  }
+  .big-stat-label { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+  @keyframes shake-glow-settle {
+    0%   { transform: scale(0); opacity: 0; text-shadow: none; }
+    45%  { transform: scale(1.25) rotate(-7deg); opacity: 1; text-shadow: 0 0 22px var(--glow-color, var(--color-accent)); }
+    60%  { transform: scale(1.12) rotate(5deg); }
+    75%  { transform: scale(1.06) rotate(-3deg); }
+    100% { transform: scale(1) rotate(0deg); text-shadow: 0 0 0 transparent; }
+  }
+
+  .reward-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: var(--text-2xl);
+    margin-bottom: 4px;
+  }
+
+  .streak-flame { font-size: 40px; display: inline-block; animation: flame-flicker 1.4s ease-in-out infinite; }
+  @keyframes flame-flicker { 0%,100% { transform: scale(1) rotate(-2deg); } 50% { transform: scale(1.08) rotate(2deg); } }
+
+  /* Big prominent personal-best ribbon */
+  .best-ribbon {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, #D4900A, #FFE4C4 60%, #D4900A);
+    color: #4A3728;
+    font-family: var(--font-heading); font-weight: 700;
+    font-size: var(--text-lg);
+    padding: 10px 24px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+    box-shadow: 0 6px 18px rgba(212, 144, 10, 0.45);
+    border: 2px solid #fff7e6;
+    opacity: 0;
+    transform: scale(0.5) translateY(-16px);
+  }
+  .best-ribbon.show {
+    animation: best-ribbon-in 0.55s cubic-bezier(0.2, 1.5, 0.3, 1) forwards;
+  }
+  @keyframes best-ribbon-in {
+    0%   { opacity: 0; transform: scale(0.5) translateY(-16px); }
+    60%  { opacity: 1; transform: scale(1.12) translateY(0); }
+    80%  { transform: scale(0.96); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .best-ribbon-pulse { animation: best-ribbon-pulse 1.6s ease-in-out 0.6s infinite; }
+  @keyframes best-ribbon-pulse {
+    0%, 100% { box-shadow: 0 6px 18px rgba(212, 144, 10, 0.45); }
+    50% { box-shadow: 0 6px 26px rgba(212, 144, 10, 0.75); }
+  }
+  .best-ribbon-icon { font-size: 22px; }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Final Finish Screen v2</h1>
+    <p>Combines the personal-best ribbon (now much bigger/more prominent, with a gentle glow pulse), the streak flame counter, and a reactive headline that's randomly picked from a list per accuracy tier so repeat sessions don't always show identical text. Confetti settling + checkmark draw + glow numbers all unchanged. Click Replay to re-roll a random fake session.</p>
+  </div>
+
+  <div class="demo-section" style="border-bottom:none;">
+    <div class="demo-stage">
+      <div class="finish-stage" id="stage"><div class="finish-content" id="content"></div></div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="run()">Replay (random performance)</button></div>
+    </div>
+  </div>
+
+  <script>
+    const COLORS = ['#E8698A', '#6BAF92', '#5B9BD5', '#D4900A', '#C45C3A']
+    function rand(min, max) { return min + Math.random() * (max - min) }
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)] }
+
+    const HEADLINES = {
+      great: ["Nailed it! 🎯", "Outstanding work! 🌟", "You're on fire! 🔥", "Flawless round! 💎", "Incredible focus! 🧠✨"],
+      good:  ["Solid work. 👍", "Nice progress! 📈", "You're getting there. 🚀", "Good effort! 💪", "Steady improvement! 🌱"],
+      rough: ["Keep going — you'll get there. 🌤️", "Practice makes progress. 📚", "Every review counts. ✅", "Don't give up — you've got this. 💛", "Tomorrow's a new chance. 🌅"],
+    }
+    function tierOf(accuracy) {
+      if (accuracy >= 90) return 'great'
+      if (accuracy >= 70) return 'good'
+      return 'rough'
+    }
+
+    function randomSession() {
+      const reviewed = Math.round(rand(8, 22))
+      const accuracy = Math.round(rand(45, 100))
+      const streak = Math.round(rand(2, 21))
+      const isBest = accuracy >= 80 && Math.random() > 0.45
+      return { reviewed, accuracy, streak, isBest }
+    }
+
+    function dropConfettiSettle(stage) {
+      stage.querySelectorAll('.confetti-piece').forEach((el) => el.remove())
+      const stageHeight = stage.clientHeight || 380
+      const groundY = stageHeight - 14
+      for (let i = 0; i < 55; i++) {
+        const piece = document.createElement('div')
+        piece.className = 'confetti-piece'
+        const startX = Math.random() * 100
+        const restX = Math.max(2, Math.min(98, startX + (Math.random() - 0.5) * 8))
+        const size = 7 + Math.random() * 4
+        const isCircle = Math.random() > 0.5
+        piece.style.width = size + 'px'
+        piece.style.height = (isCircle ? size : size * 1.7) + 'px'
+        piece.style.borderRadius = isCircle ? '50%' : '2px'
+        piece.style.background = pick(COLORS)
+        piece.style.left = startX + '%'
+        piece.style.top = '-10px'
+        const fallDur = 0.9 + Math.random() * 0.6
+        const delay = Math.random() * 0.35
+        const finalRot = Math.round((Math.random() - 0.5) * 100)
+        piece.style.transition = `top ${fallDur}s cubic-bezier(0.3,0.6,0.7,1) ${delay}s, left ${fallDur}s ease ${delay}s, transform ${fallDur}s ease ${delay}s`
+        stage.appendChild(piece)
+        requestAnimationFrame(() => {
+          piece.style.top = (groundY - size) + 'px'
+          piece.style.left = restX + '%'
+          piece.style.transform = `rotate(${finalRot}deg)`
+        })
+      }
+    }
+
+    function checkSvg() {
+      return `<svg class="check-circle-svg"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>`
+    }
+    function drawCheck(container) {
+      const svg = container.querySelector('.check-circle-svg')
+      const circle = svg.querySelector('.check-circle')
+      const mark = svg.querySelector('.check-mark')
+      requestAnimationFrame(() => {
+        circle.style.animation = 'check-circle-draw 0.5s ease-out forwards'
+        mark.style.animation = 'check-mark-draw 0.3s 0.4s ease-out forwards'
+      })
+    }
+
+    function animateShakeGlow(idPrefix, count) {
+      for (let i = 0; i < count; i++) {
+        const el = document.getElementById(idPrefix + i)
+        if (!el) continue
+        el.style.setProperty('--glow-color', pick(COLORS))
+        el.style.animation = 'none'
+        requestAnimationFrame(() => {
+          el.style.animation = `shake-glow-settle 0.6s ${0.15 + i * 0.1}s cubic-bezier(0.3,1.1,0.4,1) both`
+        })
+      }
+    }
+
+    function run() {
+      const { reviewed, accuracy, streak, isBest } = randomSession()
+      const tier = tierOf(accuracy)
+      const headline = pick(HEADLINES[tier])
+      const stage = document.getElementById('stage')
+      dropConfettiSettle(stage)
+
+      document.getElementById('content').innerHTML = `
+        ${isBest ? `
+          <div class="best-ribbon ${isBest ? 'show' : ''}" id="bestRibbon">
+            <span class="best-ribbon-icon">🏆</span> New personal best!
+          </div><br>
+        ` : ''}
+        ${checkSvg()}
+        <h2 class="reward-title">${headline}</h2>
+        <div class="big-stats">
+          <div><span class="big-stat-value" id="stat0">${reviewed}</span><div class="big-stat-label">Cards Reviewed</div></div>
+          <div><span class="big-stat-value" id="stat1">${accuracy}%</span><div class="big-stat-label">Accuracy</div></div>
+          <div><span class="streak-flame">🔥</span><span class="big-stat-value" id="stat2" style="font-size: clamp(28px,9vw,40px); vertical-align: middle;">0</span><div class="big-stat-label">Day Streak</div></div>
+        </div>
+      `
+      drawCheck(document.getElementById('content'))
+      animateShakeGlow('stat', 2)
+
+      if (isBest) {
+        setTimeout(() => {
+          const ribbon = document.getElementById('bestRibbon')
+          if (ribbon) ribbon.classList.add('best-ribbon-pulse')
+        }, 600)
+      }
+
+      const streakEl = document.getElementById('stat2')
+      setTimeout(() => {
+        const start = performance.now()
+        function tick(now) {
+          const t = Math.min(1, (now - start) / 500)
+          streakEl.textContent = Math.round(t * streak)
+          if (t < 1) requestAnimationFrame(tick)
+          else {
+            streakEl.style.setProperty('--glow-color', pick(COLORS))
+            streakEl.style.animation = 'none'
+            requestAnimationFrame(() => { streakEl.style.animation = 'shake-glow-settle 0.5s cubic-bezier(0.3,1.1,0.4,1) both' })
+          }
+        }
+        requestAnimationFrame(tick)
+      }, 350)
+    }
+
+    run()
+  </script>
+</body>
+</html>

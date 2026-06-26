@@ -1,0 +1,154 @@
+/* Demo-only scaffolding layered on top of the real app's index.css. Not part of the build. */
+
+/* index.css's @font-face rules use root-absolute "/fonts/..." paths, which only resolve
+   correctly when served from the site root. Re-declare with paths relative to this demo
+   dir so fonts load regardless of how/where this folder is served from. */
+@font-face {
+  font-family: 'Pacifico';
+  src: url('../../client/public/fonts/Pacifico-Regular.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Fredoka';
+  src: url('../../client/public/fonts/Fredoka-Variable.woff2') format('woff2');
+  font-weight: 300 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Nunito';
+  src: url('../../client/public/fonts/Nunito-Variable.woff2') format('woff2');
+  font-weight: 200 900; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Nunito';
+  src: url('../../client/public/fonts/Nunito-Italic-Variable.woff2') format('woff2');
+  font-weight: 200 900; font-style: italic; font-display: swap;
+}
+
+body {
+  padding: 24px 16px 80px;
+}
+
+.demo-header {
+  max-width: 720px;
+  margin: 0 auto 32px;
+  text-align: center;
+}
+
+.demo-header h1 {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.demo-header p {
+  color: var(--color-text-muted);
+}
+
+.demo-nav {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.demo-section {
+  max-width: 600px;
+  margin: 0 auto 56px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid var(--color-border);
+}
+.demo-section:last-child { border-bottom: none; }
+
+.demo-section h2 {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.demo-section .demo-desc {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin-bottom: 20px;
+}
+
+.demo-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 24px;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* ── Reusable flashcard, matches ReviewPage.tsx's inline styles ──────────── */
+
+.demo-card-outer {
+  width: 100%;
+  max-width: 600px;
+  perspective: 1200px;
+}
+
+.demo-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: clamp(20px, 5vw, 40px) clamp(16px, 4vw, 32px);
+  text-align: center;
+  cursor: pointer;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+
+.demo-card-word {
+  font-size: clamp(24px, 7vw, 36px);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.demo-card-pos {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.demo-card-back {
+  margin-top: 24px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 20px;
+  width: 100%;
+}
+
+.demo-card-back p:first-child { font-size: var(--text-lg); margin-bottom: 8px; }
+.demo-card-back .l1 { color: var(--color-text-muted); margin-bottom: 8px; }
+.demo-card-back .example { font-size: var(--text-sm); font-style: italic; color: var(--color-text-muted); margin-top: 12px; }
+
+.demo-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-top: 24px;
+}
+
+.demo-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.demo-progress {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}

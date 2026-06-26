@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Swipe-Away Variations — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .stack-wrap { width: 100%; max-width: 600px; position: relative; min-height: 220px; }
+  .nc-card {
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+    padding: clamp(20px,5vw,40px); text-align: center; min-height: 220px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-sm); position: absolute; top: 0; left: 0; width: 100%;
+  }
+
+  /* 1. Baseline swipe (left, rotate) */
+  .s1-exit { animation: s1-exit 0.3s ease forwards; }
+  .s1-enter { animation: s1-enter 0.3s cubic-bezier(0.2,0.7,0.3,1) forwards; }
+  @keyframes s1-exit { to { transform: translateX(-120%) rotate(-8deg); opacity: 0; } }
+  @keyframes s1-enter { from { transform: scale(0.92) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+
+  /* 2. Swipe right instead (matches "Easy/Good" grade direction conventions in some apps) */
+  .s2-exit { animation: s2-exit 0.3s ease forwards; }
+  .s2-enter { animation: s2-enter 0.3s cubic-bezier(0.2,0.7,0.3,1) forwards; }
+  @keyframes s2-exit { to { transform: translateX(120%) rotate(8deg); opacity: 0; } }
+  @keyframes s2-enter { from { transform: scale(0.92) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+
+  /* 3. Direction depends on grade: left for "Again/Hard" (1,2), right for "Good/Easy" (3,4) */
+  .s3-exit-left { animation: s2-exit 0.3s ease reverse forwards; } /* placeholder unused */
+  .s3-left { animation: s1-exit 0.3s ease forwards; }
+  .s3-right { animation: s2-exit 0.3s ease forwards; }
+  .s3-enter { animation: s1-enter 0.3s cubic-bezier(0.2,0.7,0.3,1) forwards; }
+
+  /* 4. Faster + more aggressive throw (less rotation, more speed, slight upward arc) */
+  .s4-exit { animation: s4-exit 0.2s ease-in forwards; }
+  .s4-enter { animation: s4-enter 0.22s cubic-bezier(0.2,0.8,0.3,1) forwards; }
+  @keyframes s4-exit { to { transform: translate(-140%, -20px) rotate(-4deg); opacity: 0; } }
+  @keyframes s4-enter { from { transform: scale(0.9) translateY(14px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+
+  /* 5. Drop down + fade (like discarding face-down onto a pile) */
+  .s5-exit { animation: s5-exit 0.32s ease-in forwards; }
+  .s5-enter { animation: s5-enter 0.28s cubic-bezier(0.2,0.7,0.3,1) forwards; }
+  @keyframes s5-exit { to { transform: translateY(40px) rotate(6deg) scale(0.92); opacity: 0; } }
+  @keyframes s5-enter { from { transform: scale(0.92) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+
+  /* 6. Big dramatic swipe with more rotation + slight scale-down as it exits */
+  .s6-exit { animation: s6-exit 0.38s cubic-bezier(0.4,0,0.6,1) forwards; }
+  .s6-enter { animation: s6-enter 0.32s cubic-bezier(0.2,0.7,0.3,1) forwards; }
+  @keyframes s6-exit { to { transform: translateX(-130%) rotate(-20deg) scale(0.85); opacity: 0; } }
+  @keyframes s6-enter { from { transform: scale(0.88) translateY(14px) rotate(3deg); opacity: 0; } to { transform: scale(1) translateY(0) rotate(0); opacity: 1; } }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Swipe-Away — Variations</h1>
+    <p>Same "swipe off the deck" idea, different directions/speed/drama. Click each button repeatedly to cycle.</p>
+  </div>
+
+  <div class="demo-section">
+    <h2>1. Baseline (swipe left)</h2>
+    <p class="demo-desc">Card flies off to the left with a slight rotation — the version you already saw.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="s1Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="s1Progress">1 / 6</div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="next('s1', 's1-exit', 's1-enter')">Grade &amp; Next</button></div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>2. Swipe right</h2>
+    <p class="demo-desc">Mirror direction. Purely a feel preference — some users associate "right" with "done/forward" more naturally (like Tinder's "like" swipe).</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="s2Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="s2Progress">1 / 6</div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="next('s2', 's2-exit', 's2-enter')">Grade &amp; Next</button></div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>3. Direction tied to grade</h2>
+    <p class="demo-desc">Buttons below let you pick a grade like the real app does. "Again"/"Hard" swipe left (red/orange side), "Good"/"Easy" swipe right (green/blue side) — gives the swipe itself meaning instead of being purely decorative.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="s3Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="s3Progress">1 / 6</div>
+      <div class="demo-controls">
+        <button class="btn" style="background:var(--color-danger);color:var(--color-vanilla)" onclick="next3('left')">Again</button>
+        <button class="btn" style="background:var(--color-warning);color:var(--color-vanilla)" onclick="next3('left')">Hard</button>
+        <button class="btn" style="background:var(--color-accent-alt);color:var(--color-vanilla)" onclick="next3('right')">Good</button>
+        <button class="btn" style="background:var(--color-info);color:var(--color-vanilla)" onclick="next3('right')">Easy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>4. Fast &amp; aggressive throw</h2>
+    <p class="demo-desc">0.2s exit, less rotation, slight upward arc as it flies — feels punchy/quick rather than graceful. Good fit if sessions have many cards and speed matters more than ceremony.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="s4Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="s4Progress">1 / 6</div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="next('s4', 's4-exit', 's4-enter')">Grade &amp; Next</button></div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>5. Drop &amp; discard</h2>
+    <p class="demo-desc">Card drops downward and shrinks, like being discarded face-down onto a pile, instead of flying sideways. Calmer than a swipe but still has clear motion.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="s5Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="s5Progress">1 / 6</div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="next('s5', 's5-exit', 's5-enter')">Grade &amp; Next</button></div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>6. Big dramatic swipe</h2>
+    <p class="demo-desc">More rotation (20°) and a scale-down as it exits, plus the next card eases in with its own slight counter-rotation. Most "extra" of the bunch — fun once in a while, but might feel like too much for every single card.</p>
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="s6Card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="s6Progress">1 / 6</div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="next('s6', 's6-exit', 's6-enter')">Grade &amp; Next</button></div>
+    </div>
+  </div>
+
+  <script>
+    const WORDS = ['蛋糕', '苹果', '老师', '学校', '朋友', '电脑']
+    const counters = {}
+    function bump(prefix) {
+      counters[prefix] = ((counters[prefix] ?? 0) + 1) % WORDS.length
+      document.getElementById(prefix + 'Progress').textContent = (counters[prefix] + 1) + ' / ' + WORDS.length
+      return WORDS[counters[prefix]]
+    }
+
+    function next(prefix, exitClass, enterClass) {
+      const card = document.getElementById(prefix + 'Card')
+      const exitMs = exitClass === 's4-exit' ? 200 : exitClass === 's6-exit' ? 380 : exitClass === 's5-exit' ? 320 : 300
+      card.className = 'nc-card ' + exitClass
+      setTimeout(() => {
+        card.querySelector('.demo-card-word').textContent = bump(prefix)
+        card.className = 'nc-card ' + enterClass
+      }, exitMs)
+    }
+
+    function next3(direction) {
+      const card = document.getElementById('s3Card')
+      card.className = 'nc-card ' + (direction === 'left' ? 's3-left' : 's3-right')
+      setTimeout(() => {
+        card.querySelector('.demo-card-word').textContent = bump('s3')
+        card.className = 'nc-card s3-enter'
+      }, 300)
+    }
+  </script>
+</body>
+</html>

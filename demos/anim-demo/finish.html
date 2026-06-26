@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Finish Demos — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .finish-stage {
+    width: 100%; max-width: 600px; min-height: 280px; position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden; border-radius: 12px; border: 1px dashed var(--color-border);
+  }
+  .finish-content { text-align: center; padding: 32px 16px; position: relative; z-index: 2; }
+  .finish-content img { width: 80px; height: 80px; object-fit: contain; margin-bottom: 12px; }
+  .finish-emoji { font-size: 44px; margin-bottom: 8px; }
+
+  /* Confetti */
+  .confetti-piece {
+    position: absolute; top: -10px; z-index: 1;
+    width: 8px; height: 14px; opacity: 0.9;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall {
+    to { transform: translateY(320px) rotate(540deg); opacity: 0.2; }
+  }
+
+  /* Pop-in scale */
+  .pop-in { animation: pop-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
+  @keyframes pop-in { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  /* Checkmark draw */
+  .check-circle-svg { width: 80px; height: 80px; margin-bottom: 12px; }
+  .check-circle { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 166; stroke-dashoffset: 166; animation: check-circle-draw 0.5s ease-out forwards; }
+  .check-mark { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 48; stroke-dashoffset: 48; animation: check-mark-draw 0.3s 0.4s ease-out forwards; }
+  @keyframes check-circle-draw { to { stroke-dashoffset: 0; } }
+  @keyframes check-mark-draw { to { stroke-dashoffset: 0; } }
+
+  /* Stat count-up handled via JS */
+  .stat-value.counting { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Finishing a Session — Options</h1>
+    <p>Click "Replay" on each to re-trigger the effect.</p>
+  </div>
+
+  <!-- 1. Confetti -->
+  <div class="demo-section">
+    <h2>1. Confetti burst</h2>
+    <p class="demo-desc">Classic celebratory confetti falling from the top, using the app's own accent colors. High-energy, best for finishing a full session (not for every single card).</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="confettiStage">
+        <div class="finish-content">
+          <img src="../../client/public/Vanilla-deck.png" alt="">
+          <div class="finish-emoji">✅</div>
+          <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+          <div style="display:flex;gap:24px;justify-content:center;">
+            <div class="stat-block"><div class="stat-value">12</div><div class="stat-label">Cards Reviewed</div></div>
+            <div class="stat-block"><div class="stat-value">83%</div><div class="stat-label">Accuracy</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runConfetti()">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 2. Pop-in -->
+  <div class="demo-section">
+    <h2>2. Pop-in (no particles)</h2>
+    <p class="demo-desc">Just the completion card itself springs into view with a bouncy scale-up. Calmer, no extra DOM/particle cost, still feels rewarding.</p>
+    <div class="demo-stage">
+      <div class="finish-stage">
+        <div class="finish-content" id="popContent">
+          <div class="finish-emoji">🎉</div>
+          <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+          <div style="display:flex;gap:24px;justify-content:center;">
+            <div class="stat-block"><div class="stat-value">12</div><div class="stat-label">Cards Reviewed</div></div>
+            <div class="stat-block"><div class="stat-value">83%</div><div class="stat-label">Accuracy</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runPop()">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- 3. Checkmark draw + count-up stats -->
+  <div class="demo-section">
+    <h2>3. Drawn checkmark + counting stats</h2>
+    <p class="demo-desc">An SVG circle-and-checkmark draws itself in, then the stat numbers count up from 0 to their final value. Feels the most "polished app" of the three, slightly more motion-engineering involved.</p>
+    <div class="demo-stage">
+      <div class="finish-stage">
+        <div class="finish-content" id="checkContent">
+          <svg class="check-circle-svg" viewBox="0 0 80 80" id="checkSvg">
+            <circle class="check-circle" cx="40" cy="40" r="32"/>
+            <path class="check-mark" d="M24 41 L35 52 L57 28"/>
+          </svg>
+          <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+          <div style="display:flex;gap:24px;justify-content:center;">
+            <div class="stat-block"><div class="stat-value counting" id="checkCount1">0</div><div class="stat-label">Cards Reviewed</div></div>
+            <div class="stat-block"><div class="stat-value counting" id="checkCount2">0%</div><div class="stat-label">Accuracy</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runCheck()">Replay</button></div>
+    </div>
+  </div>
+
+  <script>
+    const COLORS = ['#E8698A', '#6BAF92', '#FFE4C4', '#5B9BD5', '#D4900A']
+
+    function runConfetti() {
+      const stage = document.getElementById('confettiStage')
+      stage.querySelectorAll('.confetti-piece').forEach((el) => el.remove())
+      for (let i = 0; i < 60; i++) {
+        const piece = document.createElement('div')
+        piece.className = 'confetti-piece'
+        piece.style.left = Math.random() * 100 + '%'
+        piece.style.background = COLORS[Math.floor(Math.random() * COLORS.length)]
+        piece.style.animationDuration = (1.2 + Math.random() * 0.8) + 's'
+        piece.style.animationDelay = (Math.random() * 0.3) + 's'
+        piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px'
+        stage.appendChild(piece)
+        setTimeout(() => piece.remove(), 2500)
+      }
+    }
+
+    function runPop() {
+      const el = document.getElementById('popContent')
+      el.classList.remove('pop-in')
+      requestAnimationFrame(() => el.classList.add('pop-in'))
+    }
+
+    function countUp(el, to, suffix, duration) {
+      const start = performance.now()
+      function tick(now) {
+        const t = Math.min(1, (now - start) / duration)
+        const val = Math.round(t * to)
+        el.textContent = val + suffix
+        if (t < 1) requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    }
+
+    function runCheck() {
+      const svg = document.getElementById('checkSvg')
+      const circle = svg.querySelector('.check-circle')
+      const mark = svg.querySelector('.check-mark')
+      ;[circle, mark].forEach((el) => { el.style.animation = 'none' })
+      requestAnimationFrame(() => {
+        circle.style.animation = 'check-circle-draw 0.5s ease-out forwards'
+        mark.style.animation = 'check-mark-draw 0.3s 0.4s ease-out forwards'
+      })
+      countUp(document.getElementById('checkCount1'), 12, '', 700)
+      countUp(document.getElementById('checkCount2'), 83, '%', 700)
+    }
+
+    // Auto-run once on load
+    runConfetti()
+    runPop()
+    runCheck()
+  </script>
+</body>
+</html>

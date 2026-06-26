@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flip Demos — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* 1. 3D flip */
+  .flip-3d-card {
+    width: 100%; height: 260px; position: relative;
+  }
+  .flip-3d-inner {
+    position: relative; width: 100%; height: 100%;
+    transition: transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+  .flip-3d-card.is-flipped .flip-3d-inner { transform: rotateY(180deg); }
+  .flip-3d-face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px; box-shadow: var(--shadow-sm); text-align: center;
+  }
+  .flip-3d-back { transform: rotateY(180deg); }
+
+  /* 2. Crossfade */
+  .fade-card { width: 100%; min-height: 220px; position: relative; }
+  .fade-face {
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+    padding: clamp(20px,5vw,40px); display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-sm); text-align: center; min-height: 220px;
+    transition: opacity 0.25s ease;
+  }
+
+  /* 3. Vertical unfold (rotateX) */
+  .unfold-card { width: 100%; height: 260px; position: relative; }
+  .unfold-inner {
+    position: relative; width: 100%; height: 100%;
+    transition: transform 0.45s cubic-bezier(0.34, 1.2, 0.4, 1);
+    transform-style: preserve-3d;
+  }
+  .unfold-card.is-flipped .unfold-inner { transform: rotateX(180deg); }
+  .unfold-face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px; box-shadow: var(--shadow-sm); text-align: center;
+  }
+  .unfold-back { transform: rotateX(180deg); }
+
+  /* 4. Scale + reveal (current app style, animated) */
+  .scale-card {
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+    padding: clamp(20px,5vw,40px); text-align: center; min-height: 220px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-sm);
+  }
+  .scale-back {
+    margin-top: 24px; border-top: 1px solid var(--color-border); padding-top: 20px; width: 100%;
+    animation: scale-reveal 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.1);
+    transform-origin: top center;
+  }
+  @keyframes scale-reveal {
+    from { opacity: 0; transform: scaleY(0.85) translateY(-6px); }
+    to   { opacity: 1; transform: scaleY(1) translateY(0); }
+  }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Card Flip Options</h1>
+    <p>Tap each card to flip it. Tap again (or use Reset) to flip back and replay.</p>
+  </div>
+
+  <div class="demo-section">
+    <h2>1. 3D Flip (Y-axis)</h2>
+    <p class="demo-desc">Classic flashcard flip — card rotates around its vertical axis like turning a physical card over.</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer">
+        <div class="flip-3d-card" id="flip3d" onclick="this.classList.toggle('is-flipped')">
+          <div class="flip-3d-inner">
+            <div class="flip-3d-face">
+              <div class="demo-card-word">蛋糕</div>
+              <div class="demo-card-pos">noun</div>
+              <p class="demo-hint">Tap to reveal</p>
+            </div>
+            <div class="flip-3d-face flip-3d-back">
+              <p>Cake</p>
+              <p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p>
+              <p class="example">"我们买了一个生日蛋糕。"</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>2. Crossfade</h2>
+    <p class="demo-desc">Front fades out, back fades in. No 3D, very calm — works well if 3D flips feel gimmicky on repeat.</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer">
+        <div class="fade-card" id="fadeCard" onclick="fadeToggle()">
+          <div class="fade-face" id="fadeFront">
+            <div class="demo-card-word">蛋糕</div>
+            <div class="demo-card-pos">noun</div>
+            <p class="demo-hint">Tap to reveal</p>
+          </div>
+          <div class="fade-face" id="fadeBack" style="display:none">
+            <p>Cake</p>
+            <p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p>
+            <p class="example">"我们买了一个生日蛋糕。"</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>3. Unfold (X-axis)</h2>
+    <p class="demo-desc">Same 3D technique as #1, but rotates top-to-bottom instead of left-to-right — feels a bit more like "revealing" than "turning over."</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer">
+        <div class="unfold-card" id="unfold" onclick="this.classList.toggle('is-flipped')">
+          <div class="unfold-inner">
+            <div class="unfold-face">
+              <div class="demo-card-word">蛋糕</div>
+              <div class="demo-card-pos">noun</div>
+              <p class="demo-hint">Tap to reveal</p>
+            </div>
+            <div class="unfold-face unfold-back">
+              <p>Cake</p>
+              <p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p>
+              <p class="example">"我们买了一个生日蛋糕。"</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>4. Scale-reveal (current app, animated)</h2>
+    <p class="demo-desc">This is closest to what the app does today (definition appears below, same card) — just with a small spring-in animation added instead of popping in instantly.</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer">
+        <div class="scale-card" id="scaleCard" onclick="scaleToggle()">
+          <div class="demo-card-word">蛋糕</div>
+          <div class="demo-card-pos">noun</div>
+          <div id="scaleBack" style="display:none" class="scale-back">
+            <p>Cake</p>
+            <p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p>
+            <p class="example">"我们买了一个生日蛋糕。"</p>
+          </div>
+          <p class="demo-hint" id="scaleHint">Tap to reveal</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function fadeToggle() {
+      const front = document.getElementById('fadeFront')
+      const back = document.getElementById('fadeBack')
+      const showingBack = back.style.display !== 'none'
+      if (showingBack) {
+        back.style.opacity = 0
+        setTimeout(() => { back.style.display = 'none'; front.style.display = 'flex'; requestAnimationFrame(() => front.style.opacity = 1) }, 250)
+        front.style.opacity = 0
+      } else {
+        front.style.opacity = 0
+        setTimeout(() => { front.style.display = 'none'; back.style.display = 'flex'; back.style.opacity = 0; requestAnimationFrame(() => back.style.opacity = 1) }, 250)
+      }
+    }
+
+    function scaleToggle() {
+      const back = document.getElementById('scaleBack')
+      const hint = document.getElementById('scaleHint')
+      const showing = back.style.display !== 'none'
+      if (showing) {
+        back.style.display = 'none'
+        hint.style.display = 'block'
+      } else {
+        back.style.display = 'block'
+        back.style.animation = 'none'
+        requestAnimationFrame(() => { back.style.animation = '' })
+        hint.style.display = 'none'
+      }
+    }
+  </script>
+</body>
+</html>

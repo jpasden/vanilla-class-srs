@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3D Flip — Askew Pop Variations — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .v-card { width: 100%; height: 260px; position: relative; }
+  .v-inner {
+    position: relative; width: 100%; height: 100%;
+    transform-style: preserve-3d;
+  }
+  .v-face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px; box-shadow: var(--shadow-sm); text-align: center;
+  }
+  .v-back { transform: rotateY(180deg); }
+
+  /* Base pop-at-midpoint keyframes — each variation overrides --askew/--tilt/--dur via JS-set CSS vars.
+     Forward (face-up -> face-down) and backward (face-down -> face-up) need separate keyframes since
+     the card rests at a random tilt, not at 0deg, when flipped. */
+  .pop-flip-fwd {
+    animation: pop-flip-fwd-anim var(--dur, 0.42s) var(--ease, cubic-bezier(0.4,0.2,0.2,1));
+  }
+  @keyframes pop-flip-fwd-anim {
+    0%   { transform: rotateY(0deg) rotateZ(0deg) scale(1); }
+    50%  { transform: rotateY(90deg) rotateZ(calc(var(--tilt, 0deg) * 0.4)) scale(var(--mid-scale, 0.92)); }
+    100% { transform: rotateY(180deg) rotateZ(var(--tilt, 0deg)) scale(1); }
+  }
+  .pop-flip-back {
+    animation: pop-flip-back-anim var(--dur, 0.42s) var(--ease, cubic-bezier(0.4,0.2,0.2,1));
+  }
+  @keyframes pop-flip-back-anim {
+    0%   { transform: rotateY(180deg) rotateZ(var(--tilt, 0deg)) scale(1); }
+    50%  { transform: rotateY(90deg) rotateZ(calc(var(--tilt, 0deg) * 0.4)) scale(var(--mid-scale, 0.92)); }
+    100% { transform: rotateY(0deg) rotateZ(0deg) scale(1); }
+  }
+  .v-inner.is-flipped-still { transform: rotateY(180deg) rotateZ(var(--tilt, 0deg)); }
+  .v-back { transform: rotateY(180deg); } /* back face content stays level inside the tilted card */
+
+  .v-controls { display: flex; gap: 10px; margin-top: 16px; }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>3D Flip — Askew Pop Variations</h1>
+    <p>All based on "pop at midpoint." Each tap randomizes the resting tilt slightly differently, so the card never lands perfectly flat twice. Tap a card to flip, tap again to flip back (re-rolls a new random tilt each time).</p>
+  </div>
+
+  <div class="demo-section">
+    <h2>1. Subtle tilt (±3°)</h2>
+    <p class="demo-desc">Barely-there randomness — card looks "almost straight" but never quite perfectly aligned, like a real card tossed onto a table gently.</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer"><div class="v-card" id="f1" onclick="flipPop('f1', {tiltRange:3, dur:0.42})">
+        <div class="v-inner">
+          <div class="v-face"><div class="demo-card-word">蛋糕</div><div class="demo-card-pos">noun</div><p class="demo-hint">Tap to reveal</p></div>
+          <div class="v-face v-back"><p>Cake</p><p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p><p class="example">"我们买了一个生日蛋糕。"</p></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>2. Noticeable tilt (±8°)</h2>
+    <p class="demo-desc">More obvious askew landing — clearly "not perfectly flipped," gives a handmade/casual feel.</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer"><div class="v-card" id="f2" onclick="flipPop('f2', {tiltRange:8, dur:0.42})">
+        <div class="v-inner">
+          <div class="v-face"><div class="demo-card-word">蛋糕</div><div class="demo-card-pos">noun</div><p class="demo-hint">Tap to reveal</p></div>
+          <div class="v-face v-back"><p>Cake</p><p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p><p class="example">"我们买了一个生日蛋糕。"</p></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>3. Tilt + slight random midpoint shrink</h2>
+    <p class="demo-desc">Same ±5° tilt, but the mid-flip shrink amount also varies a bit each time (0.88–0.94 scale) — two dimensions of randomness instead of one.</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer"><div class="v-card" id="f3" onclick="flipPop('f3', {tiltRange:5, dur:0.42, midScaleRange:[0.88,0.94]})">
+        <div class="v-inner">
+          <div class="v-face"><div class="demo-card-word">蛋糕</div><div class="demo-card-pos">noun</div><p class="demo-hint">Tap to reveal</p></div>
+          <div class="v-face v-back"><p>Cake</p><p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p><p class="example">"我们买了一个生日蛋糕。"</p></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>4. Tilt + slight random duration</h2>
+    <p class="demo-desc">±6° tilt, and the flip speed itself varies between 0.36s–0.5s each time — no two flips feel mechanically identical.</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer"><div class="v-card" id="f4" onclick="flipPop('f4', {tiltRange:6, durRange:[0.36,0.5]})">
+        <div class="v-inner">
+          <div class="v-face"><div class="demo-card-word">蛋糕</div><div class="demo-card-pos">noun</div><p class="demo-hint">Tap to reveal</p></div>
+          <div class="v-face v-back"><p>Cake</p><p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p><p class="example">"我们买了一个生日蛋糕。"</p></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>5. Tilt + tiny random horizontal drift</h2>
+    <p class="demo-desc">±7° tilt, plus the card also settles slightly left or right of center (±6px) — like it didn't land in exactly the same spot each time.</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer"><div class="v-card" id="f5" onclick="flipPop('f5', {tiltRange:7, driftRange:6})">
+        <div class="v-inner">
+          <div class="v-face"><div class="demo-card-word">蛋糕</div><div class="demo-card-pos">noun</div><p class="demo-hint">Tap to reveal</p></div>
+          <div class="v-face v-back"><p>Cake</p><p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p><p class="example">"我们买了一个生日蛋糕。"</p></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>6. Big personality tilt (±12°, biased toward extremes)</h2>
+    <p class="demo-desc">Wider range and biased away from 0° (so it rarely lands "almost straight") — most exaggerated/playful version, every flip clearly askew.</p>
+    <div class="demo-stage">
+      <div class="demo-card-outer"><div class="v-card" id="f6" onclick="flipPop('f6', {tiltRange:12, biasAwayFromZero:true})">
+        <div class="v-inner">
+          <div class="v-face"><div class="demo-card-word">蛋糕</div><div class="demo-card-pos">noun</div><p class="demo-hint">Tap to reveal</p></div>
+          <div class="v-face v-back"><p>Cake</p><p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p><p class="example">"我们买了一个生日蛋糕。"</p></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <script>
+    function rand(min, max) { return min + Math.random() * (max - min) }
+
+    function flipPop(id, opts) {
+      const outer = document.getElementById(id)
+      const inner = outer.querySelector('.v-inner')
+      const willFlip = !outer.classList.contains('is-flipped')
+
+      const tiltRange = opts.tiltRange ?? 5
+      let tilt
+      if (opts.biasAwayFromZero) {
+        const mag = rand(tiltRange * 0.4, tiltRange)
+        tilt = Math.random() > 0.5 ? mag : -mag
+      } else {
+        tilt = rand(-tiltRange, tiltRange)
+      }
+      const dur = opts.durRange ? rand(opts.durRange[0], opts.durRange[1]) : (opts.dur ?? 0.42)
+      const midScale = opts.midScaleRange ? rand(opts.midScaleRange[0], opts.midScaleRange[1]) : 0.92
+      const drift = opts.driftRange ? rand(-opts.driftRange, opts.driftRange) : 0
+
+      if (willFlip) {
+        inner.style.setProperty('--tilt', tilt.toFixed(2) + 'deg')
+        inner.style.setProperty('--dur', dur.toFixed(2) + 's')
+        inner.style.setProperty('--mid-scale', midScale.toFixed(2))
+        outer.style.transform = drift ? `translateX(${drift.toFixed(1)}px)` : ''
+        inner.classList.remove('is-flipped-still', 'pop-flip-back')
+        inner.classList.remove('pop-flip-fwd')
+        requestAnimationFrame(() => { inner.classList.add('pop-flip-fwd') })
+        setTimeout(() => {
+          inner.classList.remove('pop-flip-fwd')
+          inner.classList.add('is-flipped-still')
+        }, dur * 1000)
+        outer.classList.add('is-flipped')
+      } else {
+        const currentDur = inner.style.getPropertyValue('--dur') || '0.42s'
+        inner.classList.remove('is-flipped-still', 'pop-flip-fwd')
+        inner.classList.remove('pop-flip-back')
+        requestAnimationFrame(() => { inner.classList.add('pop-flip-back') })
+        const ms = parseFloat(currentDur) * 1000
+        setTimeout(() => {
+          inner.classList.remove('pop-flip-back')
+          outer.style.transform = ''
+        }, ms)
+        outer.classList.remove('is-flipped')
+      }
+    }
+  </script>
+</body>
+</html>

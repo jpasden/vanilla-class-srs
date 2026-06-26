@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Confetti + Checkmark Variations — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .finish-stage {
+    width: 100%; max-width: 600px; min-height: 300px; position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden; border-radius: 12px; border: 1px dashed var(--color-border);
+  }
+  .finish-content { text-align: center; padding: 32px 16px; position: relative; z-index: 2; }
+
+  .confetti-piece {
+    position: absolute; top: -10px; z-index: 1;
+    width: 8px; height: 14px; opacity: 0.9;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall { to { transform: translateY(340px) rotate(540deg); opacity: 0.15; } }
+
+  .check-circle-svg { width: 80px; height: 80px; margin-bottom: 12px; }
+  .check-circle { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 166; stroke-dashoffset: 166; }
+  .check-mark { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 48; stroke-dashoffset: 48; }
+  @keyframes check-circle-draw { to { stroke-dashoffset: 0; } }
+  @keyframes check-mark-draw { to { stroke-dashoffset: 0; } }
+
+  .title-fade { animation: title-fade 0.4s ease forwards; opacity: 0; }
+  @keyframes title-fade { to { opacity: 1; } }
+
+  .title-pop { animation: title-pop 0.4s cubic-bezier(0.3,1.4,0.4,1) forwards; opacity: 0; transform: scale(0.7); }
+  @keyframes title-pop { to { opacity: 1; transform: scale(1); } }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Confetti + Checkmark — Combined Variations</h1>
+    <p>Each combines a confetti burst with the drawn checkmark + count-up stats, sequenced/styled differently. Click Replay to re-trigger.</p>
+  </div>
+
+  <!-- A: Sequential — checkmark draws first, then confetti -->
+  <div class="demo-section">
+    <h2>A. Checkmark first, then confetti</h2>
+    <p class="demo-desc">Checkmark draws in (0.8s), then once it completes, confetti bursts as a "reward" for finishing. Two distinct beats — feels deliberate, slight delay before the celebration.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stageA">
+        <div class="finish-content">
+          <svg class="check-circle-svg" id="svgA"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+          <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+          <div style="display:flex;gap:24px;justify-content:center;">
+            <div class="stat-block"><div class="stat-value" id="countA1">0</div><div class="stat-label">Cards Reviewed</div></div>
+            <div class="stat-block"><div class="stat-value" id="countA2">0%</div><div class="stat-label">Accuracy</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runA()">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- B: Simultaneous — both start at once -->
+  <div class="demo-section">
+    <h2>B. Confetti + checkmark together</h2>
+    <p class="demo-desc">Both effects start immediately on arrival, no staggering. Single big "moment," fastest to read, no waiting around — but busier in the first half-second.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stageB">
+        <div class="finish-content">
+          <svg class="check-circle-svg" id="svgB"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+          <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+          <div style="display:flex;gap:24px;justify-content:center;">
+            <div class="stat-block"><div class="stat-value" id="countB1">0</div><div class="stat-label">Cards Reviewed</div></div>
+            <div class="stat-block"><div class="stat-value" id="countB2">0%</div><div class="stat-label">Accuracy</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runB()">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- C: Confetti first as a "burst entrance", then checkmark+stats settle in after -->
+  <div class="demo-section">
+    <h2>C. Confetti entrance, then content settles</h2>
+    <p class="demo-desc">Confetti bursts immediately (announcing "something happened"), and a beat later the checkmark/title/stats fade+pop in on top of the falling confetti. Confetti is the "announcement," checkmark is the "payoff."</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stageC">
+        <div class="finish-content title-pop" id="contentC" style="display:none;">
+          <svg class="check-circle-svg" id="svgC"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+          <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+          <div style="display:flex;gap:24px;justify-content:center;">
+            <div class="stat-block"><div class="stat-value" id="countC1">0</div><div class="stat-label">Cards Reviewed</div></div>
+            <div class="stat-block"><div class="stat-value" id="countC2">0%</div><div class="stat-label">Accuracy</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runC()">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- D: Minimal confetti (fewer, larger pieces) + checkmark, more restrained -->
+  <div class="demo-section">
+    <h2>D. Restrained confetti (fewer pieces)</h2>
+    <p class="demo-desc">Only ~16 larger confetti pieces instead of 60, paired with the checkmark draw — same combo idea, but toned down so it doesn't feel like a slot-machine win. Good middle ground if full confetti feels like "too much" every single session.</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stageD">
+        <div class="finish-content">
+          <svg class="check-circle-svg" id="svgD"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+          <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+          <div style="display:flex;gap:24px;justify-content:center;">
+            <div class="stat-block"><div class="stat-value" id="countD1">0</div><div class="stat-label">Cards Reviewed</div></div>
+            <div class="stat-block"><div class="stat-value" id="countD2">0%</div><div class="stat-label">Accuracy</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runD()">Replay</button></div>
+    </div>
+  </div>
+
+  <!-- E: Confetti origin from the checkmark itself, not the top of the screen -->
+  <div class="demo-section">
+    <h2>E. Confetti bursts from the checkmark</h2>
+    <p class="demo-desc">Instead of falling from the top of the screen (decorative, unconnected), confetti pieces burst outward from the checkmark's position once it finishes drawing — ties the two effects together causally ("the checkmark caused the celebration").</p>
+    <div class="demo-stage">
+      <div class="finish-stage" id="stageE">
+        <div class="finish-content">
+          <svg class="check-circle-svg" id="svgE"><circle class="check-circle" cx="40" cy="40" r="32"/><path class="check-mark" d="M24 41 L35 52 L57 28"/></svg>
+          <h2 style="font-family:var(--font-heading);font-size:var(--text-2xl);font-weight:700;margin-bottom:8px;">Session Complete</h2>
+          <div style="display:flex;gap:24px;justify-content:center;">
+            <div class="stat-block"><div class="stat-value" id="countE1">0</div><div class="stat-label">Cards Reviewed</div></div>
+            <div class="stat-block"><div class="stat-value" id="countE2">0%</div><div class="stat-label">Accuracy</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-controls"><button class="btn btn-primary" onclick="runE()">Replay</button></div>
+    </div>
+  </div>
+
+  <script>
+    const COLORS = ['#E8698A', '#6BAF92', '#FFE4C4', '#5B9BD5', '#D4900A']
+
+    function dropConfetti(stage, count, opts) {
+      opts = opts || {}
+      for (let i = 0; i < count; i++) {
+        const piece = document.createElement('div')
+        piece.className = 'confetti-piece'
+        piece.style.left = (opts.originXPercent != null ? opts.originXPercent : Math.random() * 100) + '%'
+        piece.style.top = (opts.originYPx != null ? opts.originYPx + 'px' : '-10px')
+        piece.style.background = COLORS[Math.floor(Math.random() * COLORS.length)]
+        const size = opts.large ? 12 + Math.random() * 6 : 8
+        piece.style.width = size + 'px'
+        piece.style.height = (size * 1.7) + 'px'
+        piece.style.animationDuration = (1.2 + Math.random() * 0.8) + 's'
+        piece.style.animationDelay = (Math.random() * (opts.spread || 0.3)) + 's'
+        piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px'
+        if (opts.fromPoint) {
+          const dx = (Math.random() - 0.5) * 240
+          piece.style.setProperty('--dx', dx + 'px')
+          piece.style.animation = 'none'
+          piece.style.transition = 'transform 1s cubic-bezier(0.15,0.6,0.3,1), opacity 1s ease'
+          requestAnimationFrame(() => {
+            piece.style.transform = `translate(${dx}px, ${120 + Math.random() * 100}px) rotate(${(Math.random()-0.5)*720}deg)`
+            piece.style.opacity = 0.15
+          })
+        }
+        stage.appendChild(piece)
+        setTimeout(() => piece.remove(), 2400)
+      }
+    }
+
+    function drawCheck(svgId, delayMs) {
+      const svg = document.getElementById(svgId)
+      const circle = svg.querySelector('.check-circle')
+      const mark = svg.querySelector('.check-mark')
+      circle.style.animation = 'none'; mark.style.animation = 'none'
+      requestAnimationFrame(() => {
+        circle.style.animation = `check-circle-draw 0.5s ${delayMs}ms ease-out forwards`
+        mark.style.animation = `check-mark-draw 0.3s ${delayMs + 400}ms ease-out forwards`
+      })
+    }
+
+    function countUp(el, to, suffix, duration, delayMs) {
+      setTimeout(() => {
+        const start = performance.now()
+        function tick(now) {
+          const t = Math.min(1, (now - start) / duration)
+          el.textContent = Math.round(t * to) + suffix
+          if (t < 1) requestAnimationFrame(tick)
+        }
+        requestAnimationFrame(tick)
+      }, delayMs)
+    }
+
+    // A: checkmark first, confetti after it completes (~750ms)
+    function runA() {
+      const stage = document.getElementById('stageA')
+      stage.querySelectorAll('.confetti-piece').forEach((el) => el.remove())
+      drawCheck('svgA', 0)
+      countUp(document.getElementById('countA1'), 12, '', 600, 200)
+      countUp(document.getElementById('countA2'), 83, '%', 600, 200)
+      setTimeout(() => dropConfetti(stage, 60, { spread: 0.3 }), 750)
+    }
+
+    // B: simultaneous
+    function runB() {
+      const stage = document.getElementById('stageB')
+      stage.querySelectorAll('.confetti-piece').forEach((el) => el.remove())
+      drawCheck('svgB', 0)
+      countUp(document.getElementById('countB1'), 12, '', 600, 0)
+      countUp(document.getElementById('countB2'), 83, '%', 600, 0)
+      dropConfetti(stage, 60, { spread: 0.3 })
+    }
+
+    // C: confetti entrance, content fades/pops in after ~250ms
+    function runC() {
+      const stage = document.getElementById('stageC')
+      const content = document.getElementById('contentC')
+      stage.querySelectorAll('.confetti-piece').forEach((el) => el.remove())
+      content.style.display = 'none'
+      dropConfetti(stage, 50, { spread: 0.2 })
+      setTimeout(() => {
+        content.style.display = 'block'
+        content.style.animation = 'none'
+        requestAnimationFrame(() => { content.style.animation = 'title-pop 0.4s cubic-bezier(0.3,1.4,0.4,1) forwards' })
+        drawCheck('svgC', 0)
+        countUp(document.getElementById('countC1'), 12, '', 600, 150)
+        countUp(document.getElementById('countC2'), 83, '%', 600, 150)
+      }, 250)
+    }
+
+    // D: restrained confetti, fewer + larger pieces
+    function runD() {
+      const stage = document.getElementById('stageD')
+      stage.querySelectorAll('.confetti-piece').forEach((el) => el.remove())
+      drawCheck('svgD', 0)
+      countUp(document.getElementById('countD1'), 12, '', 600, 100)
+      countUp(document.getElementById('countD2'), 83, '%', 600, 100)
+      dropConfetti(stage, 16, { spread: 0.25, large: true })
+    }
+
+    // E: confetti bursts outward from the checkmark's position once it finishes (~750ms)
+    function runE() {
+      const stage = document.getElementById('stageE')
+      stage.querySelectorAll('.confetti-piece').forEach((el) => el.remove())
+      drawCheck('svgE', 0)
+      countUp(document.getElementById('countE1'), 12, '', 600, 200)
+      countUp(document.getElementById('countE2'), 83, '%', 600, 200)
+      setTimeout(() => {
+        const rect = stage.getBoundingClientRect()
+        dropConfetti(stage, 40, { fromPoint: true, originXPercent: 50, originYPx: 50 })
+      }, 750)
+    }
+
+    // Auto-run all on load
+    runA(); runB(); runC(); runD(); runE();
+  </script>
+</body>
+</html>

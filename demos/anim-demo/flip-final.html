@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Final Card Flip — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .v-card { width: 100%; height: 260px; position: relative; }
+  .v-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
+  .v-face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px; box-shadow: var(--shadow-sm); text-align: center;
+  }
+  .v-back { transform: rotateY(180deg); }
+
+  .pop-flip-fwd { animation: pop-flip-fwd-anim var(--dur, 0.42s) cubic-bezier(0.4,0.2,0.2,1); }
+  @keyframes pop-flip-fwd-anim {
+    0%   { transform: rotateY(0deg) rotateZ(0deg) translateX(0) scale(1); }
+    50%  { transform: rotateY(90deg) rotateZ(calc(var(--tilt, 0deg) * 0.4)) translateX(calc(var(--drift, 0px) * 0.5)) scale(0.92); }
+    100% { transform: rotateY(180deg) rotateZ(var(--tilt, 0deg)) translateX(var(--drift, 0px)) scale(1); }
+  }
+  .pop-flip-back { animation: pop-flip-back-anim var(--dur, 0.42s) cubic-bezier(0.4,0.2,0.2,1); }
+  @keyframes pop-flip-back-anim {
+    0%   { transform: rotateY(180deg) rotateZ(var(--tilt, 0deg)) translateX(var(--drift, 0px)) scale(1); }
+    50%  { transform: rotateY(90deg) rotateZ(calc(var(--tilt, 0deg) * 0.4)) translateX(calc(var(--drift, 0px) * 0.5)) scale(0.92); }
+    100% { transform: rotateY(0deg) rotateZ(0deg) translateX(0) scale(1); }
+  }
+  .v-inner.is-flipped-still { transform: rotateY(180deg) rotateZ(var(--tilt, 0deg)) translateX(var(--drift, 0px)); }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Final Card Flip</h1>
+    <p>Pop-at-midpoint flip with ±0–5° random tilt and a tiny random horizontal drift, re-rolled fresh on every flip. Tap a few times in a row to get a feel for the range.</p>
+  </div>
+  <div class="demo-section" style="border-bottom:none;">
+    <div class="demo-stage">
+      <div class="demo-card-outer"><div class="v-card" id="card" onclick="flip()">
+        <div class="v-inner">
+          <div class="v-face"><div class="demo-card-word">蛋糕</div><div class="demo-card-pos">noun</div><p class="demo-hint">Tap to reveal</p></div>
+          <div class="v-face v-back"><p>Cake</p><p class="l1" style="color:var(--color-text-muted)">蛋糕 (dàngāo)</p><p class="example">"我们买了一个生日蛋糕。"</p></div>
+        </div>
+      </div></div>
+      <p class="demo-progress" id="readout">tilt: — / drift: —</p>
+    </div>
+  </div>
+  <script>
+    function rand(min, max) { return min + Math.random() * (max - min) }
+    const outer = document.getElementById('card')
+    const inner = outer.querySelector('.v-inner')
+    const dur = 0.42
+
+    function flip() {
+      const willFlip = !outer.classList.contains('is-flipped')
+      if (willFlip) {
+        const mag = rand(0, 5)
+        const tilt = Math.random() > 0.5 ? mag : -mag
+        const drift = rand(-4, 4)
+        inner.style.setProperty('--tilt', tilt.toFixed(2) + 'deg')
+        inner.style.setProperty('--drift', drift.toFixed(1) + 'px')
+        inner.style.setProperty('--dur', dur + 's')
+        document.getElementById('readout').textContent = `tilt: ${tilt.toFixed(1)}° / drift: ${drift.toFixed(1)}px`
+        inner.classList.remove('is-flipped-still', 'pop-flip-back')
+        inner.classList.remove('pop-flip-fwd')
+        requestAnimationFrame(() => inner.classList.add('pop-flip-fwd'))
+        setTimeout(() => { inner.classList.remove('pop-flip-fwd'); inner.classList.add('is-flipped-still') }, dur * 1000)
+        outer.classList.add('is-flipped')
+      } else {
+        inner.classList.remove('is-flipped-still', 'pop-flip-fwd')
+        inner.classList.remove('pop-flip-back')
+        requestAnimationFrame(() => inner.classList.add('pop-flip-back'))
+        setTimeout(() => { inner.classList.remove('pop-flip-back') }, dur * 1000)
+        outer.classList.remove('is-flipped')
+        document.getElementById('readout').textContent = 'tilt: — / drift: —'
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Final Grade Swipe v2 — Vanilla SRS</title>
+<link rel="stylesheet" href="../../client/src/index.css">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .stack-wrap { width: 100%; max-width: 600px; position: relative; min-height: 220px; }
+  .nc-card {
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+    padding: clamp(20px,5vw,40px); text-align: center; min-height: 220px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-sm); position: absolute; top: 0; left: 0; width: 100%;
+  }
+  .nc-enter { animation: nc-enter-anim 0.3s cubic-bezier(0.2,0.7,0.3,1) forwards; }
+  @keyframes nc-enter-anim { from { transform: scale(0.92) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+  .grade-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+</style>
+</head>
+<body>
+  <div class="demo-header">
+    <a class="back-link" href="index.html">← All demos</a>
+    <h1>Final Grade Swipe v2 — Steeper Angle</h1>
+    <p>Same direction-per-grade scheme as before (Again: left-down, Hard: left-up, Good: right-up, Easy: right-down), but the angle is now ~30° off horizontal instead of ~15° — noticeably steeper, more vertical "toss" feel. Magnitude still scales with grade strength.</p>
+  </div>
+  <div class="demo-section" style="border-bottom:none;">
+    <div class="demo-stage">
+      <div class="stack-wrap"><div class="nc-card" id="card"><div class="demo-card-word">蛋糕</div></div></div>
+      <div class="demo-progress" id="progress">1 / 6</div>
+      <div class="grade-buttons">
+        <button class="btn" style="background:var(--color-danger);color:var(--color-vanilla)" onclick="run('again')">Again</button>
+        <button class="btn" style="background:var(--color-warning);color:var(--color-vanilla)" onclick="run('hard')">Hard</button>
+        <button class="btn" style="background:var(--color-accent-alt);color:var(--color-vanilla)" onclick="run('good')">Good</button>
+        <button class="btn" style="background:var(--color-info);color:var(--color-vanilla)" onclick="run('easy')">Easy</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const WORDS = ['蛋糕', '苹果', '老师', '学校', '朋友', '电脑']
+    let wordIdx = 0
+    function rand(min, max) { return min + Math.random() * (max - min) }
+
+    const GRADE_CFG = {
+      again: { sx: -1, sy: 1,  intense: true  }, // left-down
+      hard:  { sx: -1, sy: -1, intense: false }, // left-up
+      good:  { sx: 1,  sy: -1, intense: false }, // right-up
+      easy:  { sx: 1,  sy: 1,  intense: true  }, // right-down
+    }
+
+    function run(grade) {
+      const card = document.getElementById('card')
+      const cfg = GRADE_CFG[grade]
+
+      const angleDeg = rand(26, 34) // ~30deg +/- a little
+      const rad = angleDeg * Math.PI / 180
+      const distPct = cfg.intense ? rand(135, 165) : rand(95, 120)
+      const dur = cfg.intense ? rand(0.2, 0.26) : rand(0.3, 0.38)
+      const rot = cfg.intense ? rand(10, 18) : rand(3, 8)
+
+      const dx = cfg.sx * Math.cos(rad) * distPct
+      const dy = cfg.sy * Math.sin(rad) * distPct * 0.6
+      const rotSigned = cfg.sx * rot
+
+      const exitName = 'exit-' + grade + '-' + Date.now()
+      const styleEl = document.createElement('style')
+      styleEl.textContent = `
+        @keyframes ${exitName} {
+          to { transform: translate(${dx.toFixed(1)}%, ${dy.toFixed(1)}%) rotate(${rotSigned.toFixed(1)}deg); opacity: 0; }
+        }
+      `
+      document.head.appendChild(styleEl)
+      card.style.animation = `${exitName} ${dur.toFixed(2)}s ease forwards`
+
+      setTimeout(() => {
+        wordIdx = (wordIdx + 1) % WORDS.length
+        card.querySelector('.demo-card-word').textContent = WORDS[wordIdx]
+        document.getElementById('progress').textContent = (wordIdx + 1) + ' / ' + WORDS.length
+        card.style.animation = ''
+        card.className = 'nc-card nc-enter'
+        styleEl.remove()
+      }, dur * 1000)
+    }
+  </script>
+</body>
+</html>

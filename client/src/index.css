@@ -340,6 +340,92 @@ button, input, select, textarea {
 .progress-bar { height: 8px; background: var(--color-border); border-radius: var(--radius-pill); overflow: hidden; margin-top: 4px; }
 .progress-fill { height: 100%; border-radius: var(--radius-pill); background: var(--color-accent); transition: width 0.3s; }
 
+/* ── Review session: card flip + next-card + finish animations ──────────────
+   Prototyped and approved in demos/anim-demo/ (flip-final.html, next-card-final-2.html,
+   finish-final-2.html) before being wired into ReviewPage.tsx. */
+
+.review-flip-outer { perspective: 1200px; width: 100%; }
+.review-flip-inner {
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+}
+.review-flip-face {
+  backface-visibility: hidden;
+}
+.review-flip-face.back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+.review-pop-flip-fwd { animation: review-pop-flip-fwd-anim var(--dur, 0.42s) cubic-bezier(0.4, 0.2, 0.2, 1); }
+@keyframes review-pop-flip-fwd-anim {
+  0%   { transform: rotateY(0deg) rotateZ(0deg) translateX(0) scale(1); }
+  50%  { transform: rotateY(90deg) rotateZ(calc(var(--tilt, 0deg) * 0.4)) translateX(calc(var(--drift, 0px) * 0.5)) scale(0.92); }
+  100% { transform: rotateY(180deg) rotateZ(var(--tilt, 0deg)) translateX(var(--drift, 0px)) scale(1); }
+}
+.review-pop-flip-back { animation: review-pop-flip-back-anim var(--dur, 0.42s) cubic-bezier(0.4, 0.2, 0.2, 1); }
+@keyframes review-pop-flip-back-anim {
+  0%   { transform: rotateY(180deg) rotateZ(var(--tilt, 0deg)) translateX(var(--drift, 0px)) scale(1); }
+  50%  { transform: rotateY(90deg) rotateZ(calc(var(--tilt, 0deg) * 0.4)) translateX(calc(var(--drift, 0px) * 0.5)) scale(0.92); }
+  100% { transform: rotateY(0deg) rotateZ(0deg) translateX(0) scale(1); }
+}
+.review-flip-inner.is-flipped-still { transform: rotateY(180deg) rotateZ(var(--tilt, 0deg)) translateX(var(--drift, 0px)); }
+
+.review-card-enter { animation: review-card-enter-anim 0.3s cubic-bezier(0.2, 0.7, 0.3, 1) forwards; }
+@keyframes review-card-enter-anim {
+  from { transform: scale(0.92) translateY(10px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.review-finish-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  text-align: center;
+}
+.review-confetti-piece {
+  position: absolute;
+  z-index: 1;
+  opacity: 0.95;
+}
+.review-check-svg { width: 80px; height: 80px; margin-bottom: 8px; }
+.review-check-circle { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 166; stroke-dashoffset: 166; }
+.review-check-mark { stroke: var(--color-accent-alt); stroke-width: 4; fill: none; stroke-dasharray: 48; stroke-dashoffset: 48; }
+.review-check-circle.draw { animation: review-check-circle-draw 0.5s ease-out forwards; }
+.review-check-mark.draw { animation: review-check-mark-draw 0.3s 0.4s ease-out forwards; }
+@keyframes review-check-circle-draw { to { stroke-dashoffset: 0; } }
+@keyframes review-check-mark-draw { to { stroke-dashoffset: 0; } }
+
+.review-big-stats { display: flex; gap: 28px; justify-content: center; align-items: flex-end; margin: 12px 0; flex-wrap: wrap; }
+.review-big-stat-value {
+  display: inline-block;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(34px, 11vw, 52px);
+  line-height: 1;
+}
+.review-big-stat-label { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+.review-shake-glow-settle {
+  animation: review-shake-glow-settle-anim 0.6s cubic-bezier(0.3, 1.1, 0.4, 1) both;
+}
+@keyframes review-shake-glow-settle-anim {
+  0%   { transform: scale(0); opacity: 0; text-shadow: none; }
+  45%  { transform: scale(1.25) rotate(-7deg); opacity: 1; text-shadow: 0 0 22px var(--glow-color, var(--color-accent)); }
+  60%  { transform: scale(1.12) rotate(5deg); }
+  75%  { transform: scale(1.06) rotate(-3deg); }
+  100% { transform: scale(1) rotate(0deg); text-shadow: 0 0 0 transparent; }
+}
+
+.review-reward-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-2xl);
+  margin-bottom: 4px;
+}
+
 /* ── Sidebar nav links ────────────────────────────────────────────────────── */
 
 .sidebar-nav-link {
