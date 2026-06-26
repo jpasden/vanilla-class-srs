@@ -66,15 +66,35 @@ export default function StudentDeckPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showStateInfo, setShowStateInfo] = useState(false)
+  // Default matches the API's natural order: due date, soonest first.
+  const [sortKey, setSortKey] = useState<'word' | 'due'>('due')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   if (!active) { navigate('/student'); return null }
 
-  const filtered = (instances ?? []).filter((inst) => {
-    const matchState = filter === 'ALL' || inst.state === filter
-    const q = search.toLowerCase()
-    const matchSearch = !q || inst.card.word.toLowerCase().includes(q)
-    return matchState && matchSearch
-  })
+  const toggleSort = (key: 'word' | 'due') => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const filtered = (instances ?? [])
+    .filter((inst) => {
+      const matchState = filter === 'ALL' || inst.state === filter
+      const q = search.toLowerCase()
+      const matchSearch = !q || inst.card.word.toLowerCase().includes(q)
+      return matchState && matchSearch
+    })
+    .slice()
+    .sort((a, b) => {
+      const cmp = sortKey === 'word'
+        ? a.card.word.localeCompare(b.card.word)
+        : new Date(a.due).getTime() - new Date(b.due).getTime()
+      return sortDir === 'asc' ? cmp : -cmp
+    })
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault()
@@ -340,7 +360,36 @@ export default function StudentDeckPage() {
       <div className="table-scroll">
         <table className="table">
           <thead>
-            <tr><th>Word</th><th>POS</th><th>State</th><th>Due</th><th>Origin</th><th>Actions</th></tr>
+            <tr>
+              <th>
+                <button
+                  type="button"
+                  onClick={() => toggleSort('word')}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, font: 'inherit', color: 'inherit', textTransform: 'inherit', letterSpacing: 'inherit' }}
+                >
+                  Word
+                  <span style={{ fontSize: 10, opacity: sortKey === 'word' ? 1 : 0.35 }}>
+                    {sortKey === 'word' && sortDir === 'desc' ? '▼' : '▲'}
+                  </span>
+                </button>
+              </th>
+              <th>POS</th>
+              <th>State</th>
+              <th>
+                <button
+                  type="button"
+                  onClick={() => toggleSort('due')}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, font: 'inherit', color: 'inherit', textTransform: 'inherit', letterSpacing: 'inherit' }}
+                >
+                  Due
+                  <span style={{ fontSize: 10, opacity: sortKey === 'due' ? 1 : 0.35 }}>
+                    {sortKey === 'due' && sortDir === 'desc' ? '▼' : '▲'}
+                  </span>
+                </button>
+              </th>
+              <th>Origin</th>
+              <th>Actions</th>
+            </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && <tr><td colSpan={6} className="table-empty">No cards match the filter.</td></tr>}
