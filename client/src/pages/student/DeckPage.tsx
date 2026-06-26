@@ -65,6 +65,7 @@ export default function StudentDeckPage() {
   const [editForm, setEditForm] = useState({ word: '', pos: '', definitionL2: '', definitionL1: '', exampleSentence: '' })
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [showStateInfo, setShowStateInfo] = useState(false)
 
   if (!active) { navigate('/student'); return null }
 
@@ -298,7 +299,7 @@ export default function StudentDeckPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <input className="form-input" style={{ maxWidth: 200 }} placeholder="Search word…" value={search} onChange={(e) => setSearch(e.target.value)} />
         {['ALL', 'NEW', 'LEARNING', 'REVIEW', 'RELEARNING'].map((s) => (
           <button
@@ -307,7 +308,31 @@ export default function StudentDeckPage() {
             onClick={() => setFilter(s)}
           >{s}</button>
         ))}
+        <button
+          type="button"
+          onClick={() => setShowStateInfo(true)}
+          aria-label="What do these statuses mean?"
+          style={{
+            width: 16, height: 16, borderRadius: '50%', border: 'none', padding: 0,
+            background: 'var(--color-info)', color: 'var(--color-vanilla)',
+            fontSize: 10, fontWeight: 700, lineHeight: '16px', cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          ?
+        </button>
       </div>
+
+      {showStateInfo && (
+        <Modal title="What do these statuses mean?" onClose={() => setShowStateInfo(false)}>
+          <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <li><strong>New</strong> — You haven't studied this word yet.</li>
+            <li><strong>Learning</strong> — You've started studying this word, but it's not locked in yet.</li>
+            <li><strong>Review</strong> — You know this word, and you're reviewing it on a normal, growing schedule.</li>
+            <li><strong>Relearning</strong> — You forgot this word after knowing it, so it's back to being studied more often for a while.</li>
+          </ul>
+        </Modal>
+      )}
 
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
