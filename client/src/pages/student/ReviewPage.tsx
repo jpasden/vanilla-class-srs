@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useEnrollment } from '../../utils/enrollment'
+import { Modal } from '../../components/Modal'
 
 interface SessionCard {
   instanceId: string
@@ -23,10 +24,10 @@ interface SessionResponse {
 type Phase = 'idle' | 'loading' | 'reviewing' | 'done' | 'empty'
 
 const GRADE_LABELS: Record<number, string> = {
-  1: "I don't know at all.",
-  2: 'Very hard to remember.',
-  3: 'Yes, I know it.',
-  4: 'Wow, super easy!',
+  1: "I don't know it.",
+  2: 'I almost forgot it.',
+  3: 'I know it.',
+  4: "It's so easy.",
 }
 const GRADE_COLORS: Record<number, string> = {
   1: 'var(--color-danger)',
@@ -88,6 +89,7 @@ export default function ReviewPage() {
   // Drives the grade-direction swipe-out / next-card-in animation
   const [cardAnim, setCardAnim] = useState<{ exitStyle: CSSProperties; exitMs: number } | null>(null)
   const [cardEntering, setCardEntering] = useState(false)
+  const [showGradeInfo, setShowGradeInfo] = useState(false)
   const finishStageRef = useRef<HTMLDivElement>(null)
 
   if (!active) { navigate('/student'); return null }
@@ -283,6 +285,22 @@ export default function ReviewPage() {
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto' }}>
+      {showGradeInfo && (
+        <Modal title="How grading works" onClose={() => setShowGradeInfo(false)}>
+          <p style={{ marginBottom: 12 }}>
+            As you review your own vocabulary, your answer here is feedback to the app — it decides when
+            you'll see this word again. Answering honestly (even when you don't know a word) helps you
+            learn faster, since the app can focus your time on the words you actually need to practice.
+          </p>
+          <ul style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <li><strong>I don't know it.</strong> — You'll see this word again very soon, often later in this same session.</li>
+            <li><strong>I almost forgot it.</strong> — You'll see it again sooner than usual, since it's still shaky.</li>
+            <li><strong>I know it.</strong> — You'll see it again after a normal, gradually increasing gap.</li>
+            <li><strong>It's so easy.</strong> — You'll see it again after an even longer gap, since you've clearly got it.</li>
+          </ul>
+        </Modal>
+      )}
+
       {/* Idle */}
       {phase === 'idle' && (
         <div style={{ textAlign: 'center', padding: '48px 16px' }}>
@@ -394,26 +412,44 @@ export default function ReviewPage() {
 
           {/* Grade buttons — vertically stacked, full width */}
           {flipped && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
-              {[1, 2, 3, 4].map((g) => (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 24 }}>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>How well do you know this?</span>
                 <button
-                  key={g}
-                  className="btn"
+                  type="button"
+                  onClick={() => setShowGradeInfo(true)}
+                  aria-label="More information about these options"
                   style={{
-                    background: GRADE_COLORS[g],
-                    color: 'var(--color-vanilla)',
-                    fontSize: 'var(--text-base)',
-                    padding: '14px 16px',
-                    width: '100%',
-                    justifyContent: 'center',
+                    width: 16, height: 16, borderRadius: '50%', border: 'none', padding: 0,
+                    background: 'var(--color-info)', color: 'var(--color-vanilla)',
+                    fontSize: 10, fontWeight: 700, lineHeight: '16px', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   }}
-                  disabled={grading}
-                  onClick={() => gradeCard(g)}
                 >
-                  {GRADE_LABELS[g]}
+                  ?
                 </button>
-              ))}
-            </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                {[1, 2, 3, 4].map((g) => (
+                  <button
+                    key={g}
+                    className="btn"
+                    style={{
+                      background: GRADE_COLORS[g],
+                      color: 'var(--color-vanilla)',
+                      fontSize: 'var(--text-base)',
+                      padding: '14px 16px',
+                      width: '100%',
+                      justifyContent: 'center',
+                    }}
+                    disabled={grading}
+                    onClick={() => gradeCard(g)}
+                  >
+                    {GRADE_LABELS[g]}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
 
           {error && <div className="alert alert-danger" style={{ marginTop: 16 }}>{error}</div>}
