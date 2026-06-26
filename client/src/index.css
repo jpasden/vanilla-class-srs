@@ -160,7 +160,9 @@ button, input, select, textarea {
   padding: 8px 14px;
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
+  /* Must stay >= 16px — iOS Safari/Chrome auto-zoom the whole page on focus for any input
+     with a smaller computed font-size, and the zoomed-in state can persist across navigation. */
+  font-size: var(--text-base);
   width: 100%;
   background: var(--color-surface);
   color: var(--color-text);
