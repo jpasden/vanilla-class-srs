@@ -11,6 +11,14 @@ import { PrismaClient, FSRSState } from '@prisma/client'
 import { schedule } from '@vanilla-srs/shared/fsrs'
 import type { FSRSParams } from '@vanilla-srs/shared/fsrs'
 
+// Caps how many due/review cards appear in a single session — a UX/session-length decision,
+// not an FSRS scheduling parameter, so it lives here rather than in the configurable
+// per-deck fsrsParams JSON. Any due cards beyond this roll over to the next session/day.
+// Does not apply to the separate newCardsPerDay cap on brand-new cards.
+const MAX_DUE_CARDS_PER_SESSION = 20
+// Same cap applied to "Review Early" (studying already-learned cards ahead of schedule).
+const MAX_REVIEW_AHEAD_CARDS = 20
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface SessionCard {
@@ -151,7 +159,9 @@ export async function startSession(
   }
 
   // Build session card list — spec §24 decisions 1, 2, 4
-  // Due cards: LEARNING / REVIEW / RELEARNING where due <= now, ordered by due asc
+  // Due cards: LEARNING / REVIEW / RELEARNING where due <= now, ordered by due asc.
+  // Capped per session — any remainder rolls over to the next session/day rather than
+  // dumping an entire backlog (e.g. from a freshly-seeded deck) on the student at once.
   const dueInstances = await prisma.cardInstance.findMany({
     where: {
       deckId: deck.id,
@@ -160,6 +170,7 @@ export async function startSession(
     },
     include: { card: true },
     orderBy: { due: 'asc' },
+    take: MAX_DUE_CARDS_PER_SESSION,
   })
 
   // New cards: NEW state, ordered by CardSet assignment priority (§24 decision 2)
@@ -212,11 +223,14 @@ export async function startSession(
   if (allInstances.length === 0) {
     if (options.reviewAhead) {
       // Study ahead of schedule: pull LEARNING/REVIEW/RELEARNING regardless of due date,
-      // soonest-due first, since there's truly nothing new left to introduce.
+      // since there's truly nothing new left to introduce. Prioritise the most fragile
+      // cards (lowest stability = most likely to be forgotten soon) rather than dumping
+      // the entire learned deck — this is meant to be a focused refresher, not a full replay.
       allInstances = await prisma.cardInstance.findMany({
         where: { deckId: deck.id, state: { in: ['LEARNING', 'REVIEW', 'RELEARNING'] } },
         include: { card: true },
-        orderBy: { due: 'asc' },
+        orderBy: { stability: 'asc' },
+        take: MAX_REVIEW_AHEAD_CARDS,
       })
     } else if (allInstances.length === 0) {
       const emptyReason: 'capped' | 'exhausted' = moreNewCardsExistBeyondCap ? 'capped' : 'exhausted'

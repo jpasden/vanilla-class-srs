@@ -516,7 +516,7 @@ export default function ReviewPage() {
                 Keep Studying ({weakCards.length} weak {weakCards.length === 1 ? 'card' : 'cards'})
               </button>
             )}
-            <button className="btn btn-secondary" onClick={() => startSession()}>New Session</button>
+            <button className="btn btn-secondary" onClick={() => startSession()}>Keep Reviewing</button>
             <button className="btn btn-secondary" onClick={() => navigate('/student/stats')}>View Stats</button>
           </div>
         </div>
