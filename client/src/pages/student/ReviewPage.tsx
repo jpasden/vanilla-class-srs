@@ -19,9 +19,10 @@ interface SessionResponse {
   sessionId: string
   cards: SessionCard[]
   totalCards: number
+  emptyReason?: 'capped' | 'exhausted'
 }
 
-type Phase = 'idle' | 'loading' | 'reviewing' | 'done' | 'empty'
+type Phase = 'idle' | 'loading' | 'reviewing' | 'done'
 
 const GRADE_LABELS: Record<number, string> = {
   1: "I don't know it.",
@@ -90,6 +91,9 @@ export default function ReviewPage() {
   const [cardAnim, setCardAnim] = useState<{ exitStyle: CSSProperties; exitMs: number } | null>(null)
   const [cardEntering, setCardEntering] = useState(false)
   const [showGradeInfo, setShowGradeInfo] = useState(false)
+  // Set when a review-start attempt comes back with zero cards, so we can offer the right
+  // next step (study more new words / review ahead of schedule) instead of a dead end.
+  const [emptyReason, setEmptyReason] = useState<'capped' | 'exhausted' | null>(null)
   const finishStageRef = useRef<HTMLDivElement>(null)
 
   if (!active) { navigate('/student'); return null }
@@ -105,14 +109,20 @@ export default function ReviewPage() {
     setTimeout(() => setFlipAnimClass(''), 420)
   }
 
-  const startSession = async () => {
+  const startSession = async (options: { bypassNewCardCap?: boolean; reviewAhead?: boolean } = {}) => {
     setPhase('loading')
     setError(null)
+    setEmptyReason(null)
     setWeakCards([])
     try {
-      const data = await api.post<SessionResponse>('/students/review/start', { enrollmentId: active.enrollmentId })
+      const data = await api.post<SessionResponse>('/students/review/start', {
+        enrollmentId: active.enrollmentId,
+        ...options,
+      })
       if (data.cards.length === 0) {
-        setPhase('empty')
+        // Nothing to study — surface a modal offering the right next step rather than a dead end.
+        setEmptyReason(data.emptyReason ?? 'exhausted')
+        setPhase('idle')
         return
       }
       setSession(data)
@@ -310,31 +320,40 @@ export default function ReviewPage() {
             Class: <strong>{active.className}</strong>
           </p>
           {error && <div className="alert alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
-          <button className="btn btn-primary btn-lg" onClick={startSession}>Start Session</button>
+          <button className="btn btn-primary btn-lg" onClick={() => startSession()}>Start Reviewing</button>
         </div>
       )}
 
       {/* Loading */}
       {phase === 'loading' && <div className="loading-center"><div className="spinner" /></div>}
 
-      {/* Empty — no due cards */}
-      {phase === 'empty' && (
-        <div style={{ textAlign: 'center', padding: '48px 16px' }}>
-          <img src="/Vanilla-deck.png" alt="" style={{ width: 96, height: 96, objectFit: 'contain', marginBottom: 16 }} />
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
-          <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 8 }}>All caught up!</h2>
-          <p style={{ color: 'var(--color-text-muted)', marginBottom: 24 }}>
-            No cards are due right now. Come back later!
-          </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            {weakCards.length > 0 && (
-              <button className="btn btn-primary" onClick={keepStudying}>
-                Keep Studying ({weakCards.length} weak {weakCards.length === 1 ? 'card' : 'cards'})
+      {/* Nothing to study right now — offer the right next step instead of a dead end */}
+      {phase === 'idle' && emptyReason && (
+        <Modal title="You're all caught up!" onClose={() => setEmptyReason(null)}>
+          {emptyReason === 'capped' ? (
+            <p style={{ marginBottom: 16 }}>
+              You're all caught up on reviews, and you've reached today's new-word limit. Want to study
+              more anyway?
+            </p>
+          ) : (
+            <p style={{ marginBottom: 16 }}>
+              You're all caught up — no new words left to learn either! You can still review your
+              already-learned words ahead of schedule if you'd like.
+            </p>
+          )}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setEmptyReason(null)}>Maybe Later</button>
+            {emptyReason === 'capped' ? (
+              <button className="btn btn-primary" onClick={() => startSession({ bypassNewCardCap: true })}>
+                Study More New Words
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={() => startSession({ reviewAhead: true })}>
+                Review Early
               </button>
             )}
-            <button className="btn btn-secondary" onClick={() => navigate('/student/stats')}>View Stats</button>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Reviewing */}
@@ -497,7 +516,7 @@ export default function ReviewPage() {
                 Keep Studying ({weakCards.length} weak {weakCards.length === 1 ? 'card' : 'cards'})
               </button>
             )}
-            <button className="btn btn-secondary" onClick={startSession}>New Session</button>
+            <button className="btn btn-secondary" onClick={() => startSession()}>New Session</button>
             <button className="btn btn-secondary" onClick={() => navigate('/student/stats')}>View Stats</button>
           </div>
         </div>

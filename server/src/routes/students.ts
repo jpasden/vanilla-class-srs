@@ -421,6 +421,8 @@ router.get('/deck/export', async (req: Request, res: Response) => {
 
 const StartSessionSchema = z.object({
   enrollmentId: z.string().uuid(),
+  bypassNewCardCap: z.boolean().optional(),
+  reviewAhead: z.boolean().optional(),
 })
 
 // POST /api/students/review/start
@@ -428,7 +430,10 @@ router.post('/review/start', validate(StartSessionSchema), async (req: Request, 
   const student = await getStudent(req.user!.sub)
   if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
 
-  const result = await startSession(prisma, student.id, req.body.enrollmentId)
+  const result = await startSession(prisma, student.id, req.body.enrollmentId, undefined, {
+    bypassNewCardCap: req.body.bypassNewCardCap,
+    reviewAhead: req.body.reviewAhead,
+  })
   if ('error' in result) { res.status(result.status).json({ error: result.error }); return }
   res.status(201).json(result)
 })

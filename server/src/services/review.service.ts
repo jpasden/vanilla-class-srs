@@ -33,6 +33,25 @@ export interface StartSessionResult {
   sessionId: string
   cards: SessionCard[]
   deckId: string
+  /**
+   * Set when `cards` is empty, so the client can offer the right next step instead of a
+   * dead-end "nothing to do" screen:
+   *  - 'capped'    — no due reviews, but NEW cards exist beyond today's per-day cap.
+   *                  Client can retry with `bypassNewCardCap: true`.
+   *  - 'exhausted' — no due reviews and no NEW cards left anywhere in the deck.
+   *                  Client can retry with `reviewAhead: true` to study early.
+   */
+  emptyReason?: 'capped' | 'exhausted'
+}
+
+export interface StartSessionOptions {
+  /** Pull extra NEW cards beyond the deck's configured daily limit for this one session. */
+  bypassNewCardCap?: boolean
+  /**
+   * No due/new cards at all — pull already-learned LEARNING/REVIEW/RELEARNING cards
+   * regardless of due date (soonest-due first) so the student can study ahead of schedule.
+   */
+  reviewAhead?: boolean
 }
 
 // ── Helper: close an open session ────────────────────────────────────────────
@@ -107,6 +126,7 @@ export async function startSession(
   studentId: string,
   enrollmentId: string,
   now: Date = new Date(),
+  options: StartSessionOptions = {},
 ): Promise<StartSessionResult | { error: string; status: number }> {
   // Resolve enrollment → deck
   const enrollment = await prisma.enrollment.findUnique({
@@ -146,9 +166,10 @@ export async function startSession(
   // Priority comes from Assignment.priority on the assignment linking the CardSet to the class
   const newCardsAlreadyToday = await newCardsReviewedToday(prisma, deck.id)
   const newCardLimit = (params as any).newCardsPerDay ?? 10
-  const newCardSlots = Math.max(0, newCardLimit - newCardsAlreadyToday)
+  const newCardSlots = options.bypassNewCardCap ? Infinity : Math.max(0, newCardLimit - newCardsAlreadyToday)
 
   let newInstances: typeof dueInstances = []
+  let moreNewCardsExistBeyondCap = false
   if (newCardSlots > 0) {
     // Get all NEW instances, join through card → cardSet → assignments for priority
     const allNew = await prisma.cardInstance.findMany({
@@ -177,10 +198,31 @@ export async function startSession(
       return a.createdAt.getTime() - b.createdAt.getTime()
     })
 
+    moreNewCardsExistBeyondCap = allNew.length > newCardSlots
     newInstances = allNew.slice(0, newCardSlots)
+  } else {
+    // Cap is 0 (already hit today) — check if there's anything beyond it worth offering.
+    const anyNew = await prisma.cardInstance.findFirst({ where: { deckId: deck.id, state: 'NEW' } })
+    moreNewCardsExistBeyondCap = !!anyNew
   }
 
-  const allInstances = [...dueInstances, ...newInstances]
+  let allInstances = [...dueInstances, ...newInstances]
+
+  // Nothing due, nothing new available within the cap.
+  if (allInstances.length === 0) {
+    if (options.reviewAhead) {
+      // Study ahead of schedule: pull LEARNING/REVIEW/RELEARNING regardless of due date,
+      // soonest-due first, since there's truly nothing new left to introduce.
+      allInstances = await prisma.cardInstance.findMany({
+        where: { deckId: deck.id, state: { in: ['LEARNING', 'REVIEW', 'RELEARNING'] } },
+        include: { card: true },
+        orderBy: { due: 'asc' },
+      })
+    } else if (allInstances.length === 0) {
+      const emptyReason: 'capped' | 'exhausted' = moreNewCardsExistBeyondCap ? 'capped' : 'exhausted'
+      return { sessionId: '', cards: [], deckId: deck.id, emptyReason }
+    }
+  }
 
   // Create the ReviewSession record
   const session = await prisma.reviewSession.create({
