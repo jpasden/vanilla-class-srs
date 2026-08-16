@@ -15,7 +15,7 @@ import { CardSetStatus } from '@prisma/client'
 import prisma from '../lib/prisma'
 import { requireAuth, requireTeacher } from '../middleware/auth'
 import { validate } from '../middleware/validate'
-import { validateCardRows, normaliseCardRow } from '../services/card.service'
+import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
@@ -208,6 +208,12 @@ router.post('/:id/cards', validate(CreateCardSchema), async (req: Request, res: 
   const cs = await getEditableCardSet(p(req, 'id'), teacher.id)
   if (!cs) { res.status(404).json({ error: 'CardSet not found or not editable' }); return }
 
+  const existing = await prisma.card.findMany({ where: { cardSetId: cs.id }, select: { word: true, pos: true } })
+  const newKey = cardDedupeKey(req.body.word, req.body.pos ?? null)
+  if (existing.some((c) => cardDedupeKey(c.word, c.pos) === newKey)) {
+    res.status(409).json({ error: `"${req.body.word}" already exists in this CardSet${req.body.pos ? ` as ${req.body.pos}` : ''}.` }); return
+  }
+
   const card = await prisma.card.create({
     data: {
       cardSetId: cs.id,
@@ -255,10 +261,16 @@ router.post(
       res.status(400).json({ error: 'CSV validation failed', validationErrors: errors }); return
     }
 
-    const cards = await prisma.card.createMany({
-      data: rows.map((r) => ({ ...normaliseCardRow(r), cardSetId: cs.id })),
-    })
-    res.status(201).json({ created: cards.count })
+    const existingCards = await prisma.card.findMany({ where: { cardSetId: cs.id }, select: { word: true, pos: true } })
+    const existingKeys = new Set(existingCards.map((c) => cardDedupeKey(c.word, c.pos)))
+    const normalised = rows.map(normaliseCardRow)
+    const { toInsert, skipped } = partitionDuplicateRows(normalised, existingKeys)
+
+    const cards = toInsert.length > 0
+      ? await prisma.card.createMany({ data: toInsert.map((r) => ({ ...r, cardSetId: cs.id })) })
+      : { count: 0 }
+
+    res.status(201).json({ created: cards.count, skipped })
   },
 )
 
