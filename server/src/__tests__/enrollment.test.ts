@@ -122,6 +122,7 @@ describe('enrollStudents', () => {
     expect(results[0].status).toBe('created')
     expect(results[0].tempPassword).toBeDefined()
     expect(results[0].email).toBe('new@school.edu')
+    expect(results[0].name).toBe('New Student')
 
     expect(prisma._tx.user.create).toHaveBeenCalledOnce()
     expect(prisma._tx.student.create).toHaveBeenCalledOnce()

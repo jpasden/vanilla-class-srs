@@ -248,6 +248,7 @@ export default function TeacherClassDetailPage() {
           {showImportStudents && (
             <CsvImportModal
               title="Import Students from CSV"
+              printLabel={cls?.name ?? ''}
               endpoint={`/teachers/classes/${id}/students/import`}
               onSuccess={() => { setShowImportStudents(false); reloadEnrollments() }}
               onClose={() => setShowImportStudents(false)}

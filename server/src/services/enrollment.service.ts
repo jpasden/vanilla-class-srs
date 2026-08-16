@@ -52,6 +52,7 @@ export interface EnrollInput {
 
 export interface EnrollResult {
   email: string
+  name: string
   status: 'created' | 'enrolled' | 'already_enrolled' | 'error'
   /** One-time temp password — only set when status === 'created' */
   tempPassword?: string
@@ -110,7 +111,7 @@ export async function enrollStudents(
           where: { studentId_classId: { studentId: student.id, classId } },
         })
         if (existingEnrollment) {
-          return { email: row.email, status: 'already_enrolled' as const }
+          return { email: row.email, name: row.name, status: 'already_enrolled' as const }
         }
 
         // ── 3. Create Enrollment ─────────────────────────────────────────────
@@ -136,12 +137,12 @@ export async function enrollStudents(
         }
 
         const status = tempPassword ? 'created' : 'enrolled'
-        return { email: row.email, status: status as 'created' | 'enrolled', tempPassword }
+        return { email: row.email, name: row.name, status: status as 'created' | 'enrolled', tempPassword }
       })
 
       results.push(result)
     } catch (err: any) {
-      results.push({ email: row.email, status: 'error', error: err?.message ?? 'Unknown error' })
+      results.push({ email: row.email, name: row.name, status: 'error', error: err?.message ?? 'Unknown error' })
     }
   }
 
