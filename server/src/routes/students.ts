@@ -3,14 +3,14 @@ import { z } from 'zod'
 import { CardOrigin, CardSetStatus } from '@prisma/client'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
-import { requireAuth, requireStudent } from '../middleware/auth'
+import { requireAuth, requireStudent, requirePasswordChanged } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { startSession, startRestudy, gradeCard, finishSession } from '../services/review.service'
 import { labelsForClass } from '../services/departmentLabels.service'
 import studentStatsRouter from './stats.student'
 
 const router = asyncRouter()
-router.use(requireAuth, requireStudent)
+router.use(requireAuth, requireStudent, requirePasswordChanged)
 router.use(studentStatsRouter)
 
 // ─── Helper: resolve student record from JWT ──────────────────────────────────

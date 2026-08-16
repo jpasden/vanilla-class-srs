@@ -5,7 +5,7 @@ import multer from 'multer'
 import { parse } from 'csv-parse/sync'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
-import { requireAuth, requireTeacher } from '../middleware/auth'
+import { requireAuth, requireTeacher, requirePasswordChanged } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { enrollStudents, validateEnrollRows } from '../services/enrollment.service'
 import { generateTempPassword, hashPassword } from '../services/auth.service'
@@ -17,7 +17,7 @@ import teacherStudentStatsRouter from './stats.teacher-student'
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
 const router = asyncRouter()
-router.use(requireAuth, requireTeacher)
+router.use(requireAuth, requireTeacher, requirePasswordChanged)
 
 // ─── Helper: resolve teacher record from JWT ─────────────────────────────────
 
