@@ -17,7 +17,7 @@ export default function ResetPasswordPage() {
     setError(null)
     setLoading(true)
     try {
-      await api.post('/auth/reset-password', { token, password })
+      await api.post('/auth/reset-password', { token, newPassword: password })
       navigate('/login')
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Reset failed')
