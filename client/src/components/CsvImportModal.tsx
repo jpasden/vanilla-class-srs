@@ -22,7 +22,10 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const imported = result !== null && !result.validationErrors?.length && !result.error
 
   const handleSubmit = async () => {
     if (!file) return
@@ -32,9 +35,6 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
     try {
       const data = await uploadFile<ImportResult>(endpoint, file)
       setResult(data)
-      if (!data.validationErrors?.length && !data.error) {
-        setTimeout(onSuccess, 1500)
-      }
     } catch (e) {
       if (e instanceof ApiError) {
         try {
@@ -86,7 +86,19 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
             {sharedPassword && (
               <div className="alert alert-success" style={{ marginBottom: 12 }}>
                 <strong>Temporary password for new students:</strong>{' '}
-                <span style={{ fontFamily: 'monospace', fontSize: 15 }}>{sharedPassword}</span>
+                <span style={{ fontFamily: 'monospace', fontSize: 15 }}>{sharedPassword}</span>{' '}
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: 12, padding: '2px 8px' }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(sharedPassword)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
                 <div style={{ fontSize: 12, marginTop: 4, color: 'var(--color-text-muted)' }}>
                   All new students use this password. Students must change it on first login.
                 </div>
@@ -108,14 +120,20 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
         )
       })()}
       <div className="modal-footer">
-        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button
-          className="btn btn-primary"
-          disabled={!file || loading}
-          onClick={handleSubmit}
-        >
-          {loading ? 'Uploading…' : 'Import'}
-        </button>
+        {imported ? (
+          <button className="btn btn-primary" onClick={onSuccess}>Done</button>
+        ) : (
+          <>
+            <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button
+              className="btn btn-primary"
+              disabled={!file || loading}
+              onClick={handleSubmit}
+            >
+              {loading ? 'Uploading…' : 'Import'}
+            </button>
+          </>
+        )}
       </div>
     </Modal>
   )
