@@ -4,6 +4,7 @@ import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
 import { CsvImportModal } from '../../components/CsvImportModal'
+import { downloadPasswordSheet, printPasswordSlips } from '../../utils/passwordSheet'
 import ClassStatsPanel from './ClassStatsPanel'
 
 interface Class {
@@ -67,7 +68,7 @@ export default function TeacherClassDetailPage() {
   const [progressLines, setProgressLines] = useState<ProgressLine[]>([])
   const [progressDone, setProgressDone] = useState(false)
   const [showProgress, setShowProgress] = useState(false)
-  const [resetResult, setResetResult] = useState<{ studentName?: string; tempPassword: string; count?: number } | null>(null)
+  const [resetResult, setResetResult] = useState<{ studentName: string; tempPassword: string }[] | null>(null)
   const pendingAssignmentId = useRef<string | null>(null)
 
   const handleAddStudent = async (e: FormEvent) => {
@@ -90,7 +91,7 @@ export default function TeacherClassDetailPage() {
     if (!confirm(`Reset password for ${enr.student.user.name}? They will need the new temp password to log in.`)) return
     try {
       const result = await api.post<{ tempPassword: string }>(`/teachers/classes/${id}/students/${enr.student.id}/reset-password`, {})
-      setResetResult({ studentName: enr.student.user.name, tempPassword: result.tempPassword })
+      setResetResult([{ studentName: enr.student.user.name, tempPassword: result.tempPassword }])
     } catch (e) {
       alert(e instanceof ApiError ? e.message : 'Failed')
     }
@@ -100,8 +101,8 @@ export default function TeacherClassDetailPage() {
     const count = enrollments?.length ?? 0
     if (!confirm(`Reset passwords for all ${count} students in this class? They will all need the new temp password to log in.`)) return
     try {
-      const result = await api.post<{ tempPassword: string; count: number }>(`/teachers/classes/${id}/reset-passwords`, {})
-      setResetResult({ tempPassword: result.tempPassword, count: result.count })
+      const result = await api.post<{ results: { studentName: string; tempPassword: string }[]; count: number }>(`/teachers/classes/${id}/reset-passwords`, {})
+      setResetResult(result.results)
     } catch (e) {
       alert(e instanceof ApiError ? e.message : 'Failed')
     }
@@ -254,21 +255,35 @@ export default function TeacherClassDetailPage() {
             />
           )}
           {resetResult && (
-            <Modal title={resetResult.studentName ? 'Password Reset' : 'Class Passwords Reset'} onClose={() => setResetResult(null)}>
+            <Modal title={resetResult.length === 1 ? 'Password Reset' : 'Class Passwords Reset'} onClose={() => setResetResult(null)}>
               <div className="alert alert-success" style={{ marginBottom: 16 }}>
-                {resetResult.studentName
-                  ? <><strong>{resetResult.studentName}</strong>'s password has been reset.</>
-                  : <><strong>{resetResult.count}</strong> student{resetResult.count !== 1 ? 's' : ''} reset.</>
+                {resetResult.length === 1
+                  ? <><strong>{resetResult[0].studentName}</strong>'s password has been reset.</>
+                  : <><strong>{resetResult.length}</strong> student{resetResult.length !== 1 ? 's' : ''} reset.</>
                 }
               </div>
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 4 }}>Temporary password:</div>
-                <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 600, letterSpacing: 1 }}>{resetResult.tempPassword}</div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
-                  {resetResult.studentName ? 'This student must' : 'Students must'} change this password on first login.
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+                  This is the only copy — passwords are hashed on creation and cannot be
+                  shown again. {resetResult.length === 1 ? 'This student' : 'Each student'} must change it on first login.
                 </div>
+                <table className="table" style={{ fontSize: 14 }}>
+                  <thead><tr><th>Student</th><th>Temporary password</th></tr></thead>
+                  <tbody>
+                    {resetResult.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.studentName}</td>
+                        <td style={{ fontFamily: 'monospace', fontWeight: 600, letterSpacing: 0.5 }}>{r.tempPassword}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div className="modal-footer">
+              <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-secondary" onClick={() => downloadPasswordSheet(resetResult)}>Download CSV</button>
+                  <button className="btn btn-secondary" onClick={() => printPasswordSlips(resetResult, cls?.name ?? '')}>Print slips</button>
+                </div>
                 <button className="btn btn-primary" onClick={() => setResetResult(null)}>Done</button>
               </div>
             </Modal>

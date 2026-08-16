@@ -50,12 +50,6 @@ export interface EnrollInput {
   name: string
 }
 
-/** Last word of the teacher's display name, lowercased. */
-function teacherLastName(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/)
-  return parts[parts.length - 1].toLowerCase()
-}
-
 export interface EnrollResult {
   email: string
   status: 'created' | 'enrolled' | 'already_enrolled' | 'error'
@@ -73,7 +67,6 @@ export async function enrollStudents(
   prisma: PrismaClient,
   classId: string,
   rows: EnrollInput[],
-  teacherName: string,
 ): Promise<EnrollResult[]> {
   // Load the class's MANDATORY assignments once (used for CardInstance creation)
   const mandatoryAssignments = await prisma.assignment.findMany({
@@ -91,7 +84,7 @@ export async function enrollStudents(
         let tempPassword: string | undefined
 
         if (!user) {
-          tempPassword = generateTempPassword(teacherLastName(teacherName))
+          tempPassword = generateTempPassword()
           const passwordHash = await hashPassword(tempPassword)
           user = await tx.user.create({
             data: {

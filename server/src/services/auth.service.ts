@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt'
 import crypto from 'crypto'
 import { Response } from 'express'
 import { Role } from '@prisma/client'
+import { PASSWORD_WORDS } from '../data/passwordWords'
 
 const BCRYPT_ROUNDS = 12
 const ACCESS_TOKEN_TTL = '1h'
@@ -72,11 +73,16 @@ export function comparePassword(plain: string, hash: string): Promise<boolean> {
   return bcrypt.compare(plain, hash)
 }
 
-export function generateTempPassword(teacherLastName: string, date?: Date): string {
-  const d = date ?? new Date()
-  const dateStr = d.toISOString().slice(0, 10).replace(/-/g, '')
-  const lastName = teacherLastName.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
-  return `${dateStr}${lastName}`
+/**
+ * Random temp password: three words from PASSWORD_WORDS plus a two-digit
+ * number, e.g. "tiger-lamp-otter-42". Not derived from the date or the
+ * teacher's name — every student gets a unique, unguessable password, unlike
+ * the old date+lastname scheme every classmate could work out.
+ */
+export function generateTempPassword(): string {
+  const words = Array.from({ length: 3 }, () => PASSWORD_WORDS[crypto.randomInt(PASSWORD_WORDS.length)])
+  const digits = String(crypto.randomInt(100)).padStart(2, '0')
+  return [...words, digits].join('-')
 }
 
 // ─── Password reset tokens ───────────────────────────────────────────────────
