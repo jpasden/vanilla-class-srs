@@ -7,11 +7,12 @@
  * Mounted at /api/teachers by index.ts as a sub-router.
  */
 
-import { Router, Request, Response } from 'express'
+import { Request, Response } from 'express'
 import { z } from 'zod'
 import multer from 'multer'
 import { parse } from 'csv-parse/sync'
 import { CardSetStatus } from '@prisma/client'
+import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { requireAuth, requireTeacher } from '../middleware/auth'
 import { validate } from '../middleware/validate'
@@ -21,7 +22,7 @@ import { labelsForCardSet } from '../services/departmentLabels.service'
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 const p = (req: Request, key: string) => req.params[key] as string
 
-const router = Router()
+const router = asyncRouter()
 router.use(requireAuth, requireTeacher)
 
 // ─── Helper: resolve teacher record from JWT ──────────────────────────────────

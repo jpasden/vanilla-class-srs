@@ -6,11 +6,12 @@
  * (classId and studentId come from the parent router params)
  */
 
-import { Router, Request, Response } from 'express'
+import { Request, Response } from 'express'
 import { Role } from '@prisma/client'
+import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 
-const router = Router({ mergeParams: true })
+const router = asyncRouter({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
 
 // ── Helper: verify access and student is enrolled ─────────────────────────────

@@ -11,11 +11,12 @@
  *     days       — lookback window (default 30)
  */
 
-import { Router, Request, Response } from 'express'
+import { Request, Response } from 'express'
+import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { labelsForClass } from '../services/departmentLabels.service'
 
-const router = Router({ mergeParams: true })
+const router = asyncRouter({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express'
+import { Request, Response } from 'express'
+import { asyncRouter } from '../lib/asyncRouter'
 import { z } from 'zod'
 import { Role, CardSetStatus, AssignmentType } from '@prisma/client'
 import multer from 'multer'
@@ -14,7 +15,7 @@ import { labelsForCardSet } from '../services/departmentLabels.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
-const router = Router()
+const router = asyncRouter()
 const p = (req: Request, key: string) => req.params[key] as string
 router.use(requireAuth, requireAdmin)
 

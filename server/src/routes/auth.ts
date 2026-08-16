@@ -1,5 +1,7 @@
-import { Router, Request, Response } from 'express'
+import { Request, Response } from 'express'
 import { z } from 'zod'
+import rateLimit from 'express-rate-limit'
+import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import {
   hashPassword,
@@ -13,7 +15,17 @@ import {
 import { sendPasswordResetEmail } from '../services/email.service'
 import { requireAuth } from '../middleware/auth'
 
-const router = Router()
+const router = asyncRouter()
+
+// A classroom on shared wifi can generate bursts of legitimate retries, so this
+// stays generous — it's here to blunt scripted guessing, not to police typos.
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please wait a few minutes and try again.' },
+})
 
 // ─── POST /api/auth/login ────────────────────────────────────────────────────
 
@@ -22,7 +34,7 @@ const LoginSchema = z.object({
   password: z.string().min(1),
 })
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authRateLimit, async (req: Request, res: Response) => {
   const parsed = LoginSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() })
@@ -137,7 +149,7 @@ const ForgotPasswordSchema = z.object({
   email: z.string().email(),
 })
 
-router.post('/forgot-password', async (req: Request, res: Response) => {
+router.post('/forgot-password', authRateLimit, async (req: Request, res: Response) => {
   const parsed = ForgotPasswordSchema.safeParse(req.body)
   if (!parsed.success) {
     // Always return 200 to avoid leaking whether an email exists

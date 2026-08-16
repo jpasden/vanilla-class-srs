@@ -13,10 +13,11 @@
  *   GET /deck/cards/:instanceId/history  per-card review history
  */
 
-import { Router, Request, Response } from 'express'
+import { Request, Response } from 'express'
+import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 
-const router = Router()
+const router = asyncRouter()
 const p = (req: Request, key: string) => req.params[key] as string
 
 // ── Helper: resolve student from JWT ─────────────────────────────────────────

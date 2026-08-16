@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import express from 'express'
+import express, { Request, Response, NextFunction } from 'express'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 
@@ -8,6 +8,13 @@ import adminRouter from './routes/admin'
 import teachersRouter from './routes/teachers'
 import studentsRouter from './routes/students'
 import cardsetsRouter from './routes/cardsets'
+
+// Express 4 does not catch rejections from async handlers, and an unhandled
+// rejection crashes the Node process by default — Docker restarts it, but
+// every in-flight request (including a student mid-session) dies with it.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason)
+})
 
 const app = express()
 const PORT = process.env.PORT ?? 3000
@@ -28,6 +35,14 @@ app.use('/api/students', studentsRouter)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
+})
+
+// Catches rejected promises from async route handlers (Express 4 doesn't) and
+// any synchronous throw that reaches here without a response already sent.
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('Unhandled error:', err)
+  if (res.headersSent) return
+  res.status(500).json({ error: 'Internal server error' })
 })
 
 app.listen(PORT, () => {

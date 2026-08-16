@@ -1,8 +1,9 @@
-import { Router, Request, Response } from 'express'
+import { Request, Response } from 'express'
 import { z } from 'zod'
 import { AssignmentType } from '@prisma/client'
 import multer from 'multer'
 import { parse } from 'csv-parse/sync'
+import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { requireAuth, requireTeacher } from '../middleware/auth'
 import { validate } from '../middleware/validate'
@@ -15,7 +16,7 @@ import teacherStudentStatsRouter from './stats.teacher-student'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
-const router = Router()
+const router = asyncRouter()
 router.use(requireAuth, requireTeacher)
 
 // ─── Helper: resolve teacher record from JWT ─────────────────────────────────

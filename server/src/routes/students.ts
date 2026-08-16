@@ -1,6 +1,7 @@
-import { Router, Request, Response } from 'express'
+import { Request, Response } from 'express'
 import { z } from 'zod'
 import { CardOrigin, CardSetStatus } from '@prisma/client'
+import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { requireAuth, requireStudent } from '../middleware/auth'
 import { validate } from '../middleware/validate'
@@ -8,7 +9,7 @@ import { startSession, startRestudy, gradeCard, finishSession } from '../service
 import { labelsForClass } from '../services/departmentLabels.service'
 import studentStatsRouter from './stats.student'
 
-const router = Router()
+const router = asyncRouter()
 router.use(requireAuth, requireStudent)
 router.use(studentStatsRouter)
 
