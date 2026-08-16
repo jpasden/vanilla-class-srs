@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../utils/auth'
 import { ApiError } from '../../utils/api'
 
@@ -78,8 +78,8 @@ export default function LoginPage() {
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
-          <p style={{ marginTop: 16, fontSize: 13, textAlign: 'center' }}>
-            <Link to="/forgot-password">Forgot password?</Link>
+          <p style={{ marginTop: 16, fontSize: 13, textAlign: 'center', color: 'var(--color-text-muted)' }}>
+            If you've forgotten your password, you'll need to ask your teacher for a password reset.
           </p>
         </div>
         <div
