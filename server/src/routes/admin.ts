@@ -1000,6 +1000,19 @@ router.delete('/subject-grades/:id/assignments/:assignmentId', async (req: Reque
   res.json({ ok: true })
 })
 
+// GET /api/admin/classes/:id/assignments
+router.get('/classes/:id/assignments', async (req: Request, res: Response) => {
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+  const assignments = await prisma.assignment.findMany({
+    where: { classId: cls.id },
+    orderBy: { priority: 'asc' },
+    include: { cardSet: { select: { id: true, name: true, status: true, _count: { select: { cards: true } } } } },
+  })
+  res.json(assignments)
+})
+
 // Admin can also create class-level assignments directly
 const AdminCreateClassAssignmentSchema = z.object({
   cardSetId: z.string().uuid(),
