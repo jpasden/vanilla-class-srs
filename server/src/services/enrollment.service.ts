@@ -161,26 +161,40 @@ export async function enrollStudents(
         }
 
         // ── 2. Check for existing enrollment ────────────────────────────────
+        // The (studentId, classId) unique constraint means a previously
+        // unenrolled (archived) student can't get a fresh row — re-activate
+        // the existing one instead, reusing their old deck and history.
         const existingEnrollment = await tx.enrollment.findUnique({
           where: { studentId_classId: { studentId: student.id, classId } },
+          include: { deck: true },
         })
-        if (existingEnrollment) {
+        if (existingEnrollment && !existingEnrollment.archivedAt) {
           return { email: row.email, name: row.name, status: 'already_enrolled' as const }
         }
 
-        // ── 3. Create Enrollment ─────────────────────────────────────────────
-        const enrollment = await tx.enrollment.create({
-          data: { studentId: student.id, classId },
-        })
-
-        // ── 4. Create Deck ───────────────────────────────────────────────────
-        const deck = await tx.deck.create({ data: { enrollmentId: enrollment.id } })
+        let deckId: string
+        if (existingEnrollment && existingEnrollment.archivedAt) {
+          await tx.enrollment.update({ where: { id: existingEnrollment.id }, data: { archivedAt: null } })
+          // Re-activating may have skipped mandatory assignments added while
+          // archived — deck already exists from the original enrollment.
+          deckId = existingEnrollment.deck!.id
+        } else {
+          // ── 3. Create Enrollment ─────────────────────────────────────────
+          const enrollment = await tx.enrollment.create({
+            data: { studentId: student.id, classId },
+          })
+          // ── 4. Create Deck ────────────────────────────────────────────────
+          const deck = await tx.deck.create({ data: { enrollmentId: enrollment.id } })
+          deckId = deck.id
+        }
 
         // ── 5. Create CardInstances for every MANDATORY assignment ───────────
+        // skipDuplicates makes this safe to re-run against a reactivated deck
+        // that already has some instances from before it was archived.
         if (mandatoryAssignments.length > 0) {
           const cardInstanceData = mandatoryAssignments.flatMap((assignment) =>
             assignment.cardSet.cards.map((card) => ({
-              deckId: deck.id,
+              deckId,
               cardId: card.id,
               origin: CardOrigin.TEACHER_ASSIGNED,
             })),

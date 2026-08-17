@@ -50,7 +50,7 @@ router.get('/', async (req: Request, res: Response) => {
 
   // Load all enrollments for the class
   const enrollments = await prisma.enrollment.findMany({
-    where: { classId: cls.id },
+    where: { classId: cls.id, archivedAt: null },
     include: {
       student: { include: { user: { select: { id: true, name: true, email: true } } } },
       deck: { select: { id: true } },

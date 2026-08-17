@@ -160,6 +160,10 @@ model Enrollment {
   // prefer querying CardSet where(enrollmentId, isPersonal: true) for clarity.
   personalCardSet CardSet? @relation("EnrollmentPersonalCardSet")
   joinedAt        DateTime @default(now())
+  // Soft-delete: set when a teacher/admin unenrolls a student. Filtered out of
+  // rosters and stats everywhere; review history and the deck are left intact
+  // (reversible, unlike a hard delete).
+  archivedAt      DateTime?
 
   @@unique([studentId, classId])
 }

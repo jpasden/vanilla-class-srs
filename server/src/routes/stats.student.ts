@@ -33,7 +33,7 @@ async function getStudentDeck(studentId: string, enrollmentId: string) {
     where: { id: enrollmentId },
     include: { deck: true },
   })
-  if (!enrollment || enrollment.studentId !== studentId) return null
+  if (!enrollment || enrollment.studentId !== studentId || enrollment.archivedAt) return null
   return enrollment
 }
 

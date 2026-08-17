@@ -141,7 +141,7 @@ export async function startSession(
     where: { id: enrollmentId },
     include: { deck: true },
   })
-  if (!enrollment || enrollment.studentId !== studentId) {
+  if (!enrollment || enrollment.studentId !== studentId || enrollment.archivedAt) {
     return { error: 'Enrollment not found', status: 404 }
   }
   if (!enrollment.deck) {
@@ -278,7 +278,7 @@ export async function startRestudy(
     where: { id: enrollmentId },
     include: { deck: true },
   })
-  if (!enrollment || enrollment.studentId !== studentId) {
+  if (!enrollment || enrollment.studentId !== studentId || enrollment.archivedAt) {
     return { error: 'Enrollment not found', status: 404 }
   }
   if (!enrollment.deck) {

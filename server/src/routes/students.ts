@@ -35,7 +35,7 @@ router.get('/enrollments', async (req: Request, res: Response) => {
     return
   }
   const enrollments = await prisma.enrollment.findMany({
-    where: { studentId: student.id },
+    where: { studentId: student.id, archivedAt: null },
     include: {
       class: {
         include: {
@@ -63,7 +63,7 @@ async function getEnrollmentAndDeck(studentId: string, enrollmentId: string) {
     where: { id: enrollmentId },
     include: { deck: true },
   })
-  if (!enrollment || enrollment.studentId !== studentId) return null
+  if (!enrollment || enrollment.studentId !== studentId || enrollment.archivedAt) return null
   return enrollment
 }
 

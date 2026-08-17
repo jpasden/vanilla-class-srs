@@ -58,6 +58,8 @@ export default function TeacherClassDetailPage() {
   const [showImportStudents, setShowImportStudents] = useState(false)
   const [showAddAssignment, setShowAddAssignment] = useState(false)
   const [removeConfirm, setRemoveConfirm] = useState<Assignment | null>(null)
+  const [unenrollConfirm, setUnenrollConfirm] = useState<Enrollment | null>(null)
+  const [unenrollTyped, setUnenrollTyped] = useState('')
   const [showHw, setShowHw] = useState(false)
   const [studentForm, setStudentForm] = useState({ email: '', name: '' })
   const [newStudentResult, setNewStudentResult] = useState<{ status: string; tempPassword?: string } | null>(null)
@@ -93,6 +95,18 @@ export default function TeacherClassDetailPage() {
     try {
       const result = await api.post<{ tempPassword: string }>(`/teachers/classes/${id}/students/${enr.student.id}/reset-password`, {})
       setResetResult([{ studentName: enr.student.user.name, tempPassword: result.tempPassword }])
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Failed')
+    }
+  }
+
+  const handleUnenroll = async () => {
+    if (!unenrollConfirm) return
+    try {
+      await api.delete(`/teachers/classes/${id}/students/${unenrollConfirm.student.id}`)
+      setUnenrollConfirm(null)
+      setUnenrollTyped('')
+      reloadEnrollments()
     } catch (e) {
       alert(e instanceof ApiError ? e.message : 'Failed')
     }
@@ -303,6 +317,40 @@ export default function TeacherClassDetailPage() {
               </div>
             </Modal>
           )}
+          {unenrollConfirm && (
+            <Modal title="Unenroll student" onClose={() => setUnenrollConfirm(null)}>
+              <p>
+                Remove <strong>{unenrollConfirm.student.user.name}</strong> ({unenrollConfirm.student.user.email})
+                from this class?
+              </p>
+              <div className="alert alert-info" style={{ marginTop: 12 }}>
+                Their deck and review history are kept, not deleted — they'll just stop
+                appearing in this class's roster and stats. They can be re-enrolled later
+                (e.g. re-importing them by CSV) and will pick up right where they left off.
+              </div>
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label className="form-label">
+                  Type <strong>{unenrollConfirm.student.user.name}</strong> to confirm
+                </label>
+                <input
+                  className="form-input"
+                  value={unenrollTyped}
+                  onChange={(e) => setUnenrollTyped(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setUnenrollConfirm(null)}>Cancel</button>
+                <button
+                  className="btn btn-danger"
+                  disabled={unenrollTyped.trim() !== unenrollConfirm.student.user.name}
+                  onClick={handleUnenroll}
+                >
+                  Unenroll
+                </button>
+              </div>
+            </Modal>
+          )}
           <div className="page-header" style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-primary btn-sm" onClick={() => { setFormError(null); setNewStudentResult(null); setStudentForm({ email: '', name: '' }); setShowAddStudent(true) }}>+ Add Student</button>
@@ -329,6 +377,7 @@ export default function TeacherClassDetailPage() {
                       className="btn btn-secondary btn-sm"
                     >View Cards</Link>
                     <button className="btn btn-secondary btn-sm" onClick={() => handleResetStudentPassword(enr)}>Reset Password</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => { setUnenrollConfirm(enr); setUnenrollTyped('') }}>Unenroll</button>
                   </td>
                 </tr>
               ))}

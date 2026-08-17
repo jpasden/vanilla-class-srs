@@ -237,7 +237,7 @@ router.post('/classes/:id/students/:studentId/reset-password', async (req: Reque
   }
 
   const enrollment = await prisma.enrollment.findFirst({
-    where: { classId: cls.id, student: { id: p(req, 'studentId') } },
+    where: { classId: cls.id, student: { id: p(req, 'studentId') }, archivedAt: null },
     include: { student: { include: { user: { select: { id: true } } } } },
   })
   if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
@@ -262,7 +262,7 @@ router.post('/classes/:id/reset-passwords', async (req: Request, res: Response) 
   }
 
   const enrollments = await prisma.enrollment.findMany({
-    where: { classId: cls.id },
+    where: { classId: cls.id, archivedAt: null },
     include: { student: { include: { user: { select: { id: true, name: true } } } } },
   })
 
@@ -296,7 +296,7 @@ router.get('/classes/:id/students', async (req: Request, res: Response) => {
     return
   }
   const enrollments = await prisma.enrollment.findMany({
-    where: { classId: cls.id },
+    where: { classId: cls.id, archivedAt: null },
     orderBy: { student: { user: { name: 'asc' } } },
     include: {
       student: {
@@ -306,6 +306,27 @@ router.get('/classes/:id/students', async (req: Request, res: Response) => {
     },
   })
   res.json(enrollments)
+})
+
+// DELETE /api/teachers/classes/:id/students/:studentId  — unenroll (soft delete)
+// Deck, review history, and CardInstances are left intact — this only removes
+// the student from rosters/stats and frees them to be re-enrolled elsewhere.
+// Reversible only via direct DB access; there is no "undo" in the UI.
+router.delete('/classes/:id/students/:studentId', async (req: Request, res: Response) => {
+  const teacher = await getTeacher(req.user!.sub)
+  if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
+
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+    res.status(404).json({ error: 'Class not found' }); return
+  }
+  const enrollment = await prisma.enrollment.findFirst({
+    where: { classId: cls.id, student: { id: p(req, 'studentId') }, archivedAt: null },
+  })
+  if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
+
+  await prisma.enrollment.update({ where: { id: enrollment.id }, data: { archivedAt: new Date() } })
+  res.json({ ok: true })
 })
 
 // ─────────────────────────────────────────────

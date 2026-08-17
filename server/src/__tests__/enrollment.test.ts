@@ -62,7 +62,7 @@ describe('validateEnrollRows', () => {
 function makePrisma({
   existingUser = null as null | { id: string; email: string },
   existingStudent = null as null | { id: string; userId: string },
-  existingEnrollment = null as null | { id: string },
+  existingEnrollment = null as null | { id: string; archivedAt?: Date | null; deck?: { id: string } | null },
   mandatoryCardIds = [] as string[],
 } = {}) {
   // Track created student so findUnique returns it after create (mirrors real DB behaviour)
@@ -87,6 +87,7 @@ function makePrisma({
     enrollment: {
       findUnique: vi.fn().mockResolvedValue(existingEnrollment),
       create: vi.fn().mockResolvedValue({ id: 'enrollment-new', studentId: 'student-new', classId: 'class-1' }),
+      update: vi.fn().mockResolvedValue({ id: existingEnrollment?.id, archivedAt: null }),
     },
     deck: {
       create: vi.fn().mockResolvedValue({ id: 'deck-new', enrollmentId: 'enrollment-new' }),
@@ -145,6 +146,33 @@ describe('enrollStudents', () => {
     expect(results[0].tempPassword).toBeUndefined()
     expect(prisma._tx.enrollment.create).not.toHaveBeenCalled()
     expect(prisma._tx.deck.create).not.toHaveBeenCalled()
+  })
+
+  it('reactivates a previously-unenrolled (archived) enrollment instead of erroring or duplicating', async () => {
+    const prisma = makePrisma({
+      existingUser: { id: 'user-1', email: 'existing@school.edu' },
+      existingStudent: { id: 'student-1', userId: 'user-1' },
+      existingEnrollment: { id: 'enrollment-1', archivedAt: new Date('2026-01-01'), deck: { id: 'deck-1' } },
+      mandatoryCardIds: ['card-1'],
+    })
+
+    const results = await enrollStudents(prisma as any, 'class-1', [
+      { email: 'existing@school.edu', name: 'Existing' },
+    ])
+
+    expect(results[0].status).toBe('enrolled')
+    expect(prisma._tx.enrollment.update).toHaveBeenCalledWith({
+      where: { id: 'enrollment-1' },
+      data: { archivedAt: null },
+    })
+    // Should not create a new Enrollment/Deck row — reuses the archived one
+    expect(prisma._tx.enrollment.create).not.toHaveBeenCalled()
+    expect(prisma._tx.deck.create).not.toHaveBeenCalled()
+    // Picks up mandatory assignments added while archived, into the existing deck
+    expect(prisma._tx.cardInstance.createMany).toHaveBeenCalledWith({
+      data: [{ deckId: 'deck-1', cardId: 'card-1', origin: 'TEACHER_ASSIGNED' }],
+      skipDuplicates: true,
+    })
   })
 
   it('enrolls existing user without creating a new User row', async () => {

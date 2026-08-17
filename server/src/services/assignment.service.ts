@@ -35,7 +35,7 @@ export async function createClassAssignment(
 
   const cardIds = assignment.cardSet.cards.map((c) => c.id)
   const enrollments = await prisma.enrollment.findMany({
-    where: { classId },
+    where: { classId, archivedAt: null },
     include: {
       deck: { select: { id: true } },
       student: { select: { user: { select: { name: true } } } },
