@@ -60,6 +60,13 @@ export interface StartSessionOptions {
    * regardless of due date (soonest-due first) so the student can study ahead of schedule.
    */
   reviewAhead?: boolean
+  /**
+   * Narrow the session to only these CardSets (e.g. a homework focus, or a
+   * manual Study Focus choice) — a soft steering preference, not a hard
+   * filter: if it would produce an empty session while unfiltered cards
+   * exist, startSession falls back to the full deck instead of blocking.
+   */
+  cardSetIds?: string[]
 }
 
 // ── Helper: close an open session ────────────────────────────────────────────
@@ -158,6 +165,13 @@ export async function startSession(
     await closeSession(prisma, openSession.id, now)
   }
 
+  // Optional CardSet focus (homework, or a manual Study Focus choice) — a soft
+  // steering preference. If it would produce an empty session while unfiltered
+  // cards exist, we fall back to the full deck below rather than block the student.
+  const cardSetFilter = options.cardSetIds && options.cardSetIds.length > 0
+    ? { cardSetId: { in: options.cardSetIds } }
+    : undefined
+
   // Build session card list — spec §24 decisions 1, 2, 4
   // Due cards: LEARNING / REVIEW / RELEARNING where due <= now, ordered by due asc.
   // Capped per session — any remainder rolls over to the next session/day rather than
@@ -167,6 +181,7 @@ export async function startSession(
       deckId: deck.id,
       state: { in: ['LEARNING', 'REVIEW', 'RELEARNING'] },
       due: { lte: now },
+      ...(cardSetFilter && { card: cardSetFilter }),
     },
     include: { card: true },
     orderBy: { due: 'asc' },
@@ -184,7 +199,11 @@ export async function startSession(
   if (newCardSlots > 0) {
     // Get all NEW instances, join through card → cardSet → assignments for priority
     const allNew = await prisma.cardInstance.findMany({
-      where: { deckId: deck.id, state: 'NEW' },
+      where: {
+        deckId: deck.id,
+        state: 'NEW',
+        ...(cardSetFilter && { card: cardSetFilter }),
+      },
       include: {
         card: {
           include: {
@@ -218,6 +237,13 @@ export async function startSession(
   }
 
   let allInstances = [...dueInstances, ...newInstances]
+
+  // CardSet focus produced an empty session — it's a soft steering preference,
+  // never a hard block, so fall back to the whole deck rather than leaving the
+  // student with nothing to study.
+  if (allInstances.length === 0 && cardSetFilter) {
+    return startSession(prisma, studentId, enrollmentId, now, { ...options, cardSetIds: undefined })
+  }
 
   // Nothing due, nothing new available within the cap.
   if (allInstances.length === 0) {
