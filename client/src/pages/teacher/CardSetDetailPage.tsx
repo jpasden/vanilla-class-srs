@@ -45,7 +45,8 @@ function validateCsvRows(rows: Record<string, string>[]): CsvRowError[] {
 }
 
 async function parseCsvFile(file: File): Promise<{ rows: Record<string, string>[] } | { parseError: string }> {
-  const text = await file.text()
+  const raw = await file.text()
+  const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
   const lines = text.split(/\r?\n/).filter((l) => l.trim())
   if (lines.length < 2) return { parseError: 'CSV must have a header row and at least one data row.' }
 

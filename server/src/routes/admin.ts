@@ -612,6 +612,7 @@ router.post(
         columns: true,
         skip_empty_lines: true,
         trim: true,
+        bom: true,
       }) as { email: string; name: string }[]
     } catch {
       res.status(400).json({ error: 'Invalid CSV format' })
@@ -809,6 +810,7 @@ router.post(
         columns: true,
         skip_empty_lines: true,
         trim: true,
+        bom: true,
       }) as Record<string, string>[]
     } catch {
       res.status(400).json({ error: 'Invalid CSV format' }); return
