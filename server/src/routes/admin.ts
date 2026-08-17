@@ -9,7 +9,7 @@ import { requireAuth, requireAdmin, requirePasswordChanged } from '../middleware
 import { validate } from '../middleware/validate'
 import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
-import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
+import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, syncNewCardsToAssignedDecks } from '../services/assignment.service'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
 
@@ -807,6 +807,7 @@ router.post('/cardsets/:id/cards', validate(CreateCardSchema), async (req: Reque
       exampleSentence: req.body.exampleSentence ?? null,
     },
   })
+  await syncNewCardsToAssignedDecks(prisma, cs.id, [card.id])
   res.status(201).json(card)
 })
 
@@ -846,11 +847,18 @@ router.post(
     const normalised = rows.map(normaliseCardRow)
     const { toInsert, skipped } = partitionDuplicateRows(normalised, existingKeys)
 
-    const cards = toInsert.length > 0
-      ? await prisma.card.createMany({ data: toInsert.map((r) => ({ ...r, cardSetId: cs.id })) })
-      : { count: 0 }
+    let createdCount = 0
+    if (toInsert.length > 0) {
+      const result = await prisma.card.createMany({ data: toInsert.map((r) => ({ ...r, cardSetId: cs.id })) })
+      createdCount = result.count
+      const newCards = await prisma.card.findMany({
+        where: { cardSetId: cs.id, OR: toInsert.map((r) => ({ word: r.word, pos: r.pos })) },
+        select: { id: true },
+      })
+      await syncNewCardsToAssignedDecks(prisma, cs.id, newCards.map((c) => c.id))
+    }
 
-    res.status(201).json({ created: cards.count, skipped })
+    res.status(201).json({ created: createdCount, skipped })
   },
 )
 

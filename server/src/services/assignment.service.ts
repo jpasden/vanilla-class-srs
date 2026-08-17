@@ -158,3 +158,47 @@ export async function streamCardInstanceCreation(
   send('done', { completed, total })
   res.end()
 }
+
+/**
+ * Fan out newly-created cards into decks that already have a MANDATORY
+ * assignment for this CardSet. Without this, a teacher's normal rhythm of
+ * "add this week's words to the existing unit list" silently stops reaching
+ * students after the first assignment — the CardSet page shows the new
+ * words, the assignment row shows the updated count, but decks stay frozen.
+ *
+ * Safe to call after every card creation (single add or CSV import) — a
+ * CardSet with no MANDATORY assignment yet is a cheap no-op, and
+ * skipDuplicates makes re-running against an already-synced deck a no-op too.
+ */
+export async function syncNewCardsToAssignedDecks(
+  prisma: PrismaClient,
+  cardSetId: string,
+  cardIds: string[],
+): Promise<{ instancesCreated: number }> {
+  if (cardIds.length === 0) return { instancesCreated: 0 }
+
+  const assignments = await prisma.assignment.findMany({
+    where: { cardSetId, type: AssignmentType.MANDATORY },
+    select: { classId: true },
+  })
+  if (assignments.length === 0) return { instancesCreated: 0 }
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: { classId: { in: assignments.map((a) => a.classId) }, archivedAt: null },
+    include: { deck: { select: { id: true } } },
+  })
+
+  const data = enrollments.flatMap((enrollment) =>
+    enrollment.deck
+      ? cardIds.map((cardId) => ({
+          deckId: enrollment.deck!.id,
+          cardId,
+          origin: CardOrigin.TEACHER_ASSIGNED,
+        }))
+      : [],
+  )
+  if (data.length === 0) return { instancesCreated: 0 }
+
+  const result = await prisma.cardInstance.createMany({ data, skipDuplicates: true })
+  return { instancesCreated: result.count }
+}

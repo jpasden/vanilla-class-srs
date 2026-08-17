@@ -17,6 +17,7 @@ import prisma from '../lib/prisma'
 import { requireAuth, requireTeacher } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
+import { syncNewCardsToAssignedDecks } from '../services/assignment.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
@@ -225,6 +226,7 @@ router.post('/:id/cards', validate(CreateCardSchema), async (req: Request, res: 
       exampleSentence: req.body.exampleSentence ?? null,
     },
   })
+  await syncNewCardsToAssignedDecks(prisma, cs.id, [card.id])
   res.status(201).json(card)
 })
 
@@ -268,11 +270,20 @@ router.post(
     const normalised = rows.map(normaliseCardRow)
     const { toInsert, skipped } = partitionDuplicateRows(normalised, existingKeys)
 
-    const cards = toInsert.length > 0
-      ? await prisma.card.createMany({ data: toInsert.map((r) => ({ ...r, cardSetId: cs.id })) })
-      : { count: 0 }
+    let createdCount = 0
+    if (toInsert.length > 0) {
+      const result = await prisma.card.createMany({ data: toInsert.map((r) => ({ ...r, cardSetId: cs.id })) })
+      createdCount = result.count
+      // createMany doesn't return the new rows — (word, pos) is exactly what
+      // dedup keys on, so it's a safe way to look the new IDs back up.
+      const newCards = await prisma.card.findMany({
+        where: { cardSetId: cs.id, OR: toInsert.map((r) => ({ word: r.word, pos: r.pos })) },
+        select: { id: true },
+      })
+      await syncNewCardsToAssignedDecks(prisma, cs.id, newCards.map((c) => c.id))
+    }
 
-    res.status(201).json({ created: cards.count, skipped })
+    res.status(201).json({ created: createdCount, skipped })
   },
 )
 
