@@ -1,4 +1,5 @@
 import { useState, FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
@@ -14,9 +15,14 @@ export default function AdminTeachersPage() {
   const { data: teachers, loading, error, reload } = useApi<Teacher[]>(() => api.get('/admin/teachers'))
   const { data: sgs } = useApi<SubjectGrade[]>(() => api.get('/admin/subject-grades'))
   const [showCreate, setShowCreate] = useState(false)
+  const [editing, setEditing] = useState<Teacher | null>(null)
   const [showAssign, setShowAssign] = useState<Teacher | null>(null)
+  const [promoting, setPromoting] = useState<Teacher | null>(null)
+  const [offboarding, setOffboarding] = useState<Teacher | null>(null)
+  const [removingSg, setRemovingSg] = useState<{ teacher: Teacher; sg: SubjectGrade } | null>(null)
   const [createdCreds, setCreatedCreds] = useState<{ email: string; tempPassword: string } | null>(null)
   const [form, setForm] = useState({ name: '', email: '', subjectGradeIds: [] as string[] })
+  const [editForm, setEditForm] = useState({ name: '', email: '' })
   const [assignSgId, setAssignSgId] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -37,10 +43,49 @@ export default function AdminTeachersPage() {
     }
   }
 
-  const handlePromoteAdmin = async (t: Teacher) => {
-    if (!confirm(`Promote ${t.user.name} to Admin? They will gain full admin access.`)) return
-    try { await api.post(`/admin/teachers/${t.id}/promote-admin`); reload() }
-    catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
+  const handleEdit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editing) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      await api.patch(`/admin/teachers/${editing.id}`, editForm)
+      setEditing(null)
+      reload()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleOffboard = async () => {
+    if (!offboarding) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      await api.delete(`/admin/teachers/${offboarding.id}`)
+      setOffboarding(null)
+      reload()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handlePromoteAdmin = async () => {
+    if (!promoting) return
+    setSaving(true)
+    try {
+      await api.post(`/admin/teachers/${promoting.id}/promote-admin`)
+      setPromoting(null)
+      reload()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleAssignSg = async (e: FormEvent) => {
@@ -58,12 +103,18 @@ export default function AdminTeachersPage() {
     }
   }
 
-  const handleRemoveSg = async (teacher: Teacher, sgId: string) => {
-    if (!confirm('Remove this teacher from the subject grade?')) return
+  const handleRemoveSg = async () => {
+    if (!removingSg) return
+    setSaving(true)
     try {
-      await api.delete(`/admin/teachers/${teacher.id}/subject-grades/${sgId}`)
+      await api.delete(`/admin/teachers/${removingSg.teacher.id}/subject-grades/${removingSg.sg.id}`)
+      setRemovingSg(null)
       reload()
-    } catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -80,11 +131,94 @@ export default function AdminTeachersPage() {
               <label className="form-label">Email</label>
               <input className="form-input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
             </div>
+            <div className="form-group">
+              <label className="form-label">Subject Grades (optional)</label>
+              {sgs && sgs.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {sgs.map((sg) => (
+                    <label key={sg.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                      <input
+                        type="checkbox"
+                        checked={form.subjectGradeIds.includes(sg.id)}
+                        onChange={(e) => {
+                          const ids = e.target.checked
+                            ? [...form.subjectGradeIds, sg.id]
+                            : form.subjectGradeIds.filter((id) => id !== sg.id)
+                          setForm({ ...form, subjectGradeIds: ids })
+                        }}
+                      />
+                      {sg.name} ({sg.department.name})
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>No subject grades exist yet.</p>
+              )}
+            </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Creating…' : 'Create'}</button>
             </div>
           </form>
+        </Modal>
+      )}
+      {editing && (
+        <Modal title={`Edit — ${editing.user.name}`} onClose={() => setEditing(null)}>
+          <form onSubmit={handleEdit}>
+            {formError && <div className="alert alert-danger">{formError}</div>}
+            <div className="form-group">
+              <label className="form-label">Name</label>
+              <input className="form-input" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input className="form-input" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {offboarding && (
+        <Modal title="Offboard teacher" onClose={() => setOffboarding(null)}>
+          <p>Remove <strong>{offboarding.user.name}</strong> as a teacher?</p>
+          <div className="alert alert-info" style={{ marginTop: 12 }}>
+            Their account is kept and demoted to a student role rather than deleted — nothing about
+            their login is destroyed. This is blocked if they still have any classes (active or
+            archived); reassign those to another teacher first.
+          </div>
+          {formError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{formError}</div>}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setOffboarding(null)}>Cancel</button>
+            <button className="btn btn-danger" disabled={saving} onClick={handleOffboard}>{saving ? 'Offboarding…' : 'Offboard'}</button>
+          </div>
+        </Modal>
+      )}
+      {promoting && (
+        <Modal title="Promote to Admin" onClose={() => setPromoting(null)}>
+          <p>Promote <strong>{promoting.user.name}</strong> to Admin? They will gain full admin access.</p>
+          <div className="alert alert-info" style={{ marginTop: 12 }}>
+            This cannot be undone from this screen — there's no "demote to teacher" action yet.
+          </div>
+          {formError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{formError}</div>}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setPromoting(null)}>Cancel</button>
+            <button className="btn btn-primary" disabled={saving} onClick={handlePromoteAdmin}>{saving ? 'Promoting…' : 'Promote'}</button>
+          </div>
+        </Modal>
+      )}
+      {removingSg && (
+        <Modal title="Remove subject grade" onClose={() => setRemovingSg(null)}>
+          <p>
+            Remove <strong>{removingSg.teacher.user.name}</strong> from{' '}
+            <strong>{removingSg.sg.name}</strong>?
+          </p>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setRemovingSg(null)}>Cancel</button>
+            <button className="btn btn-danger" disabled={saving} onClick={handleRemoveSg}>{saving ? 'Removing…' : 'Remove'}</button>
+          </div>
         </Modal>
       )}
       {createdCreds && (
@@ -133,9 +267,9 @@ export default function AdminTeachersPage() {
       {teachers && (
         <div className="table-scroll">
         <table className="table">
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Subject Grades</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Subject Grades</th><th>Classes</th><th style={{ width: 220 }}>Actions</th></tr></thead>
           <tbody>
-            {teachers.length === 0 && <tr><td colSpan={5} className="table-empty">No teachers yet.</td></tr>}
+            {teachers.length === 0 && <tr><td colSpan={6} className="table-empty">No teachers yet.</td></tr>}
             {teachers.map((t) => (
               <tr key={t.id}>
                 <td>{t.user.name}</td>
@@ -146,7 +280,7 @@ export default function AdminTeachersPage() {
                     <span key={m.subjectGrade.id} style={{ marginRight: 4 }}>
                       <span className="badge badge-gray">{m.subjectGrade.name}</span>
                       <button
-                        onClick={() => handleRemoveSg(t, m.subjectGrade.id)}
+                        onClick={() => setRemovingSg({ teacher: t, sg: m.subjectGrade })}
                         className="badge btn-danger"
                         style={{ border: 'none', cursor: 'pointer', fontWeight: 'bold', marginLeft: 2 }}
                         title="Remove"
@@ -157,10 +291,13 @@ export default function AdminTeachersPage() {
                     + SG
                   </button>
                 </td>
-                <td>
+                <td><Link to={`/admin/classes?teacherId=${t.id}`}>View classes</Link></td>
+                <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(t); setEditForm({ name: t.user.name, email: t.user.email }); setFormError(null) }}>Edit</button>
                   {t.user.role !== 'ADMIN' && (
-                    <button className="btn btn-secondary btn-sm" onClick={() => handlePromoteAdmin(t)}>Promote to Admin</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => { setFormError(null); setPromoting(t) }}>Promote to Admin</button>
                   )}
+                  <button className="btn btn-danger btn-sm" onClick={() => { setFormError(null); setOffboarding(t) }}>Offboard</button>
                 </td>
               </tr>
             ))}
