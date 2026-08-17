@@ -2,12 +2,11 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import { AssignmentType } from '@prisma/client'
 import multer from 'multer'
-import { parse } from 'csv-parse/sync'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { requireAuth, requireTeacher, requirePasswordChanged } from '../middleware/auth'
 import { validate } from '../middleware/validate'
-import { enrollStudents, validateEnrollRows } from '../services/enrollment.service'
+import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { generateTempPassword, hashPassword } from '../services/auth.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
 import { labelsForClass } from '../services/departmentLabels.service'
@@ -204,27 +203,25 @@ router.post(
       return
     }
 
-    let rows: { email: string; name: string }[]
-    try {
-      rows = parse(req.file.buffer, {
-        columns: true,
-        skip_empty_lines: true,
-        trim: true,
-        bom: true,
-      }) as { email: string; name: string }[]
-    } catch {
+    const confirmedHeaderless = req.query.confirmHeaderless === 'true'
+    const parsed = parseEnrollCsv(req.file.buffer, confirmedHeaderless)
+    if (parsed.status === 'parse_error') {
       res.status(400).json({ error: 'Invalid CSV format' })
+      return
+    }
+    if (parsed.status === 'needs_confirmation') {
+      res.status(200).json({ needsConfirmation: true, detectedFormat: parsed.detectedFormat })
       return
     }
 
     // Validate all rows before processing — per spec §15, partial imports are rejected
-    const validationErrors = validateEnrollRows(rows)
+    const validationErrors = validateEnrollRows(parsed.rows)
     if (validationErrors.length > 0) {
       res.status(400).json({ error: 'CSV validation failed', validationErrors })
       return
     }
 
-    const results = await enrollStudents(prisma, cls.id, rows)
+    const results = await enrollStudents(prisma, cls.id, parsed.rows as { email: string; name: string }[])
     res.json({ results })
   },
 )

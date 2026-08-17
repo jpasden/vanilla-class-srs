@@ -26,6 +26,8 @@ interface ImportResult {
   results?: EnrollRowResult[]
   validationErrors?: string[]
   error?: string
+  needsConfirmation?: boolean
+  detectedFormat?: { name: string; email: string }
 }
 
 export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHint, printLabel }: Props) {
@@ -35,15 +37,16 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const imported = result !== null && !result.validationErrors?.length && !result.error
+  const imported = result !== null && !result.validationErrors?.length && !result.error && !result.needsConfirmation
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (confirmHeaderless = false) => {
     if (!file) return
     setLoading(true)
     setError(null)
-    setResult(null)
+    if (!confirmHeaderless) setResult(null)
     try {
-      const data = await uploadFile<ImportResult>(endpoint, file)
+      const path = confirmHeaderless ? `${endpoint}?confirmHeaderless=true` : endpoint
+      const data = await uploadFile<ImportResult>(path, file)
       setResult(data)
     } catch (e) {
       if (e instanceof ApiError) {
@@ -77,6 +80,20 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
         />
       </div>
       {error && <div className="alert alert-danger">{error}</div>}
+      {result?.needsConfirmation && result.detectedFormat && (
+        <div className="alert alert-info">
+          <strong>No header row detected in your CSV file.</strong> We're assuming column 1 of
+          your CSV file is the student's name and column 2 is their email, based on the first row:
+          <div style={{ fontFamily: 'monospace', margin: '8px 0', fontSize: 13 }}>
+            {result.detectedFormat.name} → {result.detectedFormat.email}
+          </div>
+          <p style={{ fontSize: 13 }}>
+            If that looks right, click <strong>Import as shown</strong>. If your file actually
+            has different columns (or a header we didn't recognize), click <strong>Cancel</strong> and
+            add a header row: <code>name,email</code>.
+          </p>
+        </div>
+      )}
       {result?.validationErrors && result.validationErrors.length > 0 && (
         <div className="alert alert-danger">
           <strong>Validation errors:</strong>
@@ -144,13 +161,24 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
       <div className="modal-footer">
         {imported ? (
           <button className="btn btn-primary" onClick={onSuccess}>Done</button>
+        ) : result?.needsConfirmation ? (
+          <>
+            <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button
+              className="btn btn-primary"
+              disabled={loading}
+              onClick={() => handleSubmit(true)}
+            >
+              {loading ? 'Importing…' : 'Import as shown'}
+            </button>
+          </>
         ) : (
           <>
             <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button
               className="btn btn-primary"
               disabled={!file || loading}
-              onClick={handleSubmit}
+              onClick={() => handleSubmit(false)}
             >
               {loading ? 'Uploading…' : 'Import'}
             </button>

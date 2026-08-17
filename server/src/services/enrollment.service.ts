@@ -17,10 +17,64 @@
  */
 
 import { PrismaClient, Role, CardOrigin } from '@prisma/client'
+import { parse } from 'csv-parse/sync'
 import { z } from 'zod'
 import { hashPassword, generateTempPassword } from './auth.service'
 
 const EmailSchema = z.string().email()
+
+export interface DetectedFormat {
+  name: string
+  email: string
+}
+
+export type ParseEnrollCsvResult =
+  | { status: 'parsed'; rows: Record<string, string>[] }
+  | { status: 'needs_confirmation'; detectedFormat: DetectedFormat }
+  | { status: 'parse_error' }
+
+/**
+ * Parse an enrollment CSV, tolerating a missing "name,email" header row.
+ *
+ * If the first row's second column looks like an email address, we assume
+ * the whole file is headerless data in (name, email) column order — but we
+ * never commit to that guess silently. Callers must re-invoke with
+ * `confirmedHeaderless: true` (set only after the teacher has seen the
+ * detected format and clicked through) before the guess is actually used.
+ */
+export function parseEnrollCsv(buffer: Buffer, confirmedHeaderless: boolean): ParseEnrollCsvResult {
+  let raw: string[][]
+  try {
+    raw = parse(buffer, { skip_empty_lines: true, trim: true, bom: true }) as string[][]
+  } catch {
+    return { status: 'parse_error' }
+  }
+
+  if (raw.length === 0) return { status: 'parsed', rows: [] }
+
+  const firstRow = raw[0]
+  const looksLikeHeader = firstRow[0]?.trim().toLowerCase() === 'name' && firstRow[1]?.trim().toLowerCase() === 'email'
+  const secondCellIsEmail = EmailSchema.safeParse(firstRow[1]?.trim() ?? '').success
+
+  if (!looksLikeHeader && secondCellIsEmail) {
+    if (!confirmedHeaderless) {
+      return { status: 'needs_confirmation', detectedFormat: { name: firstRow[0]?.trim() ?? '', email: firstRow[1]?.trim() ?? '' } }
+    }
+    return { status: 'parsed', rows: raw.map(([name, email]) => ({ name: name?.trim() ?? '', email: email?.trim() ?? '' })) }
+  }
+
+  // Either a recognized header, or a shape that doesn't match the headerless
+  // heuristic — treat row 1 as the header and let existing validation catch
+  // anything genuinely malformed.
+  const [header, ...dataRows] = raw
+  const columns = header.map((h) => h.trim().toLowerCase())
+  const rows = dataRows.map((row) => {
+    const obj: Record<string, string> = {}
+    columns.forEach((col, i) => { obj[col] = (row[i] ?? '').trim() })
+    return obj
+  })
+  return { status: 'parsed', rows }
+}
 
 /**
  * Validate a batch of CSV rows before any DB work.
