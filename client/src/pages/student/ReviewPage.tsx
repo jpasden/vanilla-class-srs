@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useEnrollment } from '../../utils/enrollment'
+import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
 
 interface SessionCard {
@@ -20,6 +21,25 @@ interface SessionResponse {
   cards: SessionCard[]
   totalCards: number
   emptyReason?: 'capped' | 'exhausted'
+}
+
+type StudyFocus =
+  | null
+  | { mode: 'all' }
+  | { mode: 'assigned'; cardSetIds: string[]; cardSetNames: string[] }
+
+interface WeeklyGoal {
+  sessionsRequired: number
+  minCardsPerSession: number
+  periodDays: number
+  sessionsCompleted: number
+  daysRemaining: number
+  cardSetFocus: StudyFocus
+}
+
+interface StatsSummary {
+  weeklyGoal: WeeklyGoal | null
+  deckCardSets: { id: string; name: string }[]
 }
 
 type Phase = 'idle' | 'loading' | 'reviewing' | 'done'
@@ -96,6 +116,24 @@ export default function ReviewPage() {
   const [emptyReason, setEmptyReason] = useState<'capped' | 'exhausted' | null>(null)
   const finishStageRef = useRef<HTMLDivElement>(null)
 
+  // Drives the Study Focus dropdown. '' = All CardSets, '__homework__' = the
+  // homework-assigned CardSet(s) as a group (may be more than one), or a
+  // single CardSet id for a manual, one-CardSet override. A manual choice
+  // only applies to the next session started — never persisted, re-derived
+  // from the homework default on every load.
+  const [selectedFocus, setSelectedFocus] = useState<string>('')
+  const { data: summary } = useApi<StatsSummary>(
+    () => active
+      ? api.get<StatsSummary>(`/students/stats/summary?enrollmentId=${active.enrollmentId}`)
+      : Promise.resolve({ weeklyGoal: null, deckCardSets: [] }),
+    [active?.enrollmentId],
+  )
+
+  useEffect(() => {
+    const focus = summary?.weeklyGoal?.cardSetFocus
+    setSelectedFocus(focus?.mode === 'assigned' ? '__homework__' : '')
+  }, [summary])
+
   if (!active) { navigate('/student'); return null }
 
   const flipCard = () => {
@@ -114,9 +152,15 @@ export default function ReviewPage() {
     setError(null)
     setEmptyReason(null)
     setWeakCards([])
+    const focus = summary?.weeklyGoal?.cardSetFocus
+    const cardSetIds =
+      selectedFocus === '__homework__' && focus?.mode === 'assigned' ? focus.cardSetIds
+      : selectedFocus && selectedFocus !== '__homework__' ? [selectedFocus]
+      : undefined
     try {
       const data = await api.post<SessionResponse>('/students/review/start', {
         enrollmentId: active.enrollmentId,
+        cardSetIds,
         ...options,
       })
       if (data.cards.length === 0) {
@@ -321,6 +365,38 @@ export default function ReviewPage() {
           </p>
           {error && <div className="alert alert-danger" style={{ marginBottom: 16 }}>{error}</div>}
           <button className="btn btn-primary btn-lg" onClick={() => startSession()}>Start Reviewing</button>
+
+          <div style={{ maxWidth: 320, margin: '24px auto 0', textAlign: 'left' }}>
+            {summary && (
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label">Study Focus</label>
+                <select className="form-select" value={selectedFocus} onChange={(e) => setSelectedFocus(e.target.value)}>
+                  <option value="">All CardSets</option>
+                  {summary.weeklyGoal?.cardSetFocus?.mode === 'assigned' && (
+                    <option value="__homework__">
+                      Homework: {summary.weeklyGoal.cardSetFocus.cardSetNames.join(', ')}
+                    </option>
+                  )}
+                  {summary.deckCardSets.map((cs) => (
+                    <option key={cs.id} value={cs.id}>{cs.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {summary?.weeklyGoal && (
+              <>
+                <p style={{ fontSize: 'var(--text-base)', textAlign: 'center' }}>
+                  <strong>This Week's Homework Assignment:</strong>{' '}
+                  {summary.weeklyGoal.sessionsRequired} study session{summary.weeklyGoal.sessionsRequired !== 1 ? 's' : ''} of{' '}
+                  {summary.weeklyGoal.minCardsPerSession} cards.
+                </p>
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 8 }}>
+                  It only takes about 5 minutes for each review session. You got this!
+                </p>
+              </>
+            )}
+          </div>
         </div>
       )}
 

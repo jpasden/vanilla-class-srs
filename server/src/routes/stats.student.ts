@@ -180,10 +180,19 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
     }
   }
 
+  // CardSets present in this deck — populates the Study Focus dropdown's options.
+  const deckCardSetRows = await prisma.cardInstance.findMany({
+    where: { deckId },
+    select: { card: { select: { cardSet: { select: { id: true, name: true } } } } },
+  })
+  const deckCardSetsById = new Map(deckCardSetRows.map((r) => [r.card.cardSet.id, r.card.cardSet.name]))
+  const deckCardSets = [...deckCardSetsById].map(([id, name]) => ({ id, name }))
+
   res.json({
     deckBreakdown: breakdown,
     streak: { current: currentStreak, longest, mostCardsInDay },
     weeklyGoal,
+    deckCardSets,
   })
 })
 
