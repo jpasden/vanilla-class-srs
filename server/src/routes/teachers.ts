@@ -9,6 +9,7 @@ import { validate } from '../middleware/validate'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { generateTempPassword, hashPassword } from '../services/auth.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, removeAssignment, resumeClassAssignment } from '../services/assignment.service'
+import { DEFAULT_MIN_CARDS_PER_SESSION, DEFAULT_PERIOD_DAYS, DEFAULT_ALERT_THRESHOLD_DAYS } from '../services/homework.service'
 import { labelsForClass } from '../services/departmentLabels.service'
 import teacherStatsRouter from './stats.teacher'
 import teacherStudentStatsRouter from './stats.teacher-student'
@@ -559,10 +560,8 @@ router.get('/classes/:id/students/:studentId/cards', async (req: Request, res: R
 
 const HomeworkSchema = z.object({
   sessionsRequired: z.number().int().min(1),
-  minCardsPerSession: z.number().int().min(1),
-  periodDays: z.number().int().min(1).default(7),
-  alertThresholdDays: z.number().int().min(0).default(2),
-  activeFrom: z.string().datetime(),
+  // Optional CardSet focus — omitted or empty means "any assigned cardsets."
+  cardSetIds: z.array(z.string().uuid()).optional(),
 })
 
 // GET /api/teachers/classes/:id/homework
@@ -577,8 +576,14 @@ router.get('/classes/:id/homework', async (req: Request, res: Response) => {
 
   const hwReq = await prisma.homeworkRequirement.findFirst({
     where: { classId: cls.id, isActive: true },
+    include: { cardSets: { include: { cardSet: { select: { id: true, name: true } } } } },
   })
-  res.json(hwReq ?? null)
+  if (!hwReq) { res.json(null); return }
+
+  res.json({
+    ...hwReq,
+    cardSets: hwReq.cardSets.map((c) => c.cardSet),
+  })
 })
 
 // POST /api/teachers/classes/:id/homework
@@ -591,23 +596,39 @@ router.post('/classes/:id/homework', validate(HomeworkSchema), async (req: Reque
     res.status(404).json({ error: 'Class not found' }); return
   }
 
+  const cardSetIds: string[] = req.body.cardSetIds ?? []
+  if (cardSetIds.length > 0) {
+    const assignedCount = await prisma.assignment.count({
+      where: { classId: cls.id, cardSetId: { in: cardSetIds } },
+    })
+    if (assignedCount !== cardSetIds.length) {
+      res.status(400).json({ error: 'One or more CardSets are not assigned to this class' }); return
+    }
+  }
+
   // Deactivate any existing active requirement, then create new one (in transaction)
   const hwReq = await prisma.$transaction(async (tx) => {
     await tx.homeworkRequirement.updateMany({
       where: { classId: cls.id, isActive: true },
       data: { isActive: false },
     })
-    return tx.homeworkRequirement.create({
+    const created = await tx.homeworkRequirement.create({
       data: {
         classId: cls.id,
         sessionsRequired: req.body.sessionsRequired,
-        minCardsPerSession: req.body.minCardsPerSession,
-        periodDays: req.body.periodDays,
-        alertThresholdDays: req.body.alertThresholdDays,
-        activeFrom: new Date(req.body.activeFrom),
+        minCardsPerSession: DEFAULT_MIN_CARDS_PER_SESSION,
+        periodDays: DEFAULT_PERIOD_DAYS,
+        alertThresholdDays: DEFAULT_ALERT_THRESHOLD_DAYS,
+        activeFrom: new Date(),
         isActive: true,
       },
     })
+    if (cardSetIds.length > 0) {
+      await tx.homeworkRequirementCardSet.createMany({
+        data: cardSetIds.map((cardSetId) => ({ homeworkRequirementId: created.id, cardSetId })),
+      })
+    }
+    return created
   })
 
   res.status(201).json(hwReq)
