@@ -8,7 +8,7 @@ import { requireAuth, requireTeacher, requirePasswordChanged } from '../middlewa
 import { validate } from '../middleware/validate'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { generateTempPassword, hashPassword } from '../services/auth.service'
-import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, removeAssignment } from '../services/assignment.service'
+import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, removeAssignment, resumeClassAssignment } from '../services/assignment.service'
 import { labelsForClass } from '../services/departmentLabels.service'
 import teacherStatsRouter from './stats.teacher'
 import teacherStudentStatsRouter from './stats.teacher-student'
@@ -479,6 +479,34 @@ router.get('/classes/:id/assignments/:assignmentId/progress', async (req: Reques
   pendingAssignmentJobs.delete(p(req, 'assignmentId'))
 
   await streamCardInstanceCreation(prisma, res, job.enrollments, job.cardIds, job.className)
+})
+
+// GET /api/teachers/classes/:id/assignments/:assignmentId/resume  (SSE)
+// Re-streams CardInstance creation for an assignment whose original SSE
+// connection dropped mid-way. Re-runs against every current enrollment
+// rather than tracking who was already done — skipDuplicates on the
+// eventual createMany makes that safe and idempotent, so a flaky-wifi
+// disconnect no longer leaves an assignment stuck at "409 to retry, no way
+// to remove it" (removeAssignment now also covers that path directly).
+router.get('/classes/:id/assignments/:assignmentId/resume', async (req: Request, res: Response) => {
+  const teacher = await getTeacher(req.user!.sub)
+  if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
+
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+    res.status(404).json({ error: 'Class not found' }); return
+  }
+  const assignment = await prisma.assignment.findUnique({ where: { id: p(req, 'assignmentId') } })
+  if (!assignment || assignment.classId !== cls.id) {
+    res.status(404).json({ error: 'Assignment not found' }); return
+  }
+
+  const target = await resumeClassAssignment(prisma, assignment.id)
+  if (!target) {
+    res.status(400).json({ error: 'Assignment is not resumable' }); return
+  }
+
+  await streamCardInstanceCreation(prisma, res, target.enrollments, target.cardIds, target.className)
 })
 
 // DELETE /api/teachers/classes/:id/assignments/:assignmentId

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { rollbackOrphanedAssignment, removeAssignment, syncNewCardsToAssignedDecks } from '../services/assignment.service'
+import { rollbackOrphanedAssignment, removeAssignment, syncNewCardsToAssignedDecks, resumeClassAssignment } from '../services/assignment.service'
 
 function makePrisma(deleteResult: 'ok' | 'throws') {
   return {
@@ -141,5 +141,54 @@ describe('syncNewCardsToAssignedDecks', () => {
     const result = await syncNewCardsToAssignedDecks(prisma as any, 'set-1', ['card-1'])
 
     expect(result.instancesCreated).toBe(1)
+  })
+})
+
+function makeResumePrisma({
+  assignment = { id: 'assign-1', type: 'MANDATORY', classId: 'class-1', cardSetId: 'set-1' } as
+    | { id: string; type: string; classId: string; cardSetId: string }
+    | null,
+  cardIds = [] as string[],
+  enrollments = [] as unknown[],
+} = {}) {
+  return {
+    assignment: { findUnique: vi.fn().mockResolvedValue(assignment) },
+    cardSet: { findUnique: vi.fn().mockResolvedValue({ cards: cardIds.map((id) => ({ id })) }) },
+    enrollment: { findMany: vi.fn().mockResolvedValue(enrollments) },
+    class: { findUnique: vi.fn().mockResolvedValue({ name: 'Class A' }) },
+  }
+}
+
+describe('resumeClassAssignment', () => {
+  it('rebuilds enrollments and cardIds from current state, not a stale snapshot', async () => {
+    const prisma = makeResumePrisma({
+      cardIds: ['card-1', 'card-2'],
+      enrollments: [{ deck: { id: 'deck-1' } }],
+    })
+
+    const result = await resumeClassAssignment(prisma as any, 'assign-1')
+
+    expect(result).not.toBeNull()
+    expect(result!.cardIds).toEqual(['card-1', 'card-2'])
+    expect(result!.enrollments).toHaveLength(1)
+    expect(result!.className).toBe('Class A')
+    expect(prisma.enrollment.findMany).toHaveBeenCalledWith({
+      where: { classId: 'class-1', archivedAt: null },
+      include: { deck: { select: { id: true } }, student: { select: { user: { select: { name: true } } } } },
+    })
+  })
+
+  it('returns null if the assignment no longer exists', async () => {
+    const prisma = makeResumePrisma({ assignment: null })
+    const result = await resumeClassAssignment(prisma as any, 'assign-missing')
+    expect(result).toBeNull()
+  })
+
+  it('returns null for a non-MANDATORY assignment (nothing to resume)', async () => {
+    const prisma = makeResumePrisma({
+      assignment: { id: 'assign-1', type: 'OPTIONAL', classId: 'class-1', cardSetId: 'set-1' },
+    })
+    const result = await resumeClassAssignment(prisma as any, 'assign-1')
+    expect(result).toBeNull()
   })
 })

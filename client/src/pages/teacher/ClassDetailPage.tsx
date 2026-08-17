@@ -70,6 +70,7 @@ export default function TeacherClassDetailPage() {
   const [assignConfirm, setAssignConfirm] = useState<AssignConfirm | null>(null)
   const [progressLines, setProgressLines] = useState<ProgressLine[]>([])
   const [progressDone, setProgressDone] = useState(false)
+  const [progressError, setProgressError] = useState(false)
   const [showProgress, setShowProgress] = useState(false)
   const [resetResult, setResetResult] = useState<{ studentName: string; tempPassword: string }[] | null>(null)
   const pendingAssignmentId = useRef<string | null>(null)
@@ -158,18 +159,10 @@ export default function TeacherClassDetailPage() {
     }
   }
 
-  const handleConfirmAssign = () => {
-    const assignmentId = pendingAssignmentId.current
-    if (!assignmentId) return
+  const openAssignmentStream = (path: string) => {
+    setProgressError(false)
 
-    setAssignConfirm(null)
-    setProgressLines([])
-    setProgressDone(false)
-    setShowProgress(true)
-
-    const es = new EventSource(`/api/teachers/classes/${id}/assignments/${assignmentId}/progress`, {
-      withCredentials: true,
-    })
+    const es = new EventSource(path, { withCredentials: true })
 
     es.addEventListener('progress', (e) => {
       const data = JSON.parse(e.data) as ProgressLine
@@ -183,10 +176,34 @@ export default function TeacherClassDetailPage() {
     })
 
     es.onerror = () => {
+      // A genuine "done" event always arrives before the connection closes,
+      // so any error/close here means the connection dropped mid-stream —
+      // treating that the same as success (the old bug) told the teacher an
+      // assignment finished when only some students actually got the words.
       setProgressDone(true)
+      setProgressError(true)
       es.close()
       reloadAssignments()
     }
+  }
+
+  const handleConfirmAssign = () => {
+    const assignmentId = pendingAssignmentId.current
+    if (!assignmentId) return
+
+    setAssignConfirm(null)
+    setProgressLines([])
+    setProgressDone(false)
+    setShowProgress(true)
+    openAssignmentStream(`/api/teachers/classes/${id}/assignments/${assignmentId}/progress`)
+  }
+
+  const handleResumeAssign = () => {
+    const assignmentId = pendingAssignmentId.current
+    if (!assignmentId) return
+
+    setProgressDone(false)
+    openAssignmentStream(`/api/teachers/classes/${id}/assignments/${assignmentId}/resume`)
   }
 
   const handleRemoveAssignment = async (keepCards: boolean) => {
@@ -408,7 +425,7 @@ export default function TeacherClassDetailPage() {
       {/* Assignment progress modal */}
       {showProgress && (
         <Modal
-          title="Creating CardInstances…"
+          title={progressError ? 'Connection lost' : 'Creating CardInstances…'}
           onClose={() => { if (progressDone) setShowProgress(false) }}
         >
           <div style={{ fontFamily: 'monospace', fontSize: 13, maxHeight: 320, overflowY: 'auto', marginBottom: 16 }}>
@@ -426,9 +443,26 @@ export default function TeacherClassDetailPage() {
               <div style={{ color: 'var(--color-text-muted)', marginTop: 8 }}>Working…</div>
             )}
           </div>
+          {progressError && (
+            <div className="alert alert-danger" style={{ marginBottom: 16 }}>
+              {(() => {
+                const last = progressLines[progressLines.length - 1]
+                return last
+                  ? `Connection lost after ${last.completed} of ${last.total} students. The rest still need this word list.`
+                  : 'Connection lost before any students were updated.'
+              })()}
+            </div>
+          )}
           {progressDone && (
             <div className="modal-footer">
-              <button className="btn btn-primary" onClick={() => setShowProgress(false)}>Done</button>
+              {progressError ? (
+                <>
+                  <button className="btn btn-secondary" onClick={() => setShowProgress(false)}>Close</button>
+                  <button className="btn btn-primary" onClick={handleResumeAssign}>Resume</button>
+                </>
+              ) : (
+                <button className="btn btn-primary" onClick={() => setShowProgress(false)}>Done</button>
+              )}
             </div>
           )}
         </Modal>

@@ -2,6 +2,29 @@ import { PrismaClient, AssignmentType, CardOrigin } from '@prisma/client'
 import { Response } from 'express'
 
 /**
+ * Fetch the enrollments + card IDs needed to stream CardInstance creation for
+ * a MANDATORY assignment. Shared by fresh creation and by resuming a
+ * previously-interrupted stream — both need the *current* state (enrollments
+ * and cards can have changed since the assignment was first created), not a
+ * snapshot from whenever the job was originally queued.
+ */
+async function loadStreamTargets(prisma: PrismaClient, classId: string, cardSetId: string) {
+  const cardSet = await prisma.cardSet.findUnique({
+    where: { id: cardSetId },
+    select: { cards: { select: { id: true } } },
+  })
+  const cardIds = cardSet?.cards.map((c) => c.id) ?? []
+  const enrollments = await prisma.enrollment.findMany({
+    where: { classId, archivedAt: null },
+    include: {
+      deck: { select: { id: true } },
+      student: { select: { user: { select: { name: true } } } },
+    },
+  })
+  return { cardIds, enrollments }
+}
+
+/**
  * Create the Assignment record and fetch the card IDs + enrollments needed for
  * CardInstance creation. Does NOT create CardInstances — caller streams them via
  * streamCardInstanceCreation so the client can show progress.
@@ -33,16 +56,26 @@ export async function createClassAssignment(
     return { assignment, enrollments: [], cardIds: [] }
   }
 
-  const cardIds = assignment.cardSet.cards.map((c) => c.id)
-  const enrollments = await prisma.enrollment.findMany({
-    where: { classId, archivedAt: null },
-    include: {
-      deck: { select: { id: true } },
-      student: { select: { user: { select: { name: true } } } },
-    },
-  })
-
+  const { cardIds, enrollments } = await loadStreamTargets(prisma, classId, cardSetId)
   return { assignment, enrollments, cardIds }
+}
+
+/**
+ * Rebuild the streaming target list for an assignment that already exists in
+ * the DB — used to resume after a dropped SSE connection. Unlike the
+ * in-memory PendingJob (consumed once, lost on drop), this reads current
+ * state, so it naturally covers "the connection died, retry" without needing
+ * to track which students were already done: skipDuplicates on the eventual
+ * createMany makes re-streaming every enrollment safe, not just the
+ * incomplete ones.
+ */
+export async function resumeClassAssignment(prisma: PrismaClient, assignmentId: string) {
+  const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId } })
+  if (!assignment || assignment.type !== AssignmentType.MANDATORY) return null
+
+  const { cardIds, enrollments } = await loadStreamTargets(prisma, assignment.classId, assignment.cardSetId)
+  const cls = await prisma.class.findUnique({ where: { id: assignment.classId }, select: { name: true } })
+  return { assignment, enrollments, cardIds, className: cls?.name ?? '' }
 }
 
 /**
