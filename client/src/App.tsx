@@ -21,6 +21,8 @@ import AdminSubjectGradesPage from './pages/admin/SubjectGradesPage'
 import AdminTeachersPage from './pages/admin/TeachersPage'
 import AdminCardSetsPage from './pages/admin/CardSetsPage'
 import AdminCardSetDetailPage from './pages/admin/CardSetDetailPage'
+import AdminClassesPage from './pages/admin/ClassesPage'
+import AdminClassDetailPage from './pages/admin/ClassDetailPage'
 
 // Teacher pages
 import TeacherClassesPage from './pages/teacher/ClassesPage'
@@ -80,6 +82,8 @@ export default function App() {
               <Route path="teachers" element={<AdminTeachersPage />} />
               <Route path="cardsets" element={<AdminCardSetsPage />} />
               <Route path="cardsets/:id" element={<AdminCardSetDetailPage />} />
+              <Route path="classes" element={<AdminClassesPage />} />
+              <Route path="classes/:id" element={<AdminClassDetailPage />} />
             </Route>
 
             {/* Teacher */}

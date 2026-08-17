@@ -7,6 +7,7 @@ const navItems = [
   { to: '/admin/departments', label: 'Departments' },
   { to: '/admin/subject-grades', label: 'Subject Grades' },
   { to: '/admin/teachers', label: 'Teachers' },
+  { to: '/admin/classes', label: 'Classes' },
   { to: '/admin/cardsets', label: 'CardSets' },
 ]
 
