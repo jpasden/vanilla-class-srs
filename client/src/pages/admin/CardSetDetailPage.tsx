@@ -78,6 +78,9 @@ export default function AdminCardSetDetailPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [deletingCard, setDeletingCard] = useState<Card | null>(null)
+  const [archivingCardSet, setArchivingCardSet] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // CSV import state
   const csvInputRef = useRef<HTMLInputElement>(null)
@@ -129,20 +132,27 @@ export default function AdminCardSetDetailPage() {
     }
   }
 
-  const handleDelete = async (c: Card) => {
-    if (!confirm(`Delete card "${c.word}"? This cannot be undone.`)) return
-    try { await api.delete(`/admin/cardsets/${id}/cards/${c.id}`); reload() }
-    catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
+  const handleDelete = async () => {
+    if (!deletingCard) return
+    setDeleteError(null)
+    try {
+      await api.delete(`/admin/cardsets/${id}/cards/${deletingCard.id}`)
+      setDeletingCard(null)
+      reload()
+    } catch (e) {
+      setDeleteError(e instanceof ApiError ? e.message : 'Failed')
+    }
   }
 
-  const handleDeleteCardSet = async () => {
+  const handleArchiveCardSet = async () => {
     if (!cs) return
-    if (!confirm(`Delete "${cs.name}"? Students who already have cards from this set keep them and their review history — this just removes the set from active lists and prevents new assignments.`)) return
+    setDeleteError(null)
     try {
       await api.delete(`/admin/cardsets/${id}`)
       navigate('/admin/cardsets')
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : 'Failed')
+      setDeleteError(e instanceof ApiError ? e.message : 'Failed')
+      setArchivingCardSet(false)
     }
   }
 
@@ -229,6 +239,31 @@ export default function AdminCardSetDetailPage() {
         </Modal>
       )}
       {showHelp && <CardImportHelpModal onClose={() => setShowHelp(false)} />}
+      {deletingCard && (
+        <Modal title="Delete card" onClose={() => setDeletingCard(null)}>
+          <p>Delete card <strong>"{deletingCard.word}"</strong>? This cannot be undone.</p>
+          {deleteError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{deleteError}</div>}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setDeletingCard(null)}>Cancel</button>
+            <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
+          </div>
+        </Modal>
+      )}
+      {archivingCardSet && cs && (
+        <Modal title="Archive CardSet" onClose={() => setArchivingCardSet(false)}>
+          <p>Archive <strong>{cs.name}</strong>?</p>
+          <div className="alert alert-info" style={{ marginTop: 12 }}>
+            Students who already have cards from this set keep them and their review history —
+            nothing is deleted. This just removes the set from active lists and prevents new
+            assignments; you can restore it later from CardSets → Show Archived.
+          </div>
+          {deleteError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{deleteError}</div>}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setArchivingCardSet(false)}>Cancel</button>
+            <button className="btn btn-danger" onClick={handleArchiveCardSet}>Archive</button>
+          </div>
+        </Modal>
+      )}
 
       <div style={{ marginBottom: 20 }}>
         <Link to="/admin/cardsets" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>← CardSets</Link>
@@ -244,7 +279,7 @@ export default function AdminCardSetDetailPage() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary btn-sm" onClick={openCreate}>+ Add Card</button>
-            <button className="btn btn-danger btn-sm" onClick={handleDeleteCardSet}>Delete CardSet</button>
+            <button className="btn btn-danger btn-sm" onClick={() => { setDeleteError(null); setArchivingCardSet(true) }}>Archive CardSet</button>
           </div>
         </div>
       </div>
@@ -343,7 +378,7 @@ export default function AdminCardSetDetailPage() {
                   <td style={{ fontSize: 13 }}>{c.exampleSentence ?? '—'}</td>
                   <td>
                     <button className="btn btn-secondary btn-sm" onClick={() => openEdit(c)} style={{ marginRight: 4 }}>Edit</button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c)}>Delete</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => { setDeleteError(null); setDeletingCard(c) }}>Delete</button>
                   </td>
                 </tr>
               ))}
