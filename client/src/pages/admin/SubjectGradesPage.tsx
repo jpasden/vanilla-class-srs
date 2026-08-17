@@ -1,4 +1,5 @@
 import { useState, FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
@@ -12,12 +13,17 @@ interface SubjectGrade {
 }
 
 export default function AdminSubjectGradesPage() {
-  const { data: sgs, loading, error, reload } = useApi<SubjectGrade[]>(() => api.get('/admin/subject-grades'))
+  const [showArchived, setShowArchived] = useState(false)
+  const { data: sgs, loading, error, reload } = useApi<SubjectGrade[]>(
+    () => api.get(`/admin/subject-grades${showArchived ? '?archived=true' : ''}`),
+    [showArchived],
+  )
   const { data: depts } = useApi<Department[]>(() => api.get('/admin/departments'))
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<SubjectGrade | null>(null)
   const [name, setName] = useState('')
   const [deptId, setDeptId] = useState('')
+  const [archiving, setArchiving] = useState<SubjectGrade | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -44,9 +50,22 @@ export default function AdminSubjectGradesPage() {
     }
   }
 
-  const handleArchive = async (sg: SubjectGrade) => {
-    if (!confirm(`Archive subject grade "${sg.name}"?`)) return
-    try { await api.delete(`/admin/subject-grades/${sg.id}`); reload() }
+  const handleArchive = async () => {
+    if (!archiving) return
+    setSaving(true)
+    try {
+      await api.delete(`/admin/subject-grades/${archiving.id}`)
+      setArchiving(null)
+      reload()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUnarchive = async (sg: SubjectGrade) => {
+    try { await api.post(`/admin/subject-grades/${sg.id}/unarchive`); reload() }
     catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
   }
 
@@ -76,9 +95,32 @@ export default function AdminSubjectGradesPage() {
   return (
     <div>
       {modal}
+      {archiving && (
+        <Modal title="Archive subject grade" onClose={() => setArchiving(null)}>
+          <p>
+            Archive <strong>{archiving.name}</strong>? It has {archiving._count.classes} class
+            {archiving._count.classes !== 1 ? 'es' : ''} under it.
+          </p>
+          <div className="alert alert-info" style={{ marginTop: 12 }}>
+            This cascades: every class under this subject grade is archived too. Nothing is deleted —
+            students keep their decks and review history, and you can restore this later from Show
+            Archived.
+          </div>
+          {formError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{formError}</div>}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setArchiving(null)}>Cancel</button>
+            <button className="btn btn-danger" disabled={saving} onClick={handleArchive}>{saving ? 'Archiving…' : 'Archive'}</button>
+          </div>
+        </Modal>
+      )}
       <div className="page-header">
         <h1 className="page-title">Subject Grades</h1>
-        <button className="btn btn-primary" onClick={openCreate}>+ New Subject Grade</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => setShowArchived((v) => !v)}>
+            {showArchived ? 'Show Active' : 'Show Archived'}
+          </button>
+          {!showArchived && <button className="btn btn-primary" onClick={openCreate}>+ New Subject Grade</button>}
+        </div>
       </div>
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
@@ -87,16 +129,22 @@ export default function AdminSubjectGradesPage() {
         <table className="table">
           <thead><tr><th>Name</th><th>Department</th><th>Classes</th><th>Teachers</th><th style={{ width: 120 }}>Actions</th></tr></thead>
           <tbody>
-            {sgs.length === 0 && <tr><td colSpan={5} className="table-empty">No subject grades yet.</td></tr>}
+            {sgs.length === 0 && <tr><td colSpan={5} className="table-empty">{showArchived ? 'No archived subject grades.' : 'No subject grades yet.'}</td></tr>}
             {sgs.map((sg) => (
               <tr key={sg.id}>
                 <td>{sg.name}</td>
                 <td>{sg.department.name}</td>
-                <td>{sg._count.classes}</td>
-                <td>{sg._count.teachers}</td>
+                <td>{sg._count.classes > 0 ? <Link to={`/admin/classes?subjectGradeId=${sg.id}`}>{sg._count.classes}</Link> : 0}</td>
+                <td>{sg._count.teachers > 0 ? <Link to="/admin/teachers">{sg._count.teachers}</Link> : 0}</td>
                 <td>
-                  <button className="btn btn-secondary btn-sm" onClick={() => openEdit(sg)} style={{ marginRight: 6 }}>Edit</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleArchive(sg)}>Archive</button>
+                  {showArchived ? (
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleUnarchive(sg)}>Unarchive</button>
+                  ) : (
+                    <>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openEdit(sg)} style={{ marginRight: 6 }}>Edit</button>
+                      <button className="btn btn-danger btn-sm" onClick={() => { setFormError(null); setArchiving(sg) }}>Archive</button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
