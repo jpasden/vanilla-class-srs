@@ -8,7 +8,7 @@ import { requireAuth, requireTeacher, requirePasswordChanged } from '../middlewa
 import { validate } from '../middleware/validate'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { generateTempPassword, hashPassword } from '../services/auth.service'
-import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment } from '../services/assignment.service'
+import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, removeAssignment } from '../services/assignment.service'
 import { labelsForClass } from '../services/departmentLabels.service'
 import teacherStatsRouter from './stats.teacher'
 import teacherStudentStatsRouter from './stats.teacher-student'
@@ -461,6 +461,8 @@ router.get('/classes/:id/assignments/:assignmentId/progress', async (req: Reques
 })
 
 // DELETE /api/teachers/classes/:id/assignments/:assignmentId
+// By default also removes the words this assignment put into student decks.
+// Pass ?keepCards=true to unassign without touching existing decks.
 router.delete('/classes/:id/assignments/:assignmentId', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
@@ -473,8 +475,9 @@ router.delete('/classes/:id/assignments/:assignmentId', async (req: Request, res
   if (!assignment || assignment.classId !== cls.id) {
     res.status(404).json({ error: 'Assignment not found' }); return
   }
-  await prisma.assignment.delete({ where: { id: assignment.id } })
-  res.json({ ok: true })
+  const keepCards = req.query.keepCards === 'true'
+  const result = await removeAssignment(prisma, assignment.id, keepCards)
+  res.json({ ok: true, cardsRemoved: result.cardsRemoved })
 })
 
 // ─────────────────────────────────────────────

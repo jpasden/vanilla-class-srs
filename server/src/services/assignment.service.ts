@@ -56,6 +56,50 @@ export async function rollbackOrphanedAssignment(prisma: PrismaClient, assignmen
 }
 
 /**
+ * Remove an Assignment. By default this also removes every CardInstance (and
+ * its ReviewEvents) that this assignment put into student decks across the
+ * class — a teacher clicking "Remove" expects the words gone, not orphaned in
+ * thirty decks with no way to undo the original mistake. Pass keepCards to
+ * leave the words in place and only delete the Assignment row.
+ *
+ * Only CardInstances still tied to the CardSet's *current* cards are touched
+ * — if a card was removed from the set after assignment, its instances (now
+ * disconnected from this cardSetId via the Card table) are left alone, since
+ * they're no longer something this assignment can be said to own.
+ */
+export async function removeAssignment(
+  prisma: PrismaClient,
+  assignmentId: string,
+  keepCards: boolean,
+): Promise<{ cardsRemoved: number }> {
+  const assignment = await prisma.assignment.findUnique({ where: { id: assignmentId } })
+  if (!assignment) return { cardsRemoved: 0 }
+
+  if (keepCards) {
+    await prisma.assignment.delete({ where: { id: assignmentId } })
+    return { cardsRemoved: 0 }
+  }
+
+  const instances = await prisma.cardInstance.findMany({
+    where: {
+      card: { cardSetId: assignment.cardSetId },
+      deck: { enrollment: { classId: assignment.classId } },
+      origin: CardOrigin.TEACHER_ASSIGNED,
+    },
+    select: { id: true },
+  })
+  const instanceIds = instances.map((i) => i.id)
+
+  await prisma.$transaction([
+    prisma.reviewEvent.deleteMany({ where: { cardInstanceId: { in: instanceIds } } }),
+    prisma.cardInstance.deleteMany({ where: { id: { in: instanceIds } } }),
+    prisma.assignment.delete({ where: { id: assignmentId } }),
+  ])
+
+  return { cardsRemoved: instanceIds.length }
+}
+
+/**
  * Stream per-enrollment CardInstance creation over an SSE response.
  * Emits one "progress" event per enrollment, then a "done" event.
  * Each enrollment's instances are created in their own small transaction

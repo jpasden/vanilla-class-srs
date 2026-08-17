@@ -57,6 +57,7 @@ export default function TeacherClassDetailPage() {
   const [showAddStudent, setShowAddStudent] = useState(false)
   const [showImportStudents, setShowImportStudents] = useState(false)
   const [showAddAssignment, setShowAddAssignment] = useState(false)
+  const [removeConfirm, setRemoveConfirm] = useState<Assignment | null>(null)
   const [showHw, setShowHw] = useState(false)
   const [studentForm, setStudentForm] = useState({ email: '', name: '' })
   const [newStudentResult, setNewStudentResult] = useState<{ status: string; tempPassword?: string } | null>(null)
@@ -174,10 +175,23 @@ export default function TeacherClassDetailPage() {
     }
   }
 
-  const handleDeleteAssignment = async (aId: string) => {
-    if (!confirm('Remove this assignment?')) return
-    try { await api.delete(`/teachers/classes/${id}/assignments/${aId}`); reloadAssignments() }
-    catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
+  const handleRemoveAssignment = async (keepCards: boolean) => {
+    if (!removeConfirm) return
+    setSaving(true)
+    try {
+      const result = await api.delete<{ cardsRemoved: number }>(
+        `/teachers/classes/${id}/assignments/${removeConfirm.id}${keepCards ? '?keepCards=true' : ''}`,
+      )
+      setRemoveConfirm(null)
+      reloadAssignments()
+      if (result.cardsRemoved > 0) {
+        alert(`Removed "${removeConfirm.cardSet.name}" and ${result.cardsRemoved} word${result.cardsRemoved !== 1 ? 's' : ''} from student decks.`)
+      }
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleSaveHw = async (e: FormEvent) => {
@@ -403,6 +417,37 @@ export default function TeacherClassDetailPage() {
               </form>
             </Modal>
           )}
+          {removeConfirm && (
+            <Modal title="Remove assignment" onClose={() => setRemoveConfirm(null)}>
+              <p>
+                Remove <strong>{removeConfirm.cardSet.name}</strong> ({removeConfirm.cardSet._count.cards}{' '}
+                word{removeConfirm.cardSet._count.cards !== 1 ? 's' : ''}) from this class?
+              </p>
+              <div className="alert alert-danger" style={{ marginTop: 12 }}>
+                This will also remove these words and their review history from every student's
+                deck in this class. This cannot be undone.
+              </div>
+              <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={saving}
+                  onClick={() => handleRemoveAssignment(true)}
+                  title="Unassign, but leave the words already in student decks"
+                >
+                  Unassign only — keep the words
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={saving}
+                  onClick={() => handleRemoveAssignment(false)}
+                >
+                  {saving ? 'Removing…' : 'Remove words from decks'}
+                </button>
+              </div>
+            </Modal>
+          )}
           <div style={{ marginBottom: 16 }}>
             <button className="btn btn-primary btn-sm" onClick={() => { setFormError(null); setAssignForm({ cardSetId: '', type: 'MANDATORY', priority: 0 }); setShowAddAssignment(true) }}>+ Assign CardSet</button>
           </div>
@@ -418,7 +463,7 @@ export default function TeacherClassDetailPage() {
                   <td><span className={`badge badge-${a.type === 'MANDATORY' ? 'blue' : 'yellow'}`}>{a.type}</span></td>
                   <td>{a.priority}</td>
                   <td>{a.cardSet._count.cards}</td>
-                  <td><button className="btn btn-danger btn-sm" onClick={() => handleDeleteAssignment(a.id)}>Remove</button></td>
+                  <td><button className="btn btn-danger btn-sm" onClick={() => setRemoveConfirm(a)}>Remove</button></td>
                 </tr>
               ))}
             </tbody>
