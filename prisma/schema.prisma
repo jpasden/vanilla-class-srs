@@ -194,6 +194,7 @@ model CardSet {
   cards                   Card[]
   assignments             Assignment[]
   subjectGradeAssignments SubjectGradeAssignment[]
+  homeworkRequirements    HomeworkRequirementCardSet[]
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   archivedAt              DateTime?
@@ -322,6 +323,21 @@ model HomeworkRequirement {
   createdAt          DateTime  @default(now())
   // Only one HomeworkRequirement per class may have isActive = true at a time.
   // Enforced at app layer: deactivate existing active requirement within a transaction before creating new one.
+
+  // Optional CardSet focus — empty means "any assigned cardsets" (the student's
+  // whole queue). When set, steers (never blocks) the student's default study
+  // queue toward these CardSets. See server/src/services/homework.service.ts.
+  cardSets HomeworkRequirementCardSet[]
+}
+
+model HomeworkRequirementCardSet {
+  id                    String              @id @default(uuid())
+  homeworkRequirementId String
+  homeworkRequirement   HomeworkRequirement @relation(fields: [homeworkRequirementId], references: [id])
+  cardSetId             String
+  cardSet               CardSet             @relation(fields: [cardSetId], references: [id])
+
+  @@unique([homeworkRequirementId, cardSetId])
 }
 
 // ─────────────────────────────────────────────
