@@ -9,7 +9,7 @@ import { requireAuth, requireAdmin, requirePasswordChanged } from '../middleware
 import { validate } from '../middleware/validate'
 import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
-import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, syncNewCardsToAssignedDecks } from '../services/assignment.service'
+import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, syncNewCardsToAssignedDecks, removeAssignment, resumeClassAssignment } from '../services/assignment.service'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
 
@@ -30,9 +30,11 @@ const DepartmentSchema = z.object({
 })
 
 // GET /api/admin/departments
-router.get('/departments', async (_req: Request, res: Response) => {
+// ?archived=true returns only archived departments, for the "show archived" toggle.
+router.get('/departments', async (req: Request, res: Response) => {
+  const archived = req.query.archived === 'true'
   const departments = await prisma.department.findMany({
-    where: { archivedAt: null },
+    where: archived ? { archivedAt: { not: null } } : { archivedAt: null },
     orderBy: { name: 'asc' },
     include: { _count: { select: { subjectGrades: true } } },
   })
@@ -147,9 +149,11 @@ const SubjectGradePatchSchema = z.object({
 })
 
 // GET /api/admin/subject-grades
-router.get('/subject-grades', async (_req: Request, res: Response) => {
+// ?archived=true returns only archived subject grades, for the "show archived" toggle.
+router.get('/subject-grades', async (req: Request, res: Response) => {
+  const archived = req.query.archived === 'true'
   const sgs = await prisma.subjectGrade.findMany({
-    where: { archivedAt: null },
+    where: archived ? { archivedAt: { not: null } } : { archivedAt: null },
     orderBy: { name: 'asc' },
     include: {
       department: { select: { id: true, name: true } },
@@ -461,9 +465,19 @@ const PatchClassSchema = z.object({
 })
 
 // GET /api/admin/classes
-router.get('/classes', async (_req: Request, res: Response) => {
+// ?archived=true returns only archived classes, for the "show archived" toggle.
+// ?subjectGradeId= / ?teacherId= narrow the list — used by drill-through links
+// from the Subject Grades and Teachers pages.
+router.get('/classes', async (req: Request, res: Response) => {
+  const archived = req.query.archived === 'true'
+  const subjectGradeId = req.query.subjectGradeId as string | undefined
+  const teacherId = req.query.teacherId as string | undefined
   const classes = await prisma.class.findMany({
-    where: { archivedAt: null },
+    where: {
+      archivedAt: archived ? { not: null } : null,
+      ...(subjectGradeId && { subjectGradeId }),
+      ...(teacherId && { teacherId }),
+    },
     orderBy: { name: 'asc' },
     include: {
       teacher: { include: { user: { select: { id: true, name: true } } } },
@@ -701,9 +715,11 @@ router.post('/cardsets/:id/promote', validate(PromoteCardSetSchema), async (req:
 })
 
 // GET /api/admin/cardsets  — list all non-personal CardSets
-router.get('/cardsets', async (_req: Request, res: Response) => {
+// ?archived=true returns only archived CardSets, for the "show archived" toggle.
+router.get('/cardsets', async (req: Request, res: Response) => {
+  const archived = req.query.archived === 'true'
   const cardSets = await prisma.cardSet.findMany({
-    where: { archivedAt: null, isPersonal: false },
+    where: { archivedAt: archived ? { not: null } : null, isPersonal: false },
     orderBy: { name: 'asc' },
     include: {
       teacher: { include: { user: { select: { id: true, name: true } } } },
@@ -1068,6 +1084,42 @@ router.get('/classes/:id/assignments/:assignmentId/progress', async (req: Reques
   clearTimeout(job.timer)
   adminPendingJobs.delete(p(req, 'assignmentId'))
   await streamCardInstanceCreation(prisma, res, job.enrollments, job.cardIds, job.className)
+})
+
+// GET /api/admin/classes/:id/assignments/:assignmentId/resume  (SSE)
+// Re-streams CardInstance creation for an assignment whose original SSE
+// connection dropped mid-way — mirrors teachers.ts's equivalent route.
+router.get('/classes/:id/assignments/:assignmentId/resume', async (req: Request, res: Response) => {
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+  const assignment = await prisma.assignment.findUnique({ where: { id: p(req, 'assignmentId') } })
+  if (!assignment || assignment.classId !== cls.id) {
+    res.status(404).json({ error: 'Assignment not found' }); return
+  }
+
+  const target = await resumeClassAssignment(prisma, assignment.id)
+  if (!target) {
+    res.status(400).json({ error: 'Assignment is not resumable' }); return
+  }
+
+  await streamCardInstanceCreation(prisma, res, target.enrollments, target.cardIds, target.className)
+})
+
+// DELETE /api/admin/classes/:id/assignments/:assignmentId
+// By default also removes the words this assignment put into student decks.
+// Pass ?keepCards=true to unassign without touching existing decks.
+router.delete('/classes/:id/assignments/:assignmentId', async (req: Request, res: Response) => {
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+  const assignment = await prisma.assignment.findUnique({ where: { id: p(req, 'assignmentId') } })
+  if (!assignment || assignment.classId !== cls.id) {
+    res.status(404).json({ error: 'Assignment not found' }); return
+  }
+  const keepCards = req.query.keepCards === 'true'
+  const result = await removeAssignment(prisma, assignment.id, keepCards)
+  res.json({ ok: true, cardsRemoved: result.cardsRemoved })
 })
 
 export default router
