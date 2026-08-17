@@ -25,6 +25,7 @@ interface Assignment {
 interface HomeworkReq {
   id: string; sessionsRequired: number; minCardsPerSession: number
   periodDays: number; alertThresholdDays: number; activeFrom: string
+  cardSets: { id: string; name: string }[]
 }
 
 type Tab = 'students' | 'assignments' | 'homework' | 'stats'
@@ -64,7 +65,7 @@ export default function TeacherClassDetailPage() {
   const [studentForm, setStudentForm] = useState({ email: '', name: '' })
   const [newStudentResult, setNewStudentResult] = useState<{ status: string; tempPassword?: string } | null>(null)
   const [assignForm, setAssignForm] = useState({ cardSetId: '', type: 'MANDATORY', priority: 0 })
-  const [hwForm, setHwForm] = useState({ sessionsRequired: 3, minCardsPerSession: 10, periodDays: 7, alertThresholdDays: 2, activeFrom: new Date().toISOString().slice(0, 16) })
+  const [hwForm, setHwForm] = useState({ sessionsRequired: 2, cardSetIds: [] as string[] })
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [assignConfirm, setAssignConfirm] = useState<AssignConfirm | null>(null)
@@ -230,7 +231,7 @@ export default function TeacherClassDetailPage() {
     setSaving(true)
     setFormError(null)
     try {
-      await api.post(`/teachers/classes/${id}/homework`, { ...hwForm, activeFrom: new Date(hwForm.activeFrom).toISOString() })
+      await api.post(`/teachers/classes/${id}/homework`, hwForm)
       setShowHw(false)
       reloadHw()
     } catch (e) {
@@ -564,24 +565,35 @@ export default function TeacherClassDetailPage() {
               <form onSubmit={handleSaveHw}>
                 {formError && <div className="alert alert-danger">{formError}</div>}
                 <div className="form-group">
-                  <label className="form-label">Sessions required per period</label>
+                  <label className="form-label">Sessions required per week</label>
                   <input className="form-input" type="number" min={1} value={hwForm.sessionsRequired} onChange={(e) => setHwForm({ ...hwForm, sessionsRequired: parseInt(e.target.value) || 1 })} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Minimum cards per session</label>
-                  <input className="form-input" type="number" min={1} value={hwForm.minCardsPerSession} onChange={(e) => setHwForm({ ...hwForm, minCardsPerSession: parseInt(e.target.value) || 1 })} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Period length (days)</label>
-                  <input className="form-input" type="number" min={1} value={hwForm.periodDays} onChange={(e) => setHwForm({ ...hwForm, periodDays: parseInt(e.target.value) || 7 })} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Alert threshold (days remaining)</label>
-                  <input className="form-input" type="number" min={0} value={hwForm.alertThresholdDays} onChange={(e) => setHwForm({ ...hwForm, alertThresholdDays: parseInt(e.target.value) || 0 })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Active from</label>
-                  <input className="form-input" type="datetime-local" value={hwForm.activeFrom} onChange={(e) => setHwForm({ ...hwForm, activeFrom: e.target.value })} required />
+                  <label className="form-label">Study focus (optional)</label>
+                  <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+                    Leave unchecked to focus on any assigned CardSet — the student's normal queue.
+                  </p>
+                  {assignments && assignments.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {assignments.map((a) => (
+                        <label key={a.cardSet.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                          <input
+                            type="checkbox"
+                            checked={hwForm.cardSetIds.includes(a.cardSet.id)}
+                            onChange={(e) => {
+                              const ids = e.target.checked
+                                ? [...hwForm.cardSetIds, a.cardSet.id]
+                                : hwForm.cardSetIds.filter((id) => id !== a.cardSet.id)
+                              setHwForm({ ...hwForm, cardSetIds: ids })
+                            }}
+                          />
+                          {a.cardSet.name} ({a.cardSet._count.cards} cards)
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>No CardSets assigned to this class yet.</p>
+                  )}
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={() => setShowHw(false)}>Cancel</button>
@@ -594,22 +606,19 @@ export default function TeacherClassDetailPage() {
             <div className="card" style={{ maxWidth: 440 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 600 }}>Active Requirement</h2>
-                <button className="btn btn-secondary btn-sm" onClick={() => { setFormError(null); setHwForm({ sessionsRequired: hw.sessionsRequired, minCardsPerSession: hw.minCardsPerSession, periodDays: hw.periodDays, alertThresholdDays: hw.alertThresholdDays, activeFrom: new Date(hw.activeFrom).toISOString().slice(0, 16) }); setShowHw(true) }}>Edit</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setFormError(null); setHwForm({ sessionsRequired: hw.sessionsRequired, cardSetIds: hw.cardSets.map((cs) => cs.id) }); setShowHw(true) }}>Edit</button>
               </div>
               <table className="table">
                 <tbody>
-                  <tr><td>Sessions required</td><td><strong>{hw.sessionsRequired}</strong></td></tr>
-                  <tr><td>Min cards per session</td><td><strong>{hw.minCardsPerSession}</strong></td></tr>
-                  <tr><td>Period</td><td><strong>{hw.periodDays} days</strong></td></tr>
-                  <tr><td>Alert threshold</td><td><strong>{hw.alertThresholdDays} days remaining</strong></td></tr>
-                  <tr><td>Active from</td><td><strong>{new Date(hw.activeFrom).toLocaleDateString()}</strong></td></tr>
+                  <tr><td>Requirement</td><td><strong>{hw.sessionsRequired} session{hw.sessionsRequired !== 1 ? 's' : ''} of {hw.minCardsPerSession} cards per {hw.periodDays === 7 ? 'week' : `${hw.periodDays} days`}</strong></td></tr>
+                  <tr><td>Study focus</td><td><strong>{hw.cardSets.length > 0 ? hw.cardSets.map((cs) => cs.name).join(', ') : 'Any assigned cardsets'}</strong></td></tr>
                 </tbody>
               </table>
             </div>
           ) : (
             <div>
               <p style={{ color: 'var(--color-text-muted)', marginBottom: 16, fontSize: 14 }}>No homework requirement set for this class.</p>
-              <button className="btn btn-primary" onClick={() => { setFormError(null); setShowHw(true) }}>Set Requirement</button>
+              <button className="btn btn-primary" onClick={() => { setFormError(null); setHwForm({ sessionsRequired: 2, cardSetIds: [] }); setShowHw(true) }}>Set Requirement</button>
             </div>
           )}
         </div>
