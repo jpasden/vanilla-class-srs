@@ -10,6 +10,7 @@ import { Request, Response } from 'express'
 import { Role } from '@prisma/client'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
+import { getPeriodBounds, getAutoStudyFocus } from '../services/homework.service'
 
 const router = asyncRouter({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -123,17 +124,20 @@ router.get('/summary', async (req: Request, res: Response) => {
 
   let weeklyGoal = null
   if (hwReq) {
-    const periodStart = new Date(hwReq.activeFrom)
-    const msPerPeriod = hwReq.periodDays * 86_400_000
-    const elapsed = now.getTime() - periodStart.getTime()
-    const periodsComplete = Math.floor(elapsed / msPerPeriod)
-    const currentPeriodStart = new Date(periodStart.getTime() + periodsComplete * msPerPeriod)
-    const currentPeriodEnd = new Date(currentPeriodStart.getTime() + msPerPeriod)
+    const { periodStart: currentPeriodStart, periodEnd: currentPeriodEnd } = getPeriodBounds(hwReq, now)
     const sessionsCompleted = await prisma.reviewSession.count({
       where: { deckId, endedAt: { gte: currentPeriodStart, lt: currentPeriodEnd }, cardsReviewed: { gte: hwReq.minCardsPerSession } },
     })
     const daysRemaining = Math.max(0, Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / 86_400_000))
-    weeklyGoal = { sessionsRequired: hwReq.sessionsRequired, minCardsPerSession: hwReq.minCardsPerSession, periodDays: hwReq.periodDays, sessionsCompleted, daysRemaining }
+    const cardSetFocus = await getAutoStudyFocus(prisma, enrollment.classId, deckId, now)
+    weeklyGoal = {
+      sessionsRequired: hwReq.sessionsRequired,
+      minCardsPerSession: hwReq.minCardsPerSession,
+      periodDays: hwReq.periodDays,
+      sessionsCompleted,
+      daysRemaining,
+      cardSetFocus,
+    }
   }
 
   res.json({ deckBreakdown: breakdown, streak: { current: currentStreak, longest, mostCardsInDay }, weeklyGoal })

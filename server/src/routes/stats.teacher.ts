@@ -15,6 +15,7 @@ import { Request, Response } from 'express'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { labelsForClass } from '../services/departmentLabels.service'
+import { getPeriodBounds } from '../services/homework.service'
 
 const router = asyncRouter({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -331,11 +332,7 @@ router.get('/', async (req: Request, res: Response) => {
 
   let homeworkCompliance = null
   if (hwReq) {
-    const msPerPeriod = hwReq.periodDays * 86_400_000
-    const elapsed = now.getTime() - hwReq.activeFrom.getTime()
-    const periodsComplete = Math.floor(elapsed / msPerPeriod)
-    const currentPeriodStart = new Date(hwReq.activeFrom.getTime() + periodsComplete * msPerPeriod)
-    const currentPeriodEnd = new Date(currentPeriodStart.getTime() + msPerPeriod)
+    const { periodStart: currentPeriodStart, periodEnd: currentPeriodEnd } = getPeriodBounds(hwReq, now)
     const daysRemaining = Math.max(0, Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / 86_400_000))
 
     const studentCompliance = await Promise.all(
