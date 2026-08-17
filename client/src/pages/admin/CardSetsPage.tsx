@@ -16,10 +16,15 @@ interface CardSet {
 }
 
 export default function AdminCardSetsPage() {
-  const { data: css, loading, error, reload } = useApi<CardSet[]>(() => api.get('/admin/cardsets'))
+  const [showArchived, setShowArchived] = useState(false)
+  const { data: css, loading, error, reload } = useApi<CardSet[]>(
+    () => api.get(`/admin/cardsets${showArchived ? '?archived=true' : ''}`),
+    [showArchived],
+  )
   const { data: sgs } = useApi<SubjectGrade[]>(() => api.get('/admin/subject-grades'))
   const [promoting, setPromoting] = useState<CardSet | null>(null)
   const [sgId, setSgId] = useState('')
+  const [archiving, setArchiving] = useState<CardSet | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -39,9 +44,22 @@ export default function AdminCardSetsPage() {
     }
   }
 
-  const handleDelete = async (cs: CardSet) => {
-    if (!confirm(`Delete "${cs.name}"? Students who already have cards from this set keep them and their review history — this just removes the set from active lists and prevents new assignments.`)) return
-    try { await api.delete(`/admin/cardsets/${cs.id}`); reload() }
+  const handleArchive = async () => {
+    if (!archiving) return
+    setSaving(true)
+    try {
+      await api.delete(`/admin/cardsets/${archiving.id}`)
+      setArchiving(null)
+      reload()
+    } catch (e) {
+      setPromoteError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUnarchive = async (cs: CardSet) => {
+    try { await api.post(`/admin/cardsets/${cs.id}/unarchive`); reload() }
     catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
   }
 
@@ -52,6 +70,9 @@ export default function AdminCardSetsPage() {
           <p style={{ fontSize: 14, marginBottom: 16, color: 'var(--color-text-muted)' }}>
             The original teacher retains attribution but loses edit rights. Only admins can edit departmental sets.
           </p>
+          <div className="alert alert-info" style={{ marginBottom: 16 }}>
+            This can't be undone from this screen — there's no "demote to private" action yet.
+          </div>
           <form onSubmit={handlePromote}>
             {promoteError && <div className="alert alert-danger">{promoteError}</div>}
             <div className="form-group">
@@ -68,8 +89,28 @@ export default function AdminCardSetsPage() {
           </form>
         </Modal>
       )}
+      {archiving && (
+        <Modal title="Archive CardSet" onClose={() => setArchiving(null)}>
+          <p>
+            Archive <strong>{archiving.name}</strong>? This removes it from active lists and prevents
+            new assignments.
+          </p>
+          <div className="alert alert-info" style={{ marginTop: 12 }}>
+            Students who already have cards from this set keep them and their review history — nothing
+            is deleted, and you can restore this later from Show Archived.
+          </div>
+          {promoteError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{promoteError}</div>}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setArchiving(null)}>Cancel</button>
+            <button className="btn btn-danger" disabled={saving} onClick={handleArchive}>{saving ? 'Archiving…' : 'Archive'}</button>
+          </div>
+        </Modal>
+      )}
       <div className="page-header">
         <h1 className="page-title">All CardSets</h1>
+        <button className="btn btn-secondary" onClick={() => setShowArchived((v) => !v)}>
+          {showArchived ? 'Show Active' : 'Show Archived'}
+        </button>
       </div>
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
@@ -78,25 +119,33 @@ export default function AdminCardSetsPage() {
         <table className="table">
           <thead><tr><th>Name</th><th>Status</th><th>Owner</th><th>Cards</th><th>Actions</th></tr></thead>
           <tbody>
-            {css.length === 0 && <tr><td colSpan={5} className="table-empty">No cardsets found.</td></tr>}
+            {css.length === 0 && <tr><td colSpan={5} className="table-empty">{showArchived ? 'No archived cardsets.' : 'No cardsets found.'}</td></tr>}
             {css.map((cs) => (
               <tr key={cs.id}>
-                <td><Link to={`/admin/cardsets/${cs.id}`}>{cs.name}</Link></td>
+                <td>{showArchived ? cs.name : <Link to={`/admin/cardsets/${cs.id}`}>{cs.name}</Link>}</td>
                 <td><span className={`badge badge-${cs.status === 'DEPARTMENTAL' ? 'blue' : 'gray'}`}>{cardSetStatusLabel(cs.status)}</span></td>
                 <td>
-                  {cs.status === 'DEPARTMENTAL' ? cs.subjectGrade?.name ?? '—' : cs.teacher?.user.name ?? '—'}
+                  {cs.status === 'DEPARTMENTAL'
+                    ? (cs.subjectGrade ? <Link to="/admin/subject-grades">{cs.subjectGrade.name}</Link> : '—')
+                    : (cs.teacher ? <Link to="/admin/teachers">{cs.teacher.user.name}</Link> : '—')}
                 </td>
                 <td>{cs._count.cards}</td>
                 <td style={{ display: 'flex', gap: 4 }}>
-                  {cs.status === 'PRIVATE' && (
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => { setSgId(''); setPromoteError(null); setPromoting(cs) }}
-                    >
-                      Promote to Departmental
-                    </button>
+                  {showArchived ? (
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleUnarchive(cs)}>Unarchive</button>
+                  ) : (
+                    <>
+                      {cs.status === 'PRIVATE' && (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => { setSgId(''); setPromoteError(null); setPromoting(cs) }}
+                        >
+                          Promote to Departmental
+                        </button>
+                      )}
+                      <button className="btn btn-danger btn-sm" onClick={() => { setPromoteError(null); setArchiving(cs) }}>Archive</button>
+                    </>
                   )}
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(cs)}>Delete</button>
                 </td>
               </tr>
             ))}
