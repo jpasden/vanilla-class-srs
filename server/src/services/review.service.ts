@@ -502,9 +502,9 @@ export async function finishSession(
 
   const updated = await prisma.reviewSession.findUnique({ where: { id: sessionId } })
   // Recomputed post-close so the student sees whether THIS session actually moved the
-  // count — e.g. a same-calendar-day repeat won't increment sessionsCompleted, and this
-  // is how they find out rather than being left to guess why "homework" still says 1/2.
-  const weeklyGoal = await getWeeklyGoal(prisma, session.deck.enrollment.classId, session.deckId, now)
+  // count — e.g. a too-soon repeat won't increment sessionsCompleted, and passing
+  // sessionId lets the client explain why rather than leaving them to guess.
+  const weeklyGoal = await getWeeklyGoal(prisma, session.deck.enrollment.classId, session.deckId, now, sessionId)
 
   return {
     ok: true,

@@ -89,16 +89,60 @@ export async function hasMetTodaysQuota(
   return count >= 1
 }
 
+/** A qualifying session only counts toward sessionsRequired if it lands on a different
+ * calendar day AND at least this many hours after the previous COUNTED session — either
+ * rule alone still allows a near-midnight pair (e.g. 11:58pm/12:02am) to slip through. */
+const MIN_HOURS_BETWEEN_COUNTED_SESSIONS = 12
+const MIN_MS_BETWEEN_COUNTED_SESSIONS = MIN_HOURS_BETWEEN_COUNTED_SESSIONS * 60 * 60 * 1000
+
+function calendarDayKey(d: Date): string {
+  const copy = new Date(d)
+  copy.setHours(0, 0, 0, 0)
+  return copy.toISOString()
+}
+
 /**
- * Homework progress toward sessionsRequired counts distinct CALENDAR DAYS with
- * at least one qualifying session in the period, not raw session count — two
- * qualifying reviews on the same day (even minutes apart, even straddling
- * 11:59pm/12:01am) still only count once. Forces the "spread out over the
- * week" intent behind sessionsRequired instead of letting it be satisfied in
- * one sitting. Server-local (Asia/Shanghai) calendar day, same boundary as
- * hasMetTodaysQuota/getTodayBounds — homework completion isn't tz-param
- * dependent the way the historical stats charts are.
+ * Walks a deck's qualifying (cardsReviewed >= minCardsPerSession) sessions within a
+ * period, in order, and marks which ones actually count toward sessionsRequired: a
+ * session counts if it's the first qualifying one in the period, or if it lands on a
+ * different calendar day AND >=12h after the previous COUNTED session. This is stricter
+ * than either rule alone — same-day repeats are blocked (the "spread out over the week"
+ * intent), and a near-midnight pair (11:58pm/12:02am) is also blocked despite being a
+ * different calendar day, since it's really the same sitting.
+ *
+ * Server-local (Asia/Shanghai) calendar day, same boundary as hasMetTodaysQuota —
+ * homework completion isn't tz-param dependent the way the historical stats charts are.
  */
+async function walkQualifyingSessions(
+  prisma: PrismaClient,
+  deckId: string,
+  minCardsPerSession: number,
+  periodStart: Date,
+  periodEnd: Date,
+): Promise<{ id: string; endedAt: Date; counted: boolean }[]> {
+  const sessions = await prisma.reviewSession.findMany({
+    where: {
+      deckId,
+      endedAt: { gte: periodStart, lt: periodEnd },
+      cardsReviewed: { gte: minCardsPerSession },
+    },
+    orderBy: { endedAt: 'asc' },
+    select: { id: true, endedAt: true },
+  })
+
+  const result: { id: string; endedAt: Date; counted: boolean }[] = []
+  let lastCounted: Date | null = null
+  for (const s of sessions) {
+    if (!s.endedAt) continue
+    const isNewDay = !lastCounted || calendarDayKey(s.endedAt) !== calendarDayKey(lastCounted)
+    const isFarEnough = !lastCounted || s.endedAt.getTime() - lastCounted.getTime() >= MIN_MS_BETWEEN_COUNTED_SESSIONS
+    const counted = !lastCounted || (isNewDay && isFarEnough)
+    if (counted) lastCounted = s.endedAt
+    result.push({ id: s.id, endedAt: s.endedAt, counted })
+  }
+  return result
+}
+
 export async function countQualifyingDays(
   prisma: PrismaClient,
   deckId: string,
@@ -106,22 +150,8 @@ export async function countQualifyingDays(
   periodStart: Date,
   periodEnd: Date,
 ): Promise<number> {
-  const sessions = await prisma.reviewSession.findMany({
-    where: {
-      deckId,
-      endedAt: { gte: periodStart, lt: periodEnd },
-      cardsReviewed: { gte: minCardsPerSession },
-    },
-    select: { endedAt: true },
-  })
-  const days = new Set<string>()
-  for (const s of sessions) {
-    if (!s.endedAt) continue
-    const d = new Date(s.endedAt)
-    d.setHours(0, 0, 0, 0)
-    days.add(d.toISOString())
-  }
-  return days.size
+  const walked = await walkQualifyingSessions(prisma, deckId, minCardsPerSession, periodStart, periodEnd)
+  return walked.filter((s) => s.counted).length
 }
 
 export type StudyFocus =
@@ -170,6 +200,10 @@ export interface WeeklyGoal {
   sessionsCompleted: number
   daysRemaining: number
   cardSetFocus: StudyFocus
+  /** Set only when getWeeklyGoal is called with justFinishedSessionId: did that specific
+   * session count toward sessionsCompleted? null if there's no active requirement, or the
+   * session wasn't a qualifying one at all (too few cards). */
+  justFinishedSessionCounted?: boolean | null
 }
 
 /**
@@ -178,12 +212,18 @@ export interface WeeklyGoal {
  * across stats.student.ts, stats.teacher-student.ts, and stats.teacher.ts —
  * now also used by finishSession so a student sees updated progress the
  * moment a session ends, not just on a separate stats page.
+ *
+ * Pass justFinishedSessionId (from finishSession) to also learn whether that
+ * particular session counted — lets the client explain a same-day or
+ * too-soon-after-last-one session that didn't move the count, instead of
+ * leaving the student to guess why.
  */
 export async function getWeeklyGoal(
   prisma: PrismaClient,
   classId: string,
   deckId: string,
   now: Date = new Date(),
+  justFinishedSessionId?: string,
 ): Promise<WeeklyGoal | null> {
   const hwReq = await prisma.homeworkRequirement.findFirst({
     where: { classId, isActive: true },
@@ -191,9 +231,13 @@ export async function getWeeklyGoal(
   if (!hwReq) return null
 
   const { periodStart, periodEnd } = getPeriodBounds(hwReq, now)
-  const sessionsCompleted = await countQualifyingDays(prisma, deckId, hwReq.minCardsPerSession, periodStart, periodEnd)
+  const walked = await walkQualifyingSessions(prisma, deckId, hwReq.minCardsPerSession, periodStart, periodEnd)
+  const sessionsCompleted = walked.filter((s) => s.counted).length
   const daysRemaining = Math.max(0, Math.ceil((periodEnd.getTime() - now.getTime()) / 86_400_000))
   const cardSetFocus = await getAutoStudyFocus(prisma, classId, deckId, now)
+  const justFinishedSessionCounted = justFinishedSessionId
+    ? walked.find((s) => s.id === justFinishedSessionId)?.counted ?? null
+    : undefined
 
   return {
     sessionsRequired: hwReq.sessionsRequired,
@@ -202,5 +246,6 @@ export async function getWeeklyGoal(
     sessionsCompleted,
     daysRemaining,
     cardSetFocus,
+    ...(justFinishedSessionId ? { justFinishedSessionCounted } : {}),
   }
 }

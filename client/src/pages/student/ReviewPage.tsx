@@ -35,6 +35,7 @@ interface WeeklyGoal {
   sessionsCompleted: number
   daysRemaining: number
   cardSetFocus: StudyFocus
+  justFinishedSessionCounted?: boolean | null
 }
 
 interface StatsSummary {
@@ -591,11 +592,18 @@ export default function ReviewPage() {
             </div>
           )}
           {sessionResult?.weeklyGoal && (
-            <p style={{ fontSize: 'var(--text-base)', textAlign: 'center', marginTop: 8, position: 'relative', zIndex: 2 }}>
-              {sessionResult.weeklyGoal.sessionsCompleted >= sessionResult.weeklyGoal.sessionsRequired
-                ? <>🎉 Homework done for this week — {sessionResult.weeklyGoal.sessionsCompleted}/{sessionResult.weeklyGoal.sessionsRequired} sessions.</>
-                : <>Homework progress: {sessionResult.weeklyGoal.sessionsCompleted}/{sessionResult.weeklyGoal.sessionsRequired} sessions this week.</>}
-            </p>
+            <div style={{ marginTop: 8, position: 'relative', zIndex: 2 }}>
+              <p style={{ fontSize: 'var(--text-base)', textAlign: 'center' }}>
+                {sessionResult.weeklyGoal.sessionsCompleted >= sessionResult.weeklyGoal.sessionsRequired
+                  ? <>🎉 Homework done for this week — {sessionResult.weeklyGoal.sessionsCompleted}/{sessionResult.weeklyGoal.sessionsRequired} sessions.</>
+                  : <>{sessionResult.weeklyGoal.sessionsCompleted} of {sessionResult.weeklyGoal.sessionsRequired} sessions done this week.</>}
+              </p>
+              {sessionResult.weeklyGoal.justFinishedSessionCounted === false && (
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 4 }}>
+                  (You need to space your reviews out more for them to count for the assignment. Best to wait about 24 hours.)
+                </p>
+              )}
+            </div>
           )}
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, position: 'relative', zIndex: 2 }}>
             {weakCards.length > 0 && (

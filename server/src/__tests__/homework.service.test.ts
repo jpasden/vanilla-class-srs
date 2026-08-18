@@ -93,18 +93,20 @@ describe('hasMetTodaysQuota', () => {
 })
 
 describe('countQualifyingDays', () => {
-  function makePrisma(endedAtValues: (Date | null)[]) {
+  function makePrisma(endedAtValues: Date[]) {
     return {
       reviewSession: {
-        findMany: vi.fn().mockResolvedValue(endedAtValues.map((endedAt) => ({ endedAt }))),
+        findMany: vi.fn().mockResolvedValue(
+          endedAtValues.map((endedAt, i) => ({ id: `session-${i}`, endedAt })),
+        ),
       },
     }
   }
 
   it('counts two qualifying sessions on the same day as one', async () => {
     const prisma = makePrisma([
-      new Date(2026, 7, 17, 23, 45), // Monday 11:45pm
       new Date(2026, 7, 17, 8, 0), // Monday 8:00am
+      new Date(2026, 7, 17, 23, 45), // Monday 11:45pm
     ])
     const result = await countQualifyingDays(
       prisma as any,
@@ -116,10 +118,40 @@ describe('countQualifyingDays', () => {
     expect(result).toBe(1)
   })
 
-  it('does not let an 11:45pm + 12:01am pair across midnight count as the same day', async () => {
+  it('blocks an 11:45pm + 12:01am pair across midnight — different day, but well under 12h apart', async () => {
     const prisma = makePrisma([
       new Date(2026, 7, 17, 23, 45), // Monday 11:45pm
-      new Date(2026, 7, 18, 0, 1), // Tuesday 12:01am
+      new Date(2026, 7, 18, 0, 1), // Tuesday 12:01am — only 16 minutes later
+    ])
+    const result = await countQualifyingDays(
+      prisma as any,
+      'deck-1',
+      20,
+      new Date(2026, 7, 17),
+      new Date(2026, 7, 24),
+    )
+    expect(result).toBe(1)
+  })
+
+  it('blocks a different-day pair that is still under 12h apart (e.g. 11pm to 8am)', async () => {
+    const prisma = makePrisma([
+      new Date(2026, 7, 17, 23, 0), // Monday 11:00pm
+      new Date(2026, 7, 18, 8, 0), // Tuesday 8:00am — 9h later, different day
+    ])
+    const result = await countQualifyingDays(
+      prisma as any,
+      'deck-1',
+      20,
+      new Date(2026, 7, 17),
+      new Date(2026, 7, 24),
+    )
+    expect(result).toBe(1)
+  })
+
+  it('counts a different-day pair that is >=12h apart', async () => {
+    const prisma = makePrisma([
+      new Date(2026, 7, 17, 8, 0), // Monday 8:00am
+      new Date(2026, 7, 18, 20, 0), // Tuesday 8:00pm — 36h later
     ])
     const result = await countQualifyingDays(
       prisma as any,
@@ -131,7 +163,7 @@ describe('countQualifyingDays', () => {
     expect(result).toBe(2)
   })
 
-  it('counts sessions spread across distinct days as that many days', async () => {
+  it('counts sessions spread across distinct days, each >=12h apart', async () => {
     const prisma = makePrisma([
       new Date(2026, 7, 17, 9, 0),
       new Date(2026, 7, 19, 9, 0),
@@ -238,7 +270,7 @@ describe('getWeeklyGoal', () => {
       },
       reviewSession: {
         findMany: vi.fn().mockResolvedValue([
-          { endedAt: new Date(2026, 7, 17, 9, 0) }, // Monday — one qualifying day so far
+          { id: 'session-1', endedAt: new Date(2026, 7, 17, 9, 0) }, // Monday — one qualifying day so far
         ]),
       },
     }
@@ -251,5 +283,71 @@ describe('getWeeklyGoal', () => {
       daysRemaining: 5, // through end of Sunday from Wednesday 10am
       cardSetFocus: { mode: 'all' },
     })
+  })
+
+  it('reports justFinishedSessionCounted:false when the just-finished session was blocked by the spacing rule', async () => {
+    const now = new Date(2026, 7, 18, 8, 30) // Tuesday 8:30am
+    const prisma = {
+      homeworkRequirement: {
+        findFirst: vi.fn().mockResolvedValue({
+          activeFrom: new Date(2026, 0, 1),
+          periodDays: DEFAULT_PERIOD_DAYS,
+          sessionsRequired: 2,
+          minCardsPerSession: DEFAULT_MIN_CARDS_PER_SESSION,
+          cardSets: [],
+        }),
+      },
+      reviewSession: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'session-1', endedAt: new Date(2026, 7, 17, 23, 0) }, // Monday 11pm — counted
+          { id: 'session-2', endedAt: now }, // Tuesday 8:30am — 9.5h later, different day but too soon
+        ]),
+      },
+    }
+    const result = await getWeeklyGoal(prisma as any, 'class-1', 'deck-1', now, 'session-2')
+    expect(result?.sessionsCompleted).toBe(1)
+    expect(result?.justFinishedSessionCounted).toBe(false)
+  })
+
+  it('reports justFinishedSessionCounted:true when the just-finished session cleared the spacing rule', async () => {
+    const now = new Date(2026, 7, 18, 20, 0) // Tuesday 8pm
+    const prisma = {
+      homeworkRequirement: {
+        findFirst: vi.fn().mockResolvedValue({
+          activeFrom: new Date(2026, 0, 1),
+          periodDays: DEFAULT_PERIOD_DAYS,
+          sessionsRequired: 2,
+          minCardsPerSession: DEFAULT_MIN_CARDS_PER_SESSION,
+          cardSets: [],
+        }),
+      },
+      reviewSession: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'session-1', endedAt: new Date(2026, 7, 17, 8, 0) }, // Monday 8am — counted
+          { id: 'session-2', endedAt: now }, // Tuesday 8pm — 36h later
+        ]),
+      },
+    }
+    const result = await getWeeklyGoal(prisma as any, 'class-1', 'deck-1', now, 'session-2')
+    expect(result?.sessionsCompleted).toBe(2)
+    expect(result?.justFinishedSessionCounted).toBe(true)
+  })
+
+  it('omits justFinishedSessionCounted entirely when no sessionId is passed', async () => {
+    const now = new Date(2026, 7, 19, 10, 0)
+    const prisma = {
+      homeworkRequirement: {
+        findFirst: vi.fn().mockResolvedValue({
+          activeFrom: new Date(2026, 0, 1),
+          periodDays: DEFAULT_PERIOD_DAYS,
+          sessionsRequired: 2,
+          minCardsPerSession: DEFAULT_MIN_CARDS_PER_SESSION,
+          cardSets: [],
+        }),
+      },
+      reviewSession: { findMany: vi.fn().mockResolvedValue([]) },
+    }
+    const result = await getWeeklyGoal(prisma as any, 'class-1', 'deck-1', now)
+    expect(result).not.toHaveProperty('justFinishedSessionCounted')
   })
 })
