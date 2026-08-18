@@ -10,7 +10,7 @@ import { Request, Response } from 'express'
 import { Role } from '@prisma/client'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
-import { getPeriodBounds, getAutoStudyFocus } from '../services/homework.service'
+import { getPeriodBounds, getAutoStudyFocus, countQualifyingDays } from '../services/homework.service'
 
 const router = asyncRouter({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -125,9 +125,13 @@ router.get('/summary', async (req: Request, res: Response) => {
   let weeklyGoal = null
   if (hwReq) {
     const { periodStart: currentPeriodStart, periodEnd: currentPeriodEnd } = getPeriodBounds(hwReq, now)
-    const sessionsCompleted = await prisma.reviewSession.count({
-      where: { deckId, endedAt: { gte: currentPeriodStart, lt: currentPeriodEnd }, cardsReviewed: { gte: hwReq.minCardsPerSession } },
-    })
+    const sessionsCompleted = await countQualifyingDays(
+      prisma,
+      deckId,
+      hwReq.minCardsPerSession,
+      currentPeriodStart,
+      currentPeriodEnd,
+    )
     const daysRemaining = Math.max(0, Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / 86_400_000))
     const cardSetFocus = await getAutoStudyFocus(prisma, enrollment.classId, deckId, now)
     weeklyGoal = {

@@ -5,6 +5,7 @@ import {
   getPeriodBounds,
   hasMetTodaysQuota,
   getAutoStudyFocus,
+  countQualifyingDays,
   DEFAULT_MIN_CARDS_PER_SESSION,
   DEFAULT_PERIOD_DAYS,
 } from '../services/homework.service'
@@ -87,6 +88,74 @@ describe('hasMetTodaysQuota', () => {
     const prisma = makePrisma(0)
     const result = await hasMetTodaysQuota(prisma as any, 'deck-1', 20, new Date())
     expect(result).toBe(false)
+  })
+})
+
+describe('countQualifyingDays', () => {
+  function makePrisma(endedAtValues: (Date | null)[]) {
+    return {
+      reviewSession: {
+        findMany: vi.fn().mockResolvedValue(endedAtValues.map((endedAt) => ({ endedAt }))),
+      },
+    }
+  }
+
+  it('counts two qualifying sessions on the same day as one', async () => {
+    const prisma = makePrisma([
+      new Date(2026, 7, 17, 23, 45), // Monday 11:45pm
+      new Date(2026, 7, 17, 8, 0), // Monday 8:00am
+    ])
+    const result = await countQualifyingDays(
+      prisma as any,
+      'deck-1',
+      20,
+      new Date(2026, 7, 17),
+      new Date(2026, 7, 24),
+    )
+    expect(result).toBe(1)
+  })
+
+  it('does not let an 11:45pm + 12:01am pair across midnight count as the same day', async () => {
+    const prisma = makePrisma([
+      new Date(2026, 7, 17, 23, 45), // Monday 11:45pm
+      new Date(2026, 7, 18, 0, 1), // Tuesday 12:01am
+    ])
+    const result = await countQualifyingDays(
+      prisma as any,
+      'deck-1',
+      20,
+      new Date(2026, 7, 17),
+      new Date(2026, 7, 24),
+    )
+    expect(result).toBe(2)
+  })
+
+  it('counts sessions spread across distinct days as that many days', async () => {
+    const prisma = makePrisma([
+      new Date(2026, 7, 17, 9, 0),
+      new Date(2026, 7, 19, 9, 0),
+      new Date(2026, 7, 21, 9, 0),
+    ])
+    const result = await countQualifyingDays(
+      prisma as any,
+      'deck-1',
+      20,
+      new Date(2026, 7, 17),
+      new Date(2026, 7, 24),
+    )
+    expect(result).toBe(3)
+  })
+
+  it('returns 0 when there are no qualifying sessions', async () => {
+    const prisma = makePrisma([])
+    const result = await countQualifyingDays(
+      prisma as any,
+      'deck-1',
+      20,
+      new Date(2026, 7, 17),
+      new Date(2026, 7, 24),
+    )
+    expect(result).toBe(0)
   })
 })
 

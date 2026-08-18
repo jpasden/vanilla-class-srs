@@ -15,7 +15,7 @@ import { Request, Response } from 'express'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { labelsForClass } from '../services/departmentLabels.service'
-import { getPeriodBounds } from '../services/homework.service'
+import { getPeriodBounds, countQualifyingDays } from '../services/homework.service'
 
 const router = asyncRouter({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -339,13 +339,13 @@ router.get('/', async (req: Request, res: Response) => {
       enrollments.map(async (enr) => {
         if (!enr.deck) return { studentId: enr.student.id, name: enr.student.user.name, sessionsCompleted: 0, status: 'NOT_MET' as const }
 
-        const sessionsCompleted = await prisma.reviewSession.count({
-          where: {
-            deckId: enr.deck.id,
-            endedAt: { gte: currentPeriodStart, lt: currentPeriodEnd },
-            cardsReviewed: { gte: hwReq.minCardsPerSession },
-          },
-        })
+        const sessionsCompleted = await countQualifyingDays(
+          prisma,
+          enr.deck.id,
+          hwReq.minCardsPerSession,
+          currentPeriodStart,
+          currentPeriodEnd,
+        )
 
         let status: 'MET' | 'AT_RISK' | 'NOT_MET'
         if (sessionsCompleted >= hwReq.sessionsRequired) {

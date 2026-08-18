@@ -89,6 +89,41 @@ export async function hasMetTodaysQuota(
   return count >= 1
 }
 
+/**
+ * Homework progress toward sessionsRequired counts distinct CALENDAR DAYS with
+ * at least one qualifying session in the period, not raw session count — two
+ * qualifying reviews on the same day (even minutes apart, even straddling
+ * 11:59pm/12:01am) still only count once. Forces the "spread out over the
+ * week" intent behind sessionsRequired instead of letting it be satisfied in
+ * one sitting. Server-local (Asia/Shanghai) calendar day, same boundary as
+ * hasMetTodaysQuota/getTodayBounds — homework completion isn't tz-param
+ * dependent the way the historical stats charts are.
+ */
+export async function countQualifyingDays(
+  prisma: PrismaClient,
+  deckId: string,
+  minCardsPerSession: number,
+  periodStart: Date,
+  periodEnd: Date,
+): Promise<number> {
+  const sessions = await prisma.reviewSession.findMany({
+    where: {
+      deckId,
+      endedAt: { gte: periodStart, lt: periodEnd },
+      cardsReviewed: { gte: minCardsPerSession },
+    },
+    select: { endedAt: true },
+  })
+  const days = new Set<string>()
+  for (const s of sessions) {
+    if (!s.endedAt) continue
+    const d = new Date(s.endedAt)
+    d.setHours(0, 0, 0, 0)
+    days.add(d.toISOString())
+  }
+  return days.size
+}
+
 export type StudyFocus =
   | null // no active homework requirement for this class
   | { mode: 'all' }
