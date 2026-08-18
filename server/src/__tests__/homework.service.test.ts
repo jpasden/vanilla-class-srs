@@ -6,6 +6,7 @@ import {
   hasMetTodaysQuota,
   getAutoStudyFocus,
   countQualifyingDays,
+  getWeeklyGoal,
   DEFAULT_MIN_CARDS_PER_SESSION,
   DEFAULT_PERIOD_DAYS,
 } from '../services/homework.service'
@@ -211,5 +212,44 @@ describe('getAutoStudyFocus', () => {
     )
     const result = await getAutoStudyFocus(prisma as any, 'class-1', 'deck-1')
     expect(result).toEqual({ mode: 'all' })
+  })
+})
+
+describe('getWeeklyGoal', () => {
+  it('returns null when there is no active homework requirement', async () => {
+    const prisma = {
+      homeworkRequirement: { findFirst: vi.fn().mockResolvedValue(null) },
+    }
+    const result = await getWeeklyGoal(prisma as any, 'class-1', 'deck-1', new Date(2026, 7, 19))
+    expect(result).toBeNull()
+  })
+
+  it('assembles requirement + live progress from a single hwReq row', async () => {
+    const now = new Date(2026, 7, 19, 10, 0) // Wednesday
+    const prisma = {
+      homeworkRequirement: {
+        findFirst: vi.fn().mockResolvedValue({
+          activeFrom: new Date(2026, 0, 1),
+          periodDays: DEFAULT_PERIOD_DAYS,
+          sessionsRequired: 2,
+          minCardsPerSession: DEFAULT_MIN_CARDS_PER_SESSION,
+          cardSets: [],
+        }),
+      },
+      reviewSession: {
+        findMany: vi.fn().mockResolvedValue([
+          { endedAt: new Date(2026, 7, 17, 9, 0) }, // Monday — one qualifying day so far
+        ]),
+      },
+    }
+    const result = await getWeeklyGoal(prisma as any, 'class-1', 'deck-1', now)
+    expect(result).toEqual({
+      sessionsRequired: 2,
+      minCardsPerSession: DEFAULT_MIN_CARDS_PER_SESSION,
+      periodDays: DEFAULT_PERIOD_DAYS,
+      sessionsCompleted: 1,
+      daysRemaining: 5, // through end of Sunday from Wednesday 10am
+      cardSetFocus: { mode: 'all' },
+    })
   })
 })

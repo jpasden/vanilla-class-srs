@@ -10,6 +10,7 @@
 import { PrismaClient, FSRSState } from '@prisma/client'
 import { schedule } from '@vanilla-srs/shared/fsrs'
 import type { FSRSParams } from '@vanilla-srs/shared/fsrs'
+import { getWeeklyGoal, WeeklyGoal } from './homework.service'
 
 // Caps how many due/review cards appear in a single session — a UX/session-length decision,
 // not an FSRS scheduling parameter, so it lives here rather than in the configurable
@@ -482,7 +483,10 @@ export async function finishSession(
   studentId: string,
   sessionId: string,
   now: Date = new Date(),
-): Promise<{ ok: boolean; cardsReviewed: number; accuracyRate: number | null } | { error: string; status: number }> {
+): Promise<
+  | { ok: boolean; cardsReviewed: number; accuracyRate: number | null; weeklyGoal: WeeklyGoal | null }
+  | { error: string; status: number }
+> {
   const session = await prisma.reviewSession.findUnique({
     where: { id: sessionId },
     include: { deck: { include: { enrollment: true } } },
@@ -497,9 +501,15 @@ export async function finishSession(
   await closeSession(prisma, sessionId, now)
 
   const updated = await prisma.reviewSession.findUnique({ where: { id: sessionId } })
+  // Recomputed post-close so the student sees whether THIS session actually moved the
+  // count — e.g. a same-calendar-day repeat won't increment sessionsCompleted, and this
+  // is how they find out rather than being left to guess why "homework" still says 1/2.
+  const weeklyGoal = await getWeeklyGoal(prisma, session.deck.enrollment.classId, session.deckId, now)
+
   return {
     ok: true,
     cardsReviewed: updated?.cardsReviewed ?? 0,
     accuracyRate: updated?.accuracyRate ?? null,
+    weeklyGoal,
   }
 }

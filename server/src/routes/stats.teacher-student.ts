@@ -10,7 +10,7 @@ import { Request, Response } from 'express'
 import { Role } from '@prisma/client'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
-import { getPeriodBounds, getAutoStudyFocus, countQualifyingDays } from '../services/homework.service'
+import { getWeeklyGoal } from '../services/homework.service'
 
 const router = asyncRouter({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -122,27 +122,7 @@ router.get('/summary', async (req: Request, res: Response) => {
 
   const mostCardsInDay = Object.values(cardsPerDay).reduce((max, v) => Math.max(max, v), 0)
 
-  let weeklyGoal = null
-  if (hwReq) {
-    const { periodStart: currentPeriodStart, periodEnd: currentPeriodEnd } = getPeriodBounds(hwReq, now)
-    const sessionsCompleted = await countQualifyingDays(
-      prisma,
-      deckId,
-      hwReq.minCardsPerSession,
-      currentPeriodStart,
-      currentPeriodEnd,
-    )
-    const daysRemaining = Math.max(0, Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / 86_400_000))
-    const cardSetFocus = await getAutoStudyFocus(prisma, enrollment.classId, deckId, now)
-    weeklyGoal = {
-      sessionsRequired: hwReq.sessionsRequired,
-      minCardsPerSession: hwReq.minCardsPerSession,
-      periodDays: hwReq.periodDays,
-      sessionsCompleted,
-      daysRemaining,
-      cardSetFocus,
-    }
-  }
+  const weeklyGoal = await getWeeklyGoal(prisma, enrollment.classId, deckId, now)
 
   res.json({ deckBreakdown: breakdown, streak: { current: currentStreak, longest, mostCardsInDay }, weeklyGoal })
 })

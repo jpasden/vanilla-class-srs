@@ -162,3 +162,45 @@ export async function getAutoStudyFocus(
     cardSetNames: hwReq.cardSets.map((c) => c.cardSet.name),
   }
 }
+
+export interface WeeklyGoal {
+  sessionsRequired: number
+  minCardsPerSession: number
+  periodDays: number
+  sessionsCompleted: number
+  daysRemaining: number
+  cardSetFocus: StudyFocus
+}
+
+/**
+ * The full weeklyGoal payload shown to students/teachers: requirement plus
+ * live progress. Pulled into one helper since it was previously copy-pasted
+ * across stats.student.ts, stats.teacher-student.ts, and stats.teacher.ts —
+ * now also used by finishSession so a student sees updated progress the
+ * moment a session ends, not just on a separate stats page.
+ */
+export async function getWeeklyGoal(
+  prisma: PrismaClient,
+  classId: string,
+  deckId: string,
+  now: Date = new Date(),
+): Promise<WeeklyGoal | null> {
+  const hwReq = await prisma.homeworkRequirement.findFirst({
+    where: { classId, isActive: true },
+  })
+  if (!hwReq) return null
+
+  const { periodStart, periodEnd } = getPeriodBounds(hwReq, now)
+  const sessionsCompleted = await countQualifyingDays(prisma, deckId, hwReq.minCardsPerSession, periodStart, periodEnd)
+  const daysRemaining = Math.max(0, Math.ceil((periodEnd.getTime() - now.getTime()) / 86_400_000))
+  const cardSetFocus = await getAutoStudyFocus(prisma, classId, deckId, now)
+
+  return {
+    sessionsRequired: hwReq.sessionsRequired,
+    minCardsPerSession: hwReq.minCardsPerSession,
+    periodDays: hwReq.periodDays,
+    sessionsCompleted,
+    daysRemaining,
+    cardSetFocus,
+  }
+}

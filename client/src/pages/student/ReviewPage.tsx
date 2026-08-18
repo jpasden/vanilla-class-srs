@@ -102,7 +102,7 @@ export default function ReviewPage() {
   const [error, setError] = useState<string | null>(null)
   const [startTime, setStartTime] = useState<number>(0)
   const [completedCount, setCompletedCount] = useState(0)
-  const [sessionResult, setSessionResult] = useState<{ cardsReviewed: number; accuracyRate: number | null } | null>(null)
+  const [sessionResult, setSessionResult] = useState<{ cardsReviewed: number; accuracyRate: number | null; weeklyGoal: WeeklyGoal | null } | null>(null)
   const [headline, setHeadline] = useState('')
   const [confirmFinish, setConfirmFinish] = useState(false)
   // Cards graded < 3 this session, for "Keep Studying" re-drill
@@ -122,7 +122,7 @@ export default function ReviewPage() {
   // only applies to the next session started — never persisted, re-derived
   // from the homework default on every load.
   const [selectedFocus, setSelectedFocus] = useState<string>('')
-  const { data: summary } = useApi<StatsSummary>(
+  const { data: summary, reload: reloadSummary } = useApi<StatsSummary>(
     () => active
       ? api.get<StatsSummary>(`/students/stats/summary?enrollmentId=${active.enrollmentId}`)
       : Promise.resolve({ weeklyGoal: null, deckCardSets: [] }),
@@ -286,14 +286,15 @@ export default function ReviewPage() {
 
   const finishSession = useCallback(async (sessionId: string, reviewed?: number) => {
     try {
-      const result = await api.post<{ cardsReviewed: number; accuracyRate: number | null }>('/students/review/finish', { sessionId })
+      const result = await api.post<{ cardsReviewed: number; accuracyRate: number | null; weeklyGoal: WeeklyGoal | null }>('/students/review/finish', { sessionId })
       setSessionResult(result)
       setHeadline(pickRandom(ENCOURAGEMENT[accuracyTier(result.accuracyRate)]))
       setPhase('done')
+      reloadSummary()
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to finish session')
     }
-  }, [])
+  }, [reloadSummary])
 
   const handleFinishEarly = () => setConfirmFinish(true)
 
@@ -387,9 +388,12 @@ export default function ReviewPage() {
             {summary?.weeklyGoal && (
               <>
                 <p style={{ fontSize: 'var(--text-base)', textAlign: 'center' }}>
-                  <strong>This Week's Homework Assignment:</strong>{' '}
-                  {summary.weeklyGoal.sessionsRequired} study session{summary.weeklyGoal.sessionsRequired !== 1 ? 's' : ''} of{' '}
-                  {summary.weeklyGoal.minCardsPerSession} cards.
+                  <strong>
+                    {summary.weeklyGoal.sessionsCompleted >= summary.weeklyGoal.sessionsRequired ? '🎉 ' : ''}
+                    {summary.weeklyGoal.sessionsCompleted} of {summary.weeklyGoal.sessionsRequired} session
+                    {summary.weeklyGoal.sessionsRequired !== 1 ? 's' : ''} done this week
+                  </strong>
+                  {' — '}{summary.weeklyGoal.minCardsPerSession} cards each.
                 </p>
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 8 }}>
                   It only takes about 5 minutes for each review session. You got this!
@@ -585,6 +589,13 @@ export default function ReviewPage() {
                 <div className="review-big-stat-label">Accuracy</div>
               </div>
             </div>
+          )}
+          {sessionResult?.weeklyGoal && (
+            <p style={{ fontSize: 'var(--text-base)', textAlign: 'center', marginTop: 8, position: 'relative', zIndex: 2 }}>
+              {sessionResult.weeklyGoal.sessionsCompleted >= sessionResult.weeklyGoal.sessionsRequired
+                ? <>🎉 Homework done for this week — {sessionResult.weeklyGoal.sessionsCompleted}/{sessionResult.weeklyGoal.sessionsRequired} sessions.</>
+                : <>Homework progress: {sessionResult.weeklyGoal.sessionsCompleted}/{sessionResult.weeklyGoal.sessionsRequired} sessions this week.</>}
+            </p>
           )}
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, position: 'relative', zIndex: 2 }}>
             {weakCards.length > 0 && (
