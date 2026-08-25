@@ -15,6 +15,7 @@ import { labelsForCardSet } from '../services/departmentLabels.service'
 import { getStudentAdditions } from '../services/studentAdditions.service'
 import {
   getLastCompletedWeekBounds,
+  getCalendarWeekBounds,
   getClassCompliance,
   DEFAULT_MIN_CARDS_PER_SESSION,
   DEFAULT_PERIOD_DAYS,
@@ -1275,6 +1276,100 @@ router.get('/student-additions', async (req: Request, res: Response) => {
 
   const additions = await getStudentAdditions(prisma, classIds, start, end)
   res.json({ additions, rangeStart: start, rangeEnd: end })
+})
+
+// ─────────────────────────────────────────────
+// Class rollup — one row per class, for the Stats page overview table
+// ─────────────────────────────────────────────
+
+interface ClassRollupRow {
+  classId: string
+  className: string
+  subjectGradeId: string
+  subjectGradeName: string
+  enrolledCount: number
+  homeworkCompletionPct: number | null
+  studentAddedCount: number
+  accuracyRate: number | null
+  reviewsThisWeek: number
+}
+
+// GET /api/admin/class-rollup — one row per non-archived class, grouped by
+// Subject Grade client-side. Powers the Stats page's overview table.
+router.get('/class-rollup', async (req: Request, res: Response) => {
+  const now = new Date()
+  const classes = await prisma.class.findMany({
+    where: { archivedAt: null },
+    orderBy: { name: 'asc' },
+    include: {
+      subjectGrade: { select: { id: true, name: true } },
+      _count: { select: { enrollments: true } },
+    },
+  })
+
+  // Default date range for the student-added-cards count — matches the
+  // Student Additions table's own default so the two sections of the page
+  // agree without the admin having to think about it.
+  const additionsStartParam = req.query.start as string | undefined
+  const additionsEndParam = req.query.end as string | undefined
+  let additionsStart: Date
+  let additionsEnd: Date
+  if (additionsStartParam && additionsEndParam) {
+    additionsStart = new Date(additionsStartParam)
+    additionsEnd = new Date(additionsEndParam)
+  } else {
+    const bounds = getLastCompletedWeekBounds(now)
+    additionsStart = bounds.periodStart
+    additionsEnd = bounds.periodEnd
+  }
+
+  const { periodStart: weekStart, periodEnd: weekEnd } = getCalendarWeekBounds(now)
+  const accuracySince = new Date(now)
+  accuracySince.setDate(accuracySince.getDate() - 30)
+
+  const rows: ClassRollupRow[] = await Promise.all(
+    classes.map(async (cls) => {
+      const [compliance, reviewsThisWeek, accuracySessions, studentAdditionCount] = await Promise.all([
+        getClassCompliance(prisma, cls.id, now),
+        prisma.reviewSession.count({
+          where: { endedAt: { gte: weekStart, lt: weekEnd }, deck: { enrollment: { classId: cls.id } } },
+        }),
+        prisma.reviewSession.findMany({
+          where: { endedAt: { gte: accuracySince }, accuracyRate: { not: null }, deck: { enrollment: { classId: cls.id } } },
+          select: { accuracyRate: true },
+        }),
+        prisma.cardInstance.count({
+          where: {
+            origin: 'STUDENT_ADDED',
+            createdAt: { gte: additionsStart, lt: additionsEnd },
+            deck: { enrollment: { classId: cls.id } },
+          },
+        }),
+      ])
+
+      const homeworkCompletionPct = compliance
+        ? (compliance.students.filter((s) => s.status === 'MET').length / Math.max(1, compliance.students.length)) * 100
+        : null
+
+      const accuracyRate = accuracySessions.length > 0
+        ? accuracySessions.reduce((sum, s) => sum + (s.accuracyRate ?? 0), 0) / accuracySessions.length
+        : null
+
+      return {
+        classId: cls.id,
+        className: cls.name,
+        subjectGradeId: cls.subjectGrade.id,
+        subjectGradeName: cls.subjectGrade.name,
+        enrolledCount: cls._count.enrollments,
+        homeworkCompletionPct,
+        studentAddedCount: studentAdditionCount,
+        accuracyRate,
+        reviewsThisWeek,
+      }
+    })
+  )
+
+  res.json({ rows, additionsRangeStart: additionsStart, additionsRangeEnd: additionsEnd })
 })
 
 export default router
