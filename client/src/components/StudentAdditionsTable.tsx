@@ -40,9 +40,10 @@ export default function StudentAdditionsTable({
   classOptions?: { id: string; name: string }[]
 }) {
   const [searchParams] = useSearchParams()
-  // Lets a link like /admin/stats?classId=abc#student-additions pre-filter
-  // this table on load (e.g. from the class rollup table above it) —
-  // read once on mount, not kept in sync with further URL changes.
+  // Lets a link like /admin/stats/student-additions?classId=abc pre-filter
+  // this table on load (e.g. from the class rollup table's Student
+  // Additions column) — read once on mount, not kept in sync with further
+  // URL changes. The admin can still switch back to "All classes" here.
   const [classId, setClassId] = useState(searchParams.get('classId') ?? '')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')

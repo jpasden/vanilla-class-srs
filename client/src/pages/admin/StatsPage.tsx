@@ -2,9 +2,6 @@ import { Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../../hooks/useApi'
 import { api } from '../../utils/api'
-import StudentAdditionsTable from '../../components/StudentAdditionsTable'
-
-interface ClassOption { id: string; name: string }
 
 interface ClassRollupRow {
   classId: string
@@ -27,7 +24,6 @@ function pct(v: number | null): string {
 }
 
 export default function AdminStatsPage() {
-  const { data: classes } = useApi<ClassOption[]>(() => api.get('/admin/classes'))
   const { data: rollup, loading: rollupLoading, error: rollupError } = useApi<RollupResponse>(
     () => api.get('/admin/class-rollup'),
   )
@@ -83,7 +79,7 @@ export default function AdminStatsPage() {
                           : <Link to={`/admin/classes/${row.classId}?tab=homework`}>{pct(row.homeworkCompletionPct)}</Link>}
                       </td>
                       <td>
-                        <Link to={`/admin/stats?classId=${row.classId}#student-additions`}>{row.studentAddedCount}</Link>
+                        <Link to={`/admin/stats/student-additions?classId=${row.classId}`}>{row.studentAddedCount}</Link>
                       </td>
                       <td>{row.accuracyRate === null ? '—' : pct(row.accuracyRate * 100)}</td>
                       <td>{row.reviewsThisWeek}</td>
@@ -95,14 +91,6 @@ export default function AdminStatsPage() {
           </table>
         </div>
       )}
-
-      <h2 id="student-additions" style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Student-Added Cards</h2>
-      <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 16 }}>
-        Every vocabulary card students have personally added to their own decks, across the
-        whole school. Defaults to last week; filter by date range or a specific class, and
-        export the current view as CSV.
-      </p>
-      <StudentAdditionsTable fetchUrl="/admin/student-additions" classOptions={classes ?? []} />
     </div>
   )
 }
