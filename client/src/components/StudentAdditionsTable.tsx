@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../utils/api'
 import { useApi } from '../hooks/useApi'
 import { downloadCsv } from '../utils/csvExport'
@@ -38,7 +39,11 @@ export default function StudentAdditionsTable({
   /** When provided, renders a class filter dropdown (admin use case). Omit for a single-class context. */
   classOptions?: { id: string; name: string }[]
 }) {
-  const [classId, setClassId] = useState('')
+  const [searchParams] = useSearchParams()
+  // Lets a link like /admin/stats?classId=abc#student-additions pre-filter
+  // this table on load (e.g. from the class rollup table above it) —
+  // read once on mount, not kept in sync with further URL changes.
+  const [classId, setClassId] = useState(searchParams.get('classId') ?? '')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [sortAsc, setSortAsc] = useState(false)

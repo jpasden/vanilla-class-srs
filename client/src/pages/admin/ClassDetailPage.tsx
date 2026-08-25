@@ -1,5 +1,5 @@
 import { useState, useRef, FormEvent } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
@@ -52,15 +52,19 @@ interface ProgressLine {
   total: number
 }
 
+const VALID_TABS: Tab[] = ['students', 'assignments', 'homework']
+
 export default function AdminClassDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
+  const initialTab = searchParams.get('tab') as Tab | null
   const { data: cls, loading: clsLoading } = useApi<Class>(() => api.get(`/admin/classes/${id}`), [id])
   const { data: enrollments, reload: reloadEnrollments } = useApi<Enrollment[]>(() => api.get(`/admin/classes/${id}/students`), [id])
   const { data: assignments, reload: reloadAssignments } = useApi<Assignment[]>(() => api.get(`/admin/classes/${id}/assignments`), [id])
   const { data: homework, reload: reloadHomework } = useApi<HomeworkData>(() => api.get(`/admin/classes/${id}/homework`), [id])
   const { data: cardSets } = useApi<CardSet[]>(() => api.get('/admin/cardsets'))
 
-  const [tab, setTab] = useState<Tab>('students')
+  const [tab, setTab] = useState<Tab>(initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'students')
   const [showAddStudent, setShowAddStudent] = useState(false)
   const [showImportStudents, setShowImportStudents] = useState(false)
   const [showAddAssignment, setShowAddAssignment] = useState(false)
