@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { SimpleBarChart, AccuracyLineChart } from '../../components/Charts'
+import StudentAdditionsTable from '../../components/StudentAdditionsTable'
 
 interface StatsData {
   classId: string
@@ -15,7 +16,6 @@ interface StatsData {
   studentLeaderboard: { studentId: string; name: string; totalReps: number; accuracyRate: number | null }[]
   accuracyFlags: { studentId: string; name: string; accuracyRate: number | null; flag: string | null }[]
   cardLeaderboard: { cardId: string; word: string; avgAccuracy: number | null; reviewedByCount: number; enrolledCount: number; isProblemWord: boolean }[]
-  recentStudentAdditions: { studentId: string; studentName: string; word: string; definitionL1: string | null; definitionL2: string | null; addedAt: string }[]
   optionalCardSetAdoption: { cardSetId: string; cardSetName: string; adoptedCount: number; totalEnrolled: number; adoptedStudentIds: string[] }[]
   dailyChart: { date: string; cardsReviewed: number }[]
   forecastDaily: { date: string; due: number }[]
@@ -27,8 +27,6 @@ interface StatsData {
     summary: string
     students: { studentId: string; name: string; sessionsCompleted: number; sessionsRequired?: number; status: string }[]
   } | null
-  definitionL2Label: string
-  definitionL1Label: string
 }
 
 type StatsTab = 'matrix' | 'leaderboard' | 'cards' | 'activity' | 'compliance' | 'additions'
@@ -322,25 +320,12 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
         </div>
       )}
 
-      {/* Recent student additions — §14.5 */}
+      {/* Student additions — filterable by date range, sortable, exportable.
+          Independent fetch from the combined stats payload above, since it
+          has its own date-range controls rather than the shared `days` lookback. */}
       {tab === 'additions' && (
         <div className="card">
-        <div className="table-scroll">
-        <table className="table">
-          <thead><tr><th>Student</th><th>Word</th><th>{stats.definitionL2Label}</th><th>Added</th></tr></thead>
-          <tbody>
-            {stats.recentStudentAdditions.length === 0 && <tr><td colSpan={4} className="table-empty">No student additions in this period.</td></tr>}
-            {stats.recentStudentAdditions.map((a, i) => (
-              <tr key={i}>
-                <td>{a.studentName}</td>
-                <td style={{ fontWeight: 500 }}>{a.word}</td>
-                <td>{a.definitionL2 ?? a.definitionL1 ?? '—'}</td>
-                <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{new Date(a.addedAt).toLocaleDateString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
+          <StudentAdditionsTable fetchUrl={`/teachers/classes/${classId}/student-additions`} />
         </div>
       )}
     </div>
