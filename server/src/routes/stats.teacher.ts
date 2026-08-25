@@ -15,7 +15,7 @@ import { Request, Response } from 'express'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { labelsForClass } from '../services/departmentLabels.service'
-import { getPeriodBounds, countQualifyingDays } from '../services/homework.service'
+import { getClassCompliance } from '../services/homework.service'
 
 const router = asyncRouter({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -326,58 +326,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   // ── §14.8 Homework Compliance ─────────────────────────────────────────────
-  const hwReq = await prisma.homeworkRequirement.findFirst({
-    where: { classId: cls.id, isActive: true },
-  })
-
-  let homeworkCompliance = null
-  if (hwReq) {
-    const { periodStart: currentPeriodStart, periodEnd: currentPeriodEnd } = getPeriodBounds(hwReq, now)
-    const daysRemaining = Math.max(0, Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / 86_400_000))
-
-    const studentCompliance = await Promise.all(
-      enrollments.map(async (enr) => {
-        if (!enr.deck) return { studentId: enr.student.id, name: enr.student.user.name, sessionsCompleted: 0, status: 'NOT_MET' as const }
-
-        const sessionsCompleted = await countQualifyingDays(
-          prisma,
-          enr.deck.id,
-          hwReq.minCardsPerSession,
-          currentPeriodStart,
-          currentPeriodEnd,
-        )
-
-        let status: 'MET' | 'AT_RISK' | 'NOT_MET'
-        if (sessionsCompleted >= hwReq.sessionsRequired) {
-          status = 'MET'
-        } else if (daysRemaining <= hwReq.alertThresholdDays) {
-          status = 'AT_RISK'
-        } else {
-          status = 'NOT_MET'
-        }
-
-        return {
-          studentId: enr.student.id,
-          name: enr.student.user.name,
-          sessionsCompleted,
-          sessionsRequired: hwReq.sessionsRequired,
-          status,
-        }
-      })
-    )
-
-    const onTrack = studentCompliance.filter((s) => s.status === 'MET').length
-    homeworkCompliance = {
-      requirement: {
-        sessionsRequired: hwReq.sessionsRequired,
-        minCardsPerSession: hwReq.minCardsPerSession,
-        periodDays: hwReq.periodDays,
-        daysRemaining,
-      },
-      summary: `${onTrack}/${totalEnrolled} students on track`,
-      students: studentCompliance,
-    }
-  }
+  const homeworkCompliance = await getClassCompliance(prisma, cls.id, now)
 
   const labels = await labelsForClass(prisma, cls.id)
 

@@ -262,3 +262,72 @@ export async function getWeeklyGoal(
     ...(justFinishedSessionId ? { justFinishedSessionCounted } : {}),
   }
 }
+
+export interface ClassCompliance {
+  requirement: { sessionsRequired: number; minCardsPerSession: number; periodDays: number; daysRemaining: number }
+  summary: string
+  students: {
+    studentId: string
+    name: string
+    sessionsCompleted: number
+    sessionsRequired: number
+    status: 'MET' | 'AT_RISK' | 'NOT_MET'
+  }[]
+}
+
+/**
+ * Per-student homework compliance for a class's active requirement — who's
+ * met it, who's at risk, who hasn't. Extracted from stats.teacher.ts so an
+ * admin-side read-only view can reuse the exact same computation rather
+ * than duplicating it; teacher's own Compliance tab now calls this too.
+ */
+export async function getClassCompliance(
+  prisma: PrismaClient,
+  classId: string,
+  now: Date = new Date(),
+): Promise<ClassCompliance | null> {
+  const hwReq = await prisma.homeworkRequirement.findFirst({
+    where: { classId, isActive: true },
+  })
+  if (!hwReq) return null
+
+  const enrollments = await prisma.enrollment.findMany({
+    where: { classId, archivedAt: null },
+    include: {
+      student: { include: { user: { select: { id: true, name: true } } } },
+      deck: { select: { id: true } },
+    },
+  })
+
+  const { periodStart, periodEnd } = getPeriodBounds(hwReq, now)
+  const daysRemaining = Math.max(0, Math.ceil((periodEnd.getTime() - now.getTime()) / 86_400_000))
+
+  const students = await Promise.all(
+    enrollments.map(async (enr) => {
+      if (!enr.deck) {
+        return { studentId: enr.student.id, name: enr.student.user.name, sessionsCompleted: 0, sessionsRequired: hwReq.sessionsRequired, status: 'NOT_MET' as const }
+      }
+
+      const sessionsCompleted = await countQualifyingDays(prisma, enr.deck.id, hwReq.minCardsPerSession, periodStart, periodEnd)
+
+      let status: 'MET' | 'AT_RISK' | 'NOT_MET'
+      if (sessionsCompleted >= hwReq.sessionsRequired) status = 'MET'
+      else if (daysRemaining <= hwReq.alertThresholdDays) status = 'AT_RISK'
+      else status = 'NOT_MET'
+
+      return { studentId: enr.student.id, name: enr.student.user.name, sessionsCompleted, sessionsRequired: hwReq.sessionsRequired, status }
+    })
+  )
+
+  const onTrack = students.filter((s) => s.status === 'MET').length
+  return {
+    requirement: {
+      sessionsRequired: hwReq.sessionsRequired,
+      minCardsPerSession: hwReq.minCardsPerSession,
+      periodDays: hwReq.periodDays,
+      daysRemaining,
+    },
+    summary: `${onTrack}/${enrollments.length} students on track`,
+    students,
+  }
+}

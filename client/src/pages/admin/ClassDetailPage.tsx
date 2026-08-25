@@ -20,8 +20,21 @@ interface Assignment {
   id: string; type: string; priority: number
   cardSet: { id: string; name: string; status: string; _count: { cards: number } }
 }
+interface HomeworkRequirement {
+  sessionsRequired: number; minCardsPerSession: number; periodDays: number
+  cardSets: { id: string; name: string }[]
+}
+interface ClassCompliance {
+  requirement: { sessionsRequired: number; minCardsPerSession: number; periodDays: number; daysRemaining: number }
+  summary: string
+  students: { studentId: string; name: string; sessionsCompleted: number; sessionsRequired: number; status: 'MET' | 'AT_RISK' | 'NOT_MET' }[]
+}
+interface HomeworkData {
+  requirement: HomeworkRequirement | null
+  compliance: ClassCompliance | null
+}
 
-type Tab = 'students' | 'assignments'
+type Tab = 'students' | 'assignments' | 'homework'
 
 interface AssignConfirm {
   cardSetId: string
@@ -44,6 +57,7 @@ export default function AdminClassDetailPage() {
   const { data: cls, loading: clsLoading } = useApi<Class>(() => api.get(`/admin/classes/${id}`), [id])
   const { data: enrollments, reload: reloadEnrollments } = useApi<Enrollment[]>(() => api.get(`/admin/classes/${id}/students`), [id])
   const { data: assignments, reload: reloadAssignments } = useApi<Assignment[]>(() => api.get(`/admin/classes/${id}/assignments`), [id])
+  const { data: homework } = useApi<HomeworkData>(() => api.get(`/admin/classes/${id}/homework`), [id])
   const { data: cardSets } = useApi<CardSet[]>(() => api.get('/admin/cardsets'))
 
   const [tab, setTab] = useState<Tab>('students')
@@ -203,7 +217,7 @@ export default function AdminClassDetailPage() {
       </div>
 
       <div className="tabs">
-        {(['students', 'assignments'] as Tab[]).map((t) => (
+        {(['students', 'assignments', 'homework'] as Tab[]).map((t) => (
           <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -461,6 +475,61 @@ export default function AdminClassDetailPage() {
           </table>
           </div>
           </div>
+        </div>
+      )}
+
+      {/* Homework tab — read-only. Setting/editing stays teacher-owned. */}
+      {tab === 'homework' && (
+        <div>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 16 }}>
+            Read-only — homework requirements are set by the class's teacher.
+          </p>
+          {!homework?.requirement ? (
+            <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>No homework requirement set for this class.</p>
+          ) : (
+            <>
+              <div className="card" style={{ maxWidth: 440, marginBottom: 16 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Active Requirement</h2>
+                <table className="table">
+                  <tbody>
+                    <tr><td>Requirement</td><td><strong>{homework.requirement.sessionsRequired} session{homework.requirement.sessionsRequired !== 1 ? 's' : ''} of {homework.requirement.minCardsPerSession} cards per {homework.requirement.periodDays === 7 ? 'week' : `${homework.requirement.periodDays} days`}</strong></td></tr>
+                    <tr><td>Study focus</td><td><strong>{homework.requirement.cardSets.length > 0 ? homework.requirement.cardSets.map((cs) => cs.name).join(', ') : 'Any assigned cardsets'}</strong></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              {homework.compliance && (
+                <>
+                  <div className="card" style={{ marginBottom: 16, display: 'inline-block' }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Summary: {homework.compliance.summary}</div>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                      {homework.compliance.requirement.daysRemaining} days remaining in current period
+                    </div>
+                  </div>
+                  <div className="card">
+                  <div className="table-scroll">
+                  <table className="table">
+                    <thead><tr><th>Student</th><th>Sessions Done</th><th>Required</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {homework.compliance.students.map((s) => (
+                        <tr key={s.studentId}>
+                          <td>{s.name}</td>
+                          <td>{s.sessionsCompleted}</td>
+                          <td>{s.sessionsRequired}</td>
+                          <td>
+                            <span className={`badge badge-${s.status === 'MET' ? 'green' : s.status === 'AT_RISK' ? 'yellow' : 'red'}`}>
+                              {s.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

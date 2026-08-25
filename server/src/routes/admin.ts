@@ -13,7 +13,7 @@ import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssi
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
 import { getStudentAdditions } from '../services/studentAdditions.service'
-import { getLastCompletedWeekBounds } from '../services/homework.service'
+import { getLastCompletedWeekBounds, getClassCompliance } from '../services/homework.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
@@ -1039,6 +1039,26 @@ router.get('/classes/:id/assignments', async (req: Request, res: Response) => {
     include: { cardSet: { select: { id: true, name: true, status: true, _count: { select: { cards: true } } } } },
   })
   res.json(assignments)
+})
+
+// GET /api/admin/classes/:id/homework — read-only. Setting/editing homework
+// stays teacher-owned (teachers.ts); this just lets admin see what's
+// configured and who's meeting it, mirroring the teacher's Homework +
+// Compliance tabs.
+router.get('/classes/:id/homework', async (req: Request, res: Response) => {
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+  const hwReq = await prisma.homeworkRequirement.findFirst({
+    where: { classId: cls.id, isActive: true },
+    include: { cardSets: { include: { cardSet: { select: { id: true, name: true } } } } },
+  })
+  const compliance = await getClassCompliance(prisma, cls.id)
+
+  res.json({
+    requirement: hwReq ? { ...hwReq, cardSets: hwReq.cardSets.map((c) => c.cardSet) } : null,
+    compliance,
+  })
 })
 
 // Admin can also create class-level assignments directly
