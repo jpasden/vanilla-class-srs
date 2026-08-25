@@ -57,7 +57,7 @@ export default function AdminClassDetailPage() {
   const { data: cls, loading: clsLoading } = useApi<Class>(() => api.get(`/admin/classes/${id}`), [id])
   const { data: enrollments, reload: reloadEnrollments } = useApi<Enrollment[]>(() => api.get(`/admin/classes/${id}/students`), [id])
   const { data: assignments, reload: reloadAssignments } = useApi<Assignment[]>(() => api.get(`/admin/classes/${id}/assignments`), [id])
-  const { data: homework } = useApi<HomeworkData>(() => api.get(`/admin/classes/${id}/homework`), [id])
+  const { data: homework, reload: reloadHomework } = useApi<HomeworkData>(() => api.get(`/admin/classes/${id}/homework`), [id])
   const { data: cardSets } = useApi<CardSet[]>(() => api.get('/admin/cardsets'))
 
   const [tab, setTab] = useState<Tab>('students')
@@ -70,6 +70,8 @@ export default function AdminClassDetailPage() {
   const [studentForm, setStudentForm] = useState({ email: '', name: '' })
   const [newStudentResult, setNewStudentResult] = useState<{ status: string; tempPassword?: string } | null>(null)
   const [assignForm, setAssignForm] = useState({ cardSetId: '', type: 'MANDATORY', priority: 0 })
+  const [showHw, setShowHw] = useState(false)
+  const [hwForm, setHwForm] = useState({ sessionsRequired: 2, cardSetIds: [] as string[] })
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [assignConfirm, setAssignConfirm] = useState<AssignConfirm | null>(null)
@@ -204,6 +206,21 @@ export default function AdminClassDetailPage() {
     }
   }
 
+  const handleSaveHw = async (e: FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setFormError(null)
+    try {
+      await api.post(`/admin/classes/${id}/homework`, hwForm)
+      setShowHw(false)
+      reloadHomework()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (clsLoading) return <div className="spinner" />
 
   return (
@@ -219,7 +236,7 @@ export default function AdminClassDetailPage() {
       <div className="tabs">
         {(['students', 'assignments', 'homework'] as Tab[]).map((t) => (
           <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'assignments' ? 'CardSets' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -478,18 +495,63 @@ export default function AdminClassDetailPage() {
         </div>
       )}
 
-      {/* Homework tab — read-only. Setting/editing stays teacher-owned. */}
+      {/* Homework tab */}
       {tab === 'homework' && (
         <div>
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 16 }}>
-            Read-only — homework requirements are set by the class's teacher.
-          </p>
+          {showHw && (
+            <Modal title="Set Homework Requirement" onClose={() => setShowHw(false)}>
+              <form onSubmit={handleSaveHw}>
+                {formError && <div className="alert alert-danger">{formError}</div>}
+                <div className="form-group">
+                  <label className="form-label">Sessions required per week</label>
+                  <input className="form-input" type="number" min={1} value={hwForm.sessionsRequired} onChange={(e) => setHwForm({ ...hwForm, sessionsRequired: parseInt(e.target.value) || 1 })} required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Study focus (optional)</label>
+                  <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+                    Leave unchecked to focus on any assigned CardSet — the student's normal queue.
+                  </p>
+                  {assignments && assignments.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {assignments.map((a) => (
+                        <label key={a.cardSet.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                          <input
+                            type="checkbox"
+                            checked={hwForm.cardSetIds.includes(a.cardSet.id)}
+                            onChange={(e) => {
+                              const ids = e.target.checked
+                                ? [...hwForm.cardSetIds, a.cardSet.id]
+                                : hwForm.cardSetIds.filter((id) => id !== a.cardSet.id)
+                              setHwForm({ ...hwForm, cardSetIds: ids })
+                            }}
+                          />
+                          {a.cardSet.name} ({a.cardSet._count.cards} cards)
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>No CardSets assigned to this class yet.</p>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowHw(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                </div>
+              </form>
+            </Modal>
+          )}
           {!homework?.requirement ? (
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>No homework requirement set for this class.</p>
+            <div>
+              <p style={{ color: 'var(--color-text-muted)', marginBottom: 16, fontSize: 14 }}>No homework requirement set for this class.</p>
+              <button className="btn btn-primary" onClick={() => { setFormError(null); setHwForm({ sessionsRequired: 2, cardSetIds: [] }); setShowHw(true) }}>Set Requirement</button>
+            </div>
           ) : (
             <>
               <div className="card" style={{ maxWidth: 440, marginBottom: 16 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Active Requirement</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 600 }}>Active Requirement</h2>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setFormError(null); setHwForm({ sessionsRequired: homework.requirement!.sessionsRequired, cardSetIds: homework.requirement!.cardSets.map((cs) => cs.id) }); setShowHw(true) }}>Edit</button>
+                </div>
                 <table className="table">
                   <tbody>
                     <tr><td>Requirement</td><td><strong>{homework.requirement.sessionsRequired} session{homework.requirement.sessionsRequired !== 1 ? 's' : ''} of {homework.requirement.minCardsPerSession} cards per {homework.requirement.periodDays === 7 ? 'week' : `${homework.requirement.periodDays} days`}</strong></td></tr>

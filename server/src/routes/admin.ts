@@ -13,7 +13,13 @@ import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssi
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
 import { getStudentAdditions } from '../services/studentAdditions.service'
-import { getLastCompletedWeekBounds, getClassCompliance } from '../services/homework.service'
+import {
+  getLastCompletedWeekBounds,
+  getClassCompliance,
+  DEFAULT_MIN_CARDS_PER_SESSION,
+  DEFAULT_PERIOD_DAYS,
+  DEFAULT_ALERT_THRESHOLD_DAYS,
+} from '../services/homework.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
@@ -1041,10 +1047,8 @@ router.get('/classes/:id/assignments', async (req: Request, res: Response) => {
   res.json(assignments)
 })
 
-// GET /api/admin/classes/:id/homework — read-only. Setting/editing homework
-// stays teacher-owned (teachers.ts); this just lets admin see what's
-// configured and who's meeting it, mirroring the teacher's Homework +
-// Compliance tabs.
+// GET /api/admin/classes/:id/homework — the active requirement (if any) plus
+// per-student compliance, mirroring the teacher's Homework + Compliance tabs.
 router.get('/classes/:id/homework', async (req: Request, res: Response) => {
   const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
   if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
@@ -1059,6 +1063,56 @@ router.get('/classes/:id/homework', async (req: Request, res: Response) => {
     requirement: hwReq ? { ...hwReq, cardSets: hwReq.cardSets.map((c) => c.cardSet) } : null,
     compliance,
   })
+})
+
+// POST /api/admin/classes/:id/homework — set/replace the active requirement.
+// Mirrors teachers.ts's POST .../homework exactly (same schema, same
+// deactivate-then-create pattern), minus the teacher-ownership check —
+// admin can do this for any class.
+const AdminHomeworkSchema = z.object({
+  sessionsRequired: z.number().int().min(1),
+  cardSetIds: z.array(z.string().uuid()).optional(),
+})
+
+router.post('/classes/:id/homework', validate(AdminHomeworkSchema), async (req: Request, res: Response) => {
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+  const cardSetIds: string[] = req.body.cardSetIds ?? []
+  if (cardSetIds.length > 0) {
+    const assignedCount = await prisma.assignment.count({
+      where: { classId: cls.id, cardSetId: { in: cardSetIds } },
+    })
+    if (assignedCount !== cardSetIds.length) {
+      res.status(400).json({ error: 'One or more CardSets are not assigned to this class' }); return
+    }
+  }
+
+  const hwReq = await prisma.$transaction(async (tx) => {
+    await tx.homeworkRequirement.updateMany({
+      where: { classId: cls.id, isActive: true },
+      data: { isActive: false },
+    })
+    const created = await tx.homeworkRequirement.create({
+      data: {
+        classId: cls.id,
+        sessionsRequired: req.body.sessionsRequired,
+        minCardsPerSession: DEFAULT_MIN_CARDS_PER_SESSION,
+        periodDays: DEFAULT_PERIOD_DAYS,
+        alertThresholdDays: DEFAULT_ALERT_THRESHOLD_DAYS,
+        activeFrom: new Date(),
+        isActive: true,
+      },
+    })
+    if (cardSetIds.length > 0) {
+      await tx.homeworkRequirementCardSet.createMany({
+        data: cardSetIds.map((cardSetId) => ({ homeworkRequirementId: created.id, cardSetId })),
+      })
+    }
+    return created
+  })
+
+  res.status(201).json(hwReq)
 })
 
 // Admin can also create class-level assignments directly
