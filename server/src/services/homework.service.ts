@@ -35,6 +35,19 @@ export function getCalendarWeekBounds(now: Date): { periodStart: Date; periodEnd
 }
 
 /**
+ * The most recent fully-completed Monday–Sunday week — i.e. this week's
+ * bounds, shifted back one period. If today is mid-week, that's last week,
+ * not the current in-progress one. Used as the default range for reports
+ * (e.g. student-added-card exports) where "last week" should mean a
+ * finished period, not "the last 7 days including today."
+ */
+export function getLastCompletedWeekBounds(now: Date): { periodStart: Date; periodEnd: Date } {
+  const oneWeekAgo = new Date(now)
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+  return getCalendarWeekBounds(oneWeekAgo)
+}
+
+/**
  * Anchor-based bounds for any periodDays value other than the 7-day default
  * — kept as a fallback since a HomeworkRequirement row could in principle
  * have a non-default periodDays (the field isn't removed, just not exposed

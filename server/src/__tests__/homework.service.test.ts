@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   getCalendarWeekBounds,
+  getLastCompletedWeekBounds,
   getTodayBounds,
   getPeriodBounds,
   hasMetTodaysQuota,
@@ -38,6 +39,30 @@ describe('getCalendarWeekBounds', () => {
     const now = new Date(2026, 7, 23, 9, 0) // Sunday morning
     const { periodStart } = getCalendarWeekBounds(now)
     expect(periodStart).toEqual(new Date(2026, 7, 17, 0, 0, 0, 0))
+  })
+})
+
+describe('getLastCompletedWeekBounds', () => {
+  it('resolves a Wednesday mid-week to LAST week\'s Monday, not this week\'s', () => {
+    // Wednesday 2026-08-19 — this week is Mon 08-17 to Mon 08-24
+    const now = new Date(2026, 7, 19, 14, 30)
+    const { periodStart, periodEnd } = getLastCompletedWeekBounds(now)
+    expect(periodStart).toEqual(new Date(2026, 7, 10, 0, 0, 0, 0)) // Monday, one week earlier
+    expect(periodEnd).toEqual(new Date(2026, 7, 17, 0, 0, 0, 0)) // this week's Monday
+  })
+
+  it('on a Monday, still resolves to the prior week (not the one just starting)', () => {
+    const now = new Date(2026, 7, 17, 0, 0, 0, 0) // Monday midnight, week just started
+    const { periodStart, periodEnd } = getLastCompletedWeekBounds(now)
+    expect(periodStart).toEqual(new Date(2026, 7, 10, 0, 0, 0, 0))
+    expect(periodEnd).toEqual(new Date(2026, 7, 17, 0, 0, 0, 0))
+  })
+
+  it('on a Sunday, still resolves to the prior full week', () => {
+    const now = new Date(2026, 7, 23, 23, 59, 59, 999) // Sunday, end of this week
+    const { periodStart, periodEnd } = getLastCompletedWeekBounds(now)
+    expect(periodStart).toEqual(new Date(2026, 7, 10, 0, 0, 0, 0))
+    expect(periodEnd).toEqual(new Date(2026, 7, 17, 0, 0, 0, 0))
   })
 })
 
