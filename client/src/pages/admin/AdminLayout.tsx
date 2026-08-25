@@ -9,6 +9,7 @@ const navItems = [
   { to: '/admin/teachers', label: 'Teachers' },
   { to: '/admin/classes', label: 'Classes' },
   { to: '/admin/cardsets', label: 'CardSets' },
+  { to: '/admin/stats', label: 'Stats' },
 ]
 
 export default function AdminLayout() {

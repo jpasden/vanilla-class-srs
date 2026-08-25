@@ -23,6 +23,7 @@ import AdminCardSetsPage from './pages/admin/CardSetsPage'
 import AdminCardSetDetailPage from './pages/admin/CardSetDetailPage'
 import AdminClassesPage from './pages/admin/ClassesPage'
 import AdminClassDetailPage from './pages/admin/ClassDetailPage'
+import AdminStatsPage from './pages/admin/StatsPage'
 
 // Teacher pages
 import TeacherClassesPage from './pages/teacher/ClassesPage'
@@ -84,6 +85,7 @@ export default function App() {
               <Route path="cardsets/:id" element={<AdminCardSetDetailPage />} />
               <Route path="classes" element={<AdminClassesPage />} />
               <Route path="classes/:id" element={<AdminClassDetailPage />} />
+              <Route path="stats" element={<AdminStatsPage />} />
             </Route>
 
             {/* Teacher */}
