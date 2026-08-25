@@ -5,6 +5,7 @@
   "scripts": {
     "seed": "ts-node seed/index.ts",
     "wipe": "ts-node seed/wipe.ts",
+    "purge": "ts-node seed/purge-department.ts",
     "verify": "ts-node seed/verify.ts"
   },
   "dependencies": {

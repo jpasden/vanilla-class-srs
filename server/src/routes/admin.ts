@@ -682,10 +682,36 @@ router.delete('/classes/:id/students/:studentId', async (req: Request, res: Resp
 })
 
 // ─────────────────────────────────────────────
-// CardSet promotion (spec §10)
-// Admin promotes a teacher's PRIVATE CardSet to DEPARTMENTAL,
-// linking it to a SubjectGrade. Teacher loses edit rights after promotion.
+// CardSet creation + promotion (spec §10)
+// Admin can author a CardSet directly (created straight to DEPARTMENTAL,
+// scoped to a SubjectGrade — an admin-authored set has no teacher owner to
+// keep it PRIVATE for), or promote a teacher's existing PRIVATE CardSet to
+// DEPARTMENTAL, linking it to a SubjectGrade. Teacher loses edit rights
+// after promotion either way.
 // ─────────────────────────────────────────────
+
+const CreateAdminCardSetSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  subjectGradeId: z.string().uuid(),
+})
+
+// POST /api/admin/cardsets — admin authors a new Departmental CardSet directly
+router.post('/cardsets', validate(CreateAdminCardSetSchema), async (req: Request, res: Response) => {
+  const sg = await prisma.subjectGrade.findUnique({ where: { id: req.body.subjectGradeId } })
+  if (!sg || sg.archivedAt) {
+    res.status(400).json({ error: 'SubjectGrade not found or archived' }); return
+  }
+  const cs = await prisma.cardSet.create({
+    data: {
+      name: req.body.name,
+      description: req.body.description,
+      status: CardSetStatus.DEPARTMENTAL,
+      subjectGradeId: sg.id,
+    },
+  })
+  res.status(201).json(cs)
+})
 
 const PromoteCardSetSchema = z.object({
   subjectGradeId: z.string().uuid(),

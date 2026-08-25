@@ -28,6 +28,31 @@ export default function AdminCardSetsPage() {
   const [promoteError, setPromoteError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  const [showCreate, setShowCreate] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createDescription, setCreateDescription] = useState('')
+  const [createSgId, setCreateSgId] = useState('')
+  const [createError, setCreateError] = useState<string | null>(null)
+
+  const openCreate = () => {
+    setCreateName(''); setCreateDescription(''); setCreateSgId(''); setCreateError(null); setShowCreate(true)
+  }
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setCreateError(null)
+    try {
+      await api.post('/admin/cardsets', { name: createName, description: createDescription || undefined, subjectGradeId: createSgId })
+      setShowCreate(false)
+      reload()
+    } catch (e) {
+      setCreateError(e instanceof ApiError ? e.message : 'Failed to create CardSet')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handlePromote = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!promoting) return
@@ -65,6 +90,36 @@ export default function AdminCardSetsPage() {
 
   return (
     <div>
+      {showCreate && (
+        <Modal title="New CardSet" onClose={() => setShowCreate(false)}>
+          <p style={{ fontSize: 14, marginBottom: 16, color: 'var(--color-text-muted)' }}>
+            Created directly as Departmental — visible and assignable to every teacher in the
+            chosen Subject Grade right away, no promotion step needed.
+          </p>
+          <form onSubmit={handleCreate}>
+            {createError && <div className="alert alert-danger">{createError}</div>}
+            <div className="form-group">
+              <label className="form-label">Name</label>
+              <input className="form-input" value={createName} onChange={(e) => setCreateName(e.target.value)} required placeholder="e.g. Unit 3 Vocabulary" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Description (optional)</label>
+              <input className="form-input" value={createDescription} onChange={(e) => setCreateDescription(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Subject Grade</label>
+              <select className="form-select" value={createSgId} onChange={(e) => setCreateSgId(e.target.value)} required>
+                <option value="">Select…</option>
+                {sgs?.map((sg) => <option key={sg.id} value={sg.id}>{sg.name}</option>)}
+              </select>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Creating…' : 'Create'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
       {promoting && (
         <Modal title={`Promote "${promoting.name}" to Departmental`} onClose={() => setPromoting(null)}>
           <p style={{ fontSize: 14, marginBottom: 16, color: 'var(--color-text-muted)' }}>
@@ -108,9 +163,12 @@ export default function AdminCardSetsPage() {
       )}
       <div className="page-header">
         <h1 className="page-title">All CardSets</h1>
-        <button className="btn btn-secondary" onClick={() => setShowArchived((v) => !v)}>
-          {showArchived ? 'Show Active' : 'Show Archived'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => setShowArchived((v) => !v)}>
+            {showArchived ? 'Show Active' : 'Show Archived'}
+          </button>
+          {!showArchived && <button className="btn btn-primary" onClick={openCreate}>+ New CardSet</button>}
+        </div>
       </div>
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
