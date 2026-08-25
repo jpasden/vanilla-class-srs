@@ -13,6 +13,7 @@ import { DEFAULT_MIN_CARDS_PER_SESSION, DEFAULT_PERIOD_DAYS, DEFAULT_ALERT_THRES
 import { labelsForClass } from '../services/departmentLabels.service'
 import teacherStatsRouter from './stats.teacher'
 import teacherStudentStatsRouter from './stats.teacher-student'
+import teacherStudentAdditionsRouter from './stats.studentAdditions'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
@@ -640,6 +641,10 @@ router.post('/classes/:id/homework', validate(HomeworkSchema), async (req: Reque
 
 // Mount the stats sub-router so it has access to :id param
 router.use('/classes/:id/stats', teacherStatsRouter)
+
+// Student-added cards report — separate from the combined stats payload above,
+// since it has its own date-range query params (see stats.studentAdditions.ts)
+router.use('/classes/:id/student-additions', teacherStudentAdditionsRouter)
 
 // Student stats — teacher read-only view (mirrors student stats routes)
 router.use('/classes/:classId/students/:studentId/stats', teacherStudentStatsRouter)

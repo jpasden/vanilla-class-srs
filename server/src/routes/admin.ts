@@ -12,6 +12,8 @@ import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, syncNewCardsToAssignedDecks, removeAssignment, resumeClassAssignment } from '../services/assignment.service'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
+import { getStudentAdditions } from '../services/studentAdditions.service'
+import { getLastCompletedWeekBounds } from '../services/homework.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
@@ -1159,6 +1161,46 @@ router.delete('/classes/:id/assignments/:assignmentId', async (req: Request, res
   const keepCards = req.query.keepCards === 'true'
   const result = await removeAssignment(prisma, assignment.id, keepCards)
   res.json({ ok: true, cardsRemoved: result.cardsRemoved })
+})
+
+// ─────────────────────────────────────────────
+// Student-added cards report — school-wide
+// ─────────────────────────────────────────────
+
+// GET /api/admin/student-additions
+// Query params:
+//   start, end — ISO date strings. Both optional; default to the most
+//   recent fully-completed Monday-Sunday week.
+//   classId — optional; scope to one class. Omitted = every non-archived class.
+router.get('/student-additions', async (req: Request, res: Response) => {
+  const classId = req.query.classId as string | undefined
+  let classIds: string[]
+  if (classId) {
+    const cls = await prisma.class.findUnique({ where: { id: classId } })
+    if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+    classIds = [cls.id]
+  } else {
+    classIds = (
+      await prisma.class.findMany({ where: { archivedAt: null }, select: { id: true } })
+    ).map((c) => c.id)
+  }
+
+  const now = new Date()
+  const startParam = req.query.start as string | undefined
+  const endParam = req.query.end as string | undefined
+  let start: Date
+  let end: Date
+  if (startParam && endParam) {
+    start = new Date(startParam)
+    end = new Date(endParam)
+  } else {
+    const bounds = getLastCompletedWeekBounds(now)
+    start = bounds.periodStart
+    end = bounds.periodEnd
+  }
+
+  const additions = await getStudentAdditions(prisma, classIds, start, end)
+  res.json({ additions, rangeStart: start, rangeEnd: end })
 })
 
 export default router
