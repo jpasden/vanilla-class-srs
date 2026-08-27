@@ -159,18 +159,30 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
   const weeklyGoal = await getWeeklyGoal(prisma, enrollment.classId, deckId, now)
 
   // CardSets present in this deck — populates the Study Focus dropdown's options.
+  // Excludes the student's own personal (self-added) CardSet, which is surfaced
+  // separately below as its own "Cards I added" entry rather than mixed in here.
   const deckCardSetRows = await prisma.cardInstance.findMany({
-    where: { deckId },
+    where: { deckId, card: { cardSet: { isPersonal: false } } },
     select: { card: { select: { cardSet: { select: { id: true, name: true } } } } },
   })
   const deckCardSetsById = new Map(deckCardSetRows.map((r) => [r.card.cardSet.id, r.card.cardSet.name]))
   const deckCardSets = [...deckCardSetsById].map(([id, name]) => ({ id, name }))
+
+  // Personal (self-added) CardSet — only surfaced once it actually has cards in it.
+  const personalCardSetRow = await prisma.cardSet.findFirst({
+    where: { enrollmentId, isPersonal: true },
+    select: { id: true, _count: { select: { cards: true } } },
+  })
+  const personalCardSet = personalCardSetRow && personalCardSetRow._count.cards > 0
+    ? { id: personalCardSetRow.id, cardCount: personalCardSetRow._count.cards }
+    : null
 
   res.json({
     deckBreakdown: breakdown,
     streak: { current: currentStreak, longest, mostCardsInDay },
     weeklyGoal,
     deckCardSets,
+    personalCardSet,
   })
 })
 
