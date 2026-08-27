@@ -18,6 +18,7 @@ import StudentLayout from './pages/student/StudentLayout'
 import AdminDepartmentsPage from './pages/admin/DepartmentsPage'
 import AdminDepartmentSettingsPage from './pages/admin/DepartmentSettingsPage'
 import AdminSubjectGradesPage from './pages/admin/SubjectGradesPage'
+import AdminBatchOperationsPage from './pages/admin/BatchOperationsPage'
 import AdminTeachersPage from './pages/admin/TeachersPage'
 import AdminCardSetsPage from './pages/admin/CardSetsPage'
 import AdminCardSetDetailPage from './pages/admin/CardSetDetailPage'
@@ -81,6 +82,7 @@ export default function App() {
               <Route path="departments" element={<AdminDepartmentsPage />} />
               <Route path="departments/:id/settings" element={<AdminDepartmentSettingsPage />} />
               <Route path="subject-grades" element={<AdminSubjectGradesPage />} />
+              <Route path="subject-grades/:id/batch" element={<AdminBatchOperationsPage />} />
               <Route path="teachers" element={<AdminTeachersPage />} />
               <Route path="cardsets" element={<AdminCardSetsPage />} />
               <Route path="cardsets/:id" element={<AdminCardSetDetailPage />} />

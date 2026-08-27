@@ -128,7 +128,7 @@ export default function AdminSubjectGradesPage() {
         <div className="card">
         <div className="table-scroll">
         <table className="table">
-          <thead><tr><th>Name</th><th>Department</th><th>Classes</th><th>Teachers</th><th style={{ width: 120 }}>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Department</th><th>Classes</th><th>Teachers</th><th style={{ width: 260 }}>Actions</th></tr></thead>
           <tbody>
             {sgs.length === 0 && <tr><td colSpan={5} className="table-empty">{showArchived ? 'No archived subject grades.' : 'No subject grades yet.'}</td></tr>}
             {sgs.map((sg) => (
@@ -143,6 +143,7 @@ export default function AdminSubjectGradesPage() {
                   ) : (
                     <>
                       <button className="btn btn-secondary btn-sm" onClick={() => openEdit(sg)} style={{ marginRight: 6 }}>Edit</button>
+                      <Link to={`/admin/subject-grades/${sg.id}/batch`} className="btn btn-secondary btn-sm" style={{ marginRight: 6 }}>Batch Ops</Link>
                       <button className="btn btn-danger btn-sm" onClick={() => { setFormError(null); setArchiving(sg) }}>Archive</button>
                     </>
                   )}

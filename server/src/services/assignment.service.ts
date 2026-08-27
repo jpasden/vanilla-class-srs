@@ -138,22 +138,23 @@ export async function removeAssignment(
  * Each enrollment's instances are created in their own small transaction
  * so the stream can emit incrementally.
  */
-export async function streamCardInstanceCreation(
+type StreamEnrollments = Awaited<ReturnType<typeof createClassAssignment>>['enrollments']
+
+/**
+ * The actual per-enrollment CardInstance-creation loop, shared by the
+ * single-class stream (streamCardInstanceCreation) and the multi-class batch
+ * stream (streamCardInstanceCreationForClasses). Emits one `send('progress', ...)`
+ * call per enrollment via the caller-supplied `send` — identical DB write
+ * (`createMany` + `skipDuplicates: true`) as always, just factored out so the
+ * batch path doesn't duplicate this logic.
+ */
+async function runCardInstanceCreation(
   prisma: PrismaClient,
-  res: Response,
-  enrollments: Awaited<ReturnType<typeof createClassAssignment>>['enrollments'],
+  send: (event: string, data: unknown) => void,
+  enrollments: StreamEnrollments,
   cardIds: string[],
   className: string,
-) {
-  res.setHeader('Content-Type', 'text/event-stream')
-  res.setHeader('Cache-Control', 'no-cache')
-  res.setHeader('Connection', 'keep-alive')
-  res.flushHeaders()
-
-  const send = (event: string, data: unknown) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-  }
-
+): Promise<{ completed: number; total: number }> {
   const total = enrollments.length
   let completed = 0
 
@@ -188,8 +189,102 @@ export async function streamCardInstanceCreation(
     })
   }
 
+  return { completed, total }
+}
+
+export async function streamCardInstanceCreation(
+  prisma: PrismaClient,
+  res: Response,
+  enrollments: StreamEnrollments,
+  cardIds: string[],
+  className: string,
+) {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders()
+
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+
+  const { completed, total } = await runCardInstanceCreation(prisma, send, enrollments, cardIds, className)
+
   send('done', { completed, total })
   res.end()
+}
+
+export interface BatchAssignClassTarget {
+  classId: string
+  className: string
+  assignmentId: string
+  enrollments: StreamEnrollments
+  cardIds: string[]
+}
+
+export interface BatchAssignClassResult {
+  classId: string
+  className: string
+  assignmentId: string
+  expected: number
+  actual: number
+  verified: boolean
+}
+
+/**
+ * Streams CardInstance creation across MULTIPLE classes in one SSE response —
+ * used by the admin batch-assign-CardSet-to-many-classes feature. Reuses the
+ * exact same per-enrollment write as the single-class path
+ * (runCardInstanceCreation); this function only adds the multi-class envelope
+ * (classStarted/classDone framing) and a post-loop verification pass that
+ * confirms every expected CardInstance actually exists in the DB before
+ * reporting success — added specifically because this batch path is new,
+ * unlike the single-class path it's built on.
+ */
+export async function streamCardInstanceCreationForClasses(
+  prisma: PrismaClient,
+  res: Response,
+  targets: BatchAssignClassTarget[],
+  cardSetId: string,
+): Promise<BatchAssignClassResult[]> {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders()
+
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+
+  const results: BatchAssignClassResult[] = []
+
+  for (const target of targets) {
+    send('classStarted', { classId: target.classId, className: target.className })
+    await runCardInstanceCreation(prisma, send, target.enrollments, target.cardIds, target.className)
+
+    const expected = target.enrollments.filter((e) => e.deck).length * target.cardIds.length
+    const actual = await prisma.cardInstance.count({
+      where: {
+        card: { cardSetId },
+        deck: { enrollment: { classId: target.classId, archivedAt: null } },
+        origin: CardOrigin.TEACHER_ASSIGNED,
+      },
+    })
+    const result: BatchAssignClassResult = {
+      classId: target.classId,
+      className: target.className,
+      assignmentId: target.assignmentId,
+      expected,
+      actual,
+      verified: actual >= expected,
+    }
+    results.push(result)
+    send('classDone', result)
+  }
+
+  send('done', { results })
+  res.end()
+  return results
 }
 
 /**

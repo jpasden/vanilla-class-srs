@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { rollbackOrphanedAssignment, removeAssignment, syncNewCardsToAssignedDecks, resumeClassAssignment } from '../services/assignment.service'
+import { rollbackOrphanedAssignment, removeAssignment, syncNewCardsToAssignedDecks, resumeClassAssignment, streamCardInstanceCreationForClasses, BatchAssignClassTarget } from '../services/assignment.service'
 
 function makePrisma(deleteResult: 'ok' | 'throws') {
   return {
@@ -190,5 +190,111 @@ describe('resumeClassAssignment', () => {
     })
     const result = await resumeClassAssignment(prisma as any, 'assign-1')
     expect(result).toBeNull()
+  })
+})
+
+function makeFakeSseResponse() {
+  const events: { event: string; data: any }[] = []
+  const res = {
+    setHeader: vi.fn(),
+    flushHeaders: vi.fn(),
+    write: vi.fn((chunk: string) => {
+      const [eventLine, dataLine] = chunk.split('\n')
+      events.push({ event: eventLine.replace('event: ', ''), data: JSON.parse(dataLine.replace('data: ', '')) })
+    }),
+    end: vi.fn(),
+  }
+  return { res, events }
+}
+
+function makeBatchStreamPrisma(instancesCreatedPerEnrollment: number, actualCountPerClass: number) {
+  return {
+    cardInstance: {
+      createMany: vi.fn().mockImplementation(({ data }: { data: unknown[] }) =>
+        Promise.resolve({ count: Math.min(data.length, instancesCreatedPerEnrollment) }),
+      ),
+      count: vi.fn().mockResolvedValue(actualCountPerClass),
+    },
+  }
+}
+
+describe('streamCardInstanceCreationForClasses', () => {
+  it('streams progress for every class in order and reports verified:true when actual meets expected', async () => {
+    const targets: BatchAssignClassTarget[] = [
+      {
+        classId: 'class-1',
+        className: 'Class A',
+        assignmentId: 'assign-1',
+        cardIds: ['card-1', 'card-2'],
+        enrollments: [
+          { deck: { id: 'deck-1' }, student: { user: { name: 'Alice' } } },
+          { deck: { id: 'deck-2' }, student: { user: { name: 'Bob' } } },
+        ] as any,
+      },
+      {
+        classId: 'class-2',
+        className: 'Class B',
+        assignmentId: 'assign-2',
+        cardIds: ['card-1', 'card-2'],
+        enrollments: [{ deck: { id: 'deck-3' }, student: { user: { name: 'Carol' } } }] as any,
+      },
+    ]
+    // 2 enrollments x 2 cards = 4 expected for class-1; 1 x 2 = 2 expected for class-2.
+    const prisma = makeBatchStreamPrisma(2, 4)
+    const { res, events } = makeFakeSseResponse()
+
+    const results = await streamCardInstanceCreationForClasses(prisma as any, res as any, targets, 'set-1')
+
+    expect(events.map((e) => e.event)).toEqual([
+      'classStarted', 'progress', 'progress', 'classDone',
+      'classStarted', 'progress', 'classDone',
+      'done',
+    ])
+    expect(results).toHaveLength(2)
+    expect(results[0]).toEqual({ classId: 'class-1', className: 'Class A', assignmentId: 'assign-1', expected: 4, actual: 4, verified: true })
+    expect(res.end).toHaveBeenCalledOnce()
+  })
+
+  it('reports verified:false when the actual CardInstance count is short of expected', async () => {
+    const targets: BatchAssignClassTarget[] = [
+      {
+        classId: 'class-1',
+        className: 'Class A',
+        assignmentId: 'assign-1',
+        cardIds: ['card-1', 'card-2'],
+        enrollments: [{ deck: { id: 'deck-1' }, student: { user: { name: 'Alice' } } }] as any,
+      },
+    ]
+    // Expected = 1 enrollment x 2 cards = 2, but the DB only shows 1 actually landed.
+    const prisma = makeBatchStreamPrisma(2, 1)
+    const { res } = makeFakeSseResponse()
+
+    const results = await streamCardInstanceCreationForClasses(prisma as any, res as any, targets, 'set-1')
+
+    expect(results[0]).toEqual({ classId: 'class-1', className: 'Class A', assignmentId: 'assign-1', expected: 2, actual: 1, verified: false })
+  })
+
+  it('counts actual CardInstances scoped to this cardSet, class, and TEACHER_ASSIGNED origin only', async () => {
+    const targets: BatchAssignClassTarget[] = [
+      {
+        classId: 'class-1',
+        className: 'Class A',
+        assignmentId: 'assign-1',
+        cardIds: ['card-1'],
+        enrollments: [{ deck: { id: 'deck-1' }, student: { user: { name: 'Alice' } } }] as any,
+      },
+    ]
+    const prisma = makeBatchStreamPrisma(1, 1)
+    const { res } = makeFakeSseResponse()
+
+    await streamCardInstanceCreationForClasses(prisma as any, res as any, targets, 'set-1')
+
+    expect(prisma.cardInstance.count).toHaveBeenCalledWith({
+      where: {
+        card: { cardSetId: 'set-1' },
+        deck: { enrollment: { classId: 'class-1', archivedAt: null } },
+        origin: 'TEACHER_ASSIGNED',
+      },
+    })
   })
 })

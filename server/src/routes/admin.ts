@@ -9,7 +9,8 @@ import { requireAuth, requireAdmin, requirePasswordChanged } from '../middleware
 import { validate } from '../middleware/validate'
 import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
-import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, syncNewCardsToAssignedDecks, removeAssignment, resumeClassAssignment } from '../services/assignment.service'
+import { batchAddTeachers, batchAddClasses } from '../services/subjectGradeBatch.service'
+import { createClassAssignment, streamCardInstanceCreation, streamCardInstanceCreationForClasses, rollbackOrphanedAssignment, syncNewCardsToAssignedDecks, removeAssignment, resumeClassAssignment, BatchAssignClassTarget } from '../services/assignment.service'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
 import { getStudentAdditions } from '../services/studentAdditions.service'
@@ -255,6 +256,57 @@ router.post('/subject-grades/:id/unarchive', async (req: Request, res: Response)
   })
   res.json(updated)
 })
+
+// ─────────────────────────────────────────────
+// SubjectGrade batch operations (admin) — bulk-add teachers/classes/CardSet
+// assignment for a Subject Grade, so setting up a new subject grade doesn't
+// require repeating the same single-item form N times.
+// ─────────────────────────────────────────────
+
+const BatchAddTeachersSchema = z.object({
+  teacherIds: z.array(z.string().uuid()).min(1),
+})
+
+// POST /api/admin/subject-grades/:id/teachers — bulk-add teachers to this
+// Subject Grade. Mirrors POST /teachers/:id/subject-grades (which already
+// accepts multiple SubjectGrade ids for one teacher) in the other direction:
+// one SubjectGrade, multiple teachers.
+router.post(
+  '/subject-grades/:id/teachers',
+  validate(BatchAddTeachersSchema),
+  async (req: Request, res: Response) => {
+    const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
+    if (!sg || sg.archivedAt) { res.status(404).json({ error: 'SubjectGrade not found' }); return }
+
+    const results = await batchAddTeachers(prisma, sg.id, req.body.teacherIds)
+    res.status(201).json({ results })
+  },
+)
+
+const BatchAddClassesSchema = z.object({
+  classes: z.array(z.object({
+    name: z.string().min(1),
+    teacherId: z.string().uuid(),
+  })).min(1),
+})
+
+// POST /api/admin/subject-grades/:id/classes — bulk-create classes in this
+// Subject Grade, one row per class with its own name + teacher. Unlike the
+// single-class POST /classes route, this requires each teacher to already be
+// assigned to the Subject Grade (via TeacherSubjectGrade) — a consistency
+// check the single-class route doesn't have, added here deliberately so
+// batch-created classes can't silently reproduce that gap at scale.
+router.post(
+  '/subject-grades/:id/classes',
+  validate(BatchAddClassesSchema),
+  async (req: Request, res: Response) => {
+    const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
+    if (!sg || sg.archivedAt) { res.status(404).json({ error: 'SubjectGrade not found' }); return }
+
+    const results = await batchAddClasses(prisma, sg.id, req.body.classes)
+    res.status(201).json({ results })
+  },
+)
 
 // ─────────────────────────────────────────────
 // Teachers
@@ -1253,6 +1305,133 @@ router.get('/classes/:id/assignments/:assignmentId/resume', async (req: Request,
   }
 
   await streamCardInstanceCreation(prisma, res, target.enrollments, target.cardIds, target.className)
+})
+
+const BatchAssignSchema = z.object({
+  cardSetId: z.string().uuid(),
+  classIds: z.array(z.string().uuid()).min(1),
+  type: z.nativeEnum(AssignmentType),
+  priority: z.number().int().min(0).default(0),
+})
+
+type BatchAssignJob = {
+  cardSetId: string
+  targets: BatchAssignClassTarget[]
+  timer: ReturnType<typeof setTimeout>
+}
+const batchAssignJobs = new Map<string, BatchAssignJob>()
+
+// POST /api/admin/subject-grades/:id/batch-assign — assign one CardSet to
+// multiple classes within this Subject Grade in one operation. Two-phase,
+// same shape as the single-class assign flow: this call only creates the
+// Assignment rows and returns a jobId; the client must then open the SSE
+// /batch-assign/:jobId/progress stream (below) to actually populate
+// CardInstances, exactly like the single-class flow requires opening
+// /classes/:id/assignments/:assignmentId/progress. Classes that already have
+// this CardSet assigned are skipped (not an error) so the rest of the batch
+// still proceeds.
+router.post(
+  '/subject-grades/:id/batch-assign',
+  validate(BatchAssignSchema),
+  async (req: Request, res: Response) => {
+    const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
+    if (!sg || sg.archivedAt) { res.status(404).json({ error: 'SubjectGrade not found' }); return }
+
+    const cs = await prisma.cardSet.findUnique({ where: { id: req.body.cardSetId } })
+    if (!cs || cs.archivedAt || cs.isPersonal) {
+      res.status(400).json({ error: 'CardSet not found' }); return
+    }
+    // CardSet must belong to this Subject Grade, or be owned by one of the
+    // Subject Grade's own teachers — prevents assigning an unrelated
+    // department's CardSet to these classes by mistake. The single-class
+    // assign route (POST /classes/:id/assignments) has no such check; this
+    // batch route adds it deliberately, per the same reasoning as the
+    // teacher/Subject-Grade check on the batch class-create route above.
+    if (cs.subjectGradeId !== sg.id) {
+      if (!cs.teacherId) {
+        res.status(400).json({ error: 'CardSet does not belong to this Subject Grade' }); return
+      }
+      const ownerAssigned = await prisma.teacherSubjectGrade.findUnique({
+        where: { teacherId_subjectGradeId: { teacherId: cs.teacherId, subjectGradeId: sg.id } },
+      })
+      if (!ownerAssigned) {
+        res.status(400).json({ error: 'CardSet does not belong to this Subject Grade' }); return
+      }
+    }
+
+    const classIds: string[] = req.body.classIds
+    const classes = await prisma.class.findMany({ where: { id: { in: classIds } } })
+    const invalid = classIds.filter((id) => {
+      const cls = classes.find((c) => c.id === id)
+      return !cls || cls.archivedAt || cls.subjectGradeId !== sg.id
+    })
+    if (invalid.length > 0) {
+      res.status(400).json({ error: 'One or more classes are invalid, archived, or not in this Subject Grade' })
+      return
+    }
+
+    const existingAssignments = await prisma.assignment.findMany({
+      where: { cardSetId: cs.id, classId: { in: classIds } },
+      select: { classId: true },
+    })
+    const alreadyAssigned = new Set(existingAssignments.map((a) => a.classId))
+
+    const targets: BatchAssignClassTarget[] = []
+    const skipped: { classId: string; className: string }[] = []
+
+    for (const cls of classes) {
+      if (alreadyAssigned.has(cls.id)) {
+        skipped.push({ classId: cls.id, className: cls.name })
+        continue
+      }
+      const { assignment, enrollments, cardIds } = await createClassAssignment(
+        prisma, cls.id, cs.id, req.body.type, req.body.priority, req.user!.sub,
+      )
+      if (req.body.type === AssignmentType.MANDATORY && cardIds.length > 0 && enrollments.length > 0) {
+        targets.push({ classId: cls.id, className: cls.name, assignmentId: assignment.id, enrollments, cardIds })
+      }
+    }
+
+    if (targets.length === 0) {
+      res.status(201).json({
+        jobId: null,
+        needsStream: false,
+        skipped,
+        classes: [],
+      })
+      return
+    }
+
+    const jobId = targets.map((t) => t.assignmentId).join(',')
+    const timer = setTimeout(() => {
+      batchAssignJobs.delete(jobId)
+      for (const t of targets) rollbackOrphanedAssignment(prisma, t.assignmentId)
+    }, 60_000)
+    batchAssignJobs.set(jobId, { cardSetId: cs.id, targets, timer })
+
+    res.status(201).json({
+      jobId,
+      needsStream: true,
+      skipped,
+      classes: targets.map((t) => ({
+        classId: t.classId,
+        className: t.className,
+        enrollmentCount: t.enrollments.length,
+        totalInstances: t.enrollments.filter((e) => e.deck).length * t.cardIds.length,
+      })),
+    })
+  },
+)
+
+// GET /api/admin/subject-grades/batch-assign/:jobId/progress  (SSE)
+router.get('/subject-grades/batch-assign/:jobId/progress', async (req: Request, res: Response) => {
+  const job = batchAssignJobs.get(p(req, 'jobId'))
+  if (!job) {
+    res.status(404).json({ error: 'No pending job found for this batch' }); return
+  }
+  clearTimeout(job.timer)
+  batchAssignJobs.delete(p(req, 'jobId'))
+  await streamCardInstanceCreationForClasses(prisma, res, job.targets, job.cardSetId)
 })
 
 // DELETE /api/admin/classes/:id/assignments/:assignmentId
