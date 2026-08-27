@@ -31,6 +31,10 @@ export default function AdminClassesPage() {
   const { data: sgs } = useApi<SubjectGrade[]>(() => api.get('/admin/subject-grades'))
   const { data: teachers } = useApi<Teacher[]>(() => api.get('/admin/teachers'))
 
+  const filteredTeacherName = teacherId ? teachers?.find((t) => t.id === teacherId)?.user.name : undefined
+  const filteredSubjectGradeName = subjectGradeId ? sgs?.find((sg) => sg.id === subjectGradeId)?.name : undefined
+  const filterLabel = filteredTeacherName ?? filteredSubjectGradeName
+
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<Class | null>(null)
   const [form, setForm] = useState({ name: '', subjectGradeId: '', teacherId: '' })
@@ -133,7 +137,7 @@ export default function AdminClassesPage() {
         </Modal>
       )}
       <div className="page-header">
-        <h1 className="page-title">Classes{subjectGradeId || teacherId ? ' (filtered)' : ''}</h1>
+        <h1 className="page-title">Classes{filterLabel ? ` - ${filterLabel}` : ''}{subjectGradeId || teacherId ? ' (filtered)' : ''}</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => setShowArchived((v) => !v)}>
             {showArchived ? 'Show Active' : 'Show Archived'}
