@@ -4,6 +4,7 @@ import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
 import { formatLastLogin } from '../../utils/formatDate'
+import { downloadPasswordSheet, printPasswordSlips } from '../../utils/passwordSheet'
 
 interface SubjectGrade { id: string; name: string; department: { name: string } }
 interface Teacher {
@@ -22,6 +23,8 @@ export default function AdminTeachersPage() {
   const [offboarding, setOffboarding] = useState<Teacher | null>(null)
   const [removingSg, setRemovingSg] = useState<{ teacher: Teacher; sg: SubjectGrade } | null>(null)
   const [createdCreds, setCreatedCreds] = useState<{ email: string; tempPassword: string } | null>(null)
+  const [resetConfirm, setResetConfirm] = useState<Teacher | null>(null)
+  const [resetResult, setResetResult] = useState<{ studentName: string; tempPassword: string } | null>(null)
   const [form, setForm] = useState({ name: '', email: '', subjectGradeIds: [] as string[] })
   const [editForm, setEditForm] = useState({ name: '', email: '' })
   const [assignSgId, setAssignSgId] = useState('')
@@ -69,6 +72,21 @@ export default function AdminTeachersPage() {
       await api.delete(`/admin/teachers/${offboarding.id}`)
       setOffboarding(null)
       reload()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleResetPassword = async () => {
+    if (!resetConfirm) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      const result = await api.post<{ teacherName: string; tempPassword: string }>(`/admin/teachers/${resetConfirm.id}/reset-password`, {})
+      setResetConfirm(null)
+      setResetResult({ studentName: result.teacherName, tempPassword: result.tempPassword })
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : 'Failed')
     } finally {
@@ -237,7 +255,7 @@ export default function AdminTeachersPage() {
         </Modal>
       )}
       {createdCreds && (
-        <Modal title="Teacher Created" onClose={() => setCreatedCreds(null)}>
+        <Modal title="Teacher Created" onClose={() => setCreatedCreds(null)} preventDismiss>
           <div className="alert alert-success" style={{ marginBottom: 16 }}>
             Account created for <strong>{createdCreds.email}</strong>.
           </div>
@@ -245,11 +263,49 @@ export default function AdminTeachersPage() {
             <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 4 }}>Temporary password:</div>
             <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 600, letterSpacing: 1 }}>{createdCreds.tempPassword}</div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
-              This password is shown only once. The teacher must change it on first login.
+              This password is shown only once and cannot be recovered — save it now. The teacher must change it on first login.
             </div>
           </div>
-          <div className="modal-footer">
+          <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={() => downloadPasswordSheet([{ studentName: createdCreds.email, tempPassword: createdCreds.tempPassword }], 'Teacher')}>Download CSV</button>
+              <button className="btn btn-secondary" onClick={() => printPasswordSlips([{ studentName: createdCreds.email, tempPassword: createdCreds.tempPassword }], 'New Teacher')}>Print slip</button>
+            </div>
             <button className="btn btn-primary" onClick={() => setCreatedCreds(null)}>Done</button>
+          </div>
+        </Modal>
+      )}
+      {resetConfirm && (
+        <Modal title="Reset teacher password" onClose={() => setResetConfirm(null)}>
+          <p>
+            Reset the password for <strong>{resetConfirm.user.name}</strong>? Their current password will
+            stop working immediately, and they'll need the new one-time password to log in.
+          </p>
+          {formError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{formError}</div>}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setResetConfirm(null)}>Cancel</button>
+            <button className="btn btn-danger" disabled={saving} onClick={handleResetPassword}>{saving ? 'Resetting…' : 'Reset Password'}</button>
+          </div>
+        </Modal>
+      )}
+      {resetResult && (
+        <Modal title="Password Reset" onClose={() => setResetResult(null)} preventDismiss>
+          <div className="alert alert-success" style={{ marginBottom: 16 }}>
+            <strong>{resetResult.studentName}</strong>'s password has been reset.
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 4 }}>Temporary password:</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 600, letterSpacing: 1 }}>{resetResult.tempPassword}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
+              This is the only copy — passwords are hashed on creation and cannot be shown again. They must change it on first login.
+            </div>
+          </div>
+          <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={() => downloadPasswordSheet([resetResult], 'Teacher')}>Download CSV</button>
+              <button className="btn btn-secondary" onClick={() => printPasswordSlips([resetResult], 'Password Reset')}>Print slip</button>
+            </div>
+            <button className="btn btn-primary" onClick={() => setResetResult(null)}>Done</button>
           </div>
         </Modal>
       )}
@@ -323,6 +379,7 @@ export default function AdminTeachersPage() {
                 <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(t.user.lastLoginAt)}</td>
                 <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(t); setEditForm({ name: t.user.name, email: t.user.email }); setFormError(null) }}>Edit</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setFormError(null); setResetConfirm(t) }}>Reset Password</button>
                   {t.user.role !== 'ADMIN' && (
                     <button className="btn btn-secondary btn-sm" onClick={() => { setFormError(null); setPromoting(t) }}>Promote to Admin</button>
                   )}
