@@ -4,6 +4,7 @@ import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
 import { CsvImportModal } from '../../components/CsvImportModal'
+import { formatLastLogin } from '../../utils/formatDate'
 
 interface Class {
   id: string; name: string
@@ -12,7 +13,7 @@ interface Class {
 }
 interface Enrollment {
   id: string
-  student: { id: string; user: { name: string; email: string } }
+  student: { id: string; user: { name: string; email: string; lastLoginAt: string | null } }
   deck: { id: string; _count: { instances: number } } | null
 }
 interface CardSet { id: string; name: string; status: string; _count: { cards: number } }
@@ -65,6 +66,7 @@ export default function AdminClassDetailPage() {
   const { data: cardSets } = useApi<CardSet[]>(() => api.get('/admin/cardsets'))
 
   const [tab, setTab] = useState<Tab>(initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'students')
+  const [lastLoginSortAsc, setLastLoginSortAsc] = useState<boolean | null>(null)
   const [showAddStudent, setShowAddStudent] = useState(false)
   const [showImportStudents, setShowImportStudents] = useState(false)
   const [showAddAssignment, setShowAddAssignment] = useState(false)
@@ -227,6 +229,19 @@ export default function AdminClassDetailPage() {
 
   if (clsLoading) return <div className="spinner" />
 
+  // Never-logged-in ("Never") rows sink to the end regardless of sort direction,
+  // so unactivated accounts don't jump to the top of a descending sort.
+  const sortedEnrollments = lastLoginSortAsc === null || !enrollments
+    ? enrollments
+    : [...enrollments].sort((a, b) => {
+        const aAt = a.student.user.lastLoginAt
+        const bAt = b.student.user.lastLoginAt
+        if (!aAt && !bAt) return 0
+        if (!aAt) return 1
+        if (!bAt) return -1
+        return lastLoginSortAsc ? aAt.localeCompare(bAt) : bAt.localeCompare(aAt)
+      })
+
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
@@ -328,14 +343,25 @@ export default function AdminClassDetailPage() {
           <div className="card">
           <div className="table-scroll">
           <table className="table">
-            <thead><tr><th>Name</th><th>Email</th><th>Cards in Deck</th><th>Actions</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Cards in Deck</th>
+                <th style={{ cursor: 'pointer' }} onClick={() => setLastLoginSortAsc((v) => (v === false ? true : false))}>
+                  Last Login {lastLoginSortAsc === null ? '' : lastLoginSortAsc ? '↑' : '↓'}
+                </th>
+                <th>Actions</th>
+              </tr>
+            </thead>
             <tbody>
-              {!enrollments?.length && <tr><td colSpan={4} className="table-empty">No students enrolled.</td></tr>}
-              {enrollments?.map((enr) => (
+              {!sortedEnrollments?.length && <tr><td colSpan={5} className="table-empty">No students enrolled.</td></tr>}
+              {sortedEnrollments?.map((enr) => (
                 <tr key={enr.id}>
                   <td>{enr.student.user.name}</td>
                   <td>{enr.student.user.email}</td>
                   <td>{enr.deck?._count.instances ?? 0}</td>
+                  <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(enr.student.user.lastLoginAt)}</td>
                   <td>
                     <button className="btn btn-danger btn-sm" onClick={() => { setUnenrollConfirm(enr); setUnenrollTyped('') }}>Unenroll</button>
                   </td>

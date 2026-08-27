@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
+import { formatLastLogin } from '../../utils/formatDate'
 
 interface SubjectGrade { id: string; name: string; department: { name: string } }
 interface Teacher {
   id: string
-  user: { id: string; name: string; email: string; role: string }
+  user: { id: string; name: string; email: string; role: string; lastLoginAt: string | null }
   subjectGrades: { subjectGrade: SubjectGrade }[]
 }
 
@@ -26,6 +27,7 @@ export default function AdminTeachersPage() {
   const [assignSgId, setAssignSgId] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [lastLoginSortAsc, setLastLoginSortAsc] = useState<boolean | null>(null)
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault()
@@ -116,6 +118,19 @@ export default function AdminTeachersPage() {
       setSaving(false)
     }
   }
+
+  // Never-logged-in ("Never") rows sink to the end regardless of sort direction,
+  // so unactivated accounts don't jump to the top of a descending sort.
+  const sortedTeachers = lastLoginSortAsc === null || !teachers
+    ? teachers
+    : [...teachers].sort((a, b) => {
+        const aAt = a.user.lastLoginAt
+        const bAt = b.user.lastLoginAt
+        if (!aAt && !bAt) return 0
+        if (!aAt) return 1
+        if (!bAt) return -1
+        return lastLoginSortAsc ? aAt.localeCompare(bAt) : bAt.localeCompare(aAt)
+      })
 
   return (
     <div>
@@ -267,10 +282,22 @@ export default function AdminTeachersPage() {
       {teachers && (
         <div className="table-scroll">
         <table className="table">
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Subject Grades</th><th>Classes</th><th style={{ width: 220 }}>Actions</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Subject Grades</th>
+              <th>Classes</th>
+              <th style={{ cursor: 'pointer' }} onClick={() => setLastLoginSortAsc((v) => (v === false ? true : false))}>
+                Last Login {lastLoginSortAsc === null ? '' : lastLoginSortAsc ? '↑' : '↓'}
+              </th>
+              <th style={{ width: 220 }}>Actions</th>
+            </tr>
+          </thead>
           <tbody>
-            {teachers.length === 0 && <tr><td colSpan={6} className="table-empty">No teachers yet.</td></tr>}
-            {teachers.map((t) => (
+            {sortedTeachers?.length === 0 && <tr><td colSpan={7} className="table-empty">No teachers yet.</td></tr>}
+            {sortedTeachers?.map((t) => (
               <tr key={t.id}>
                 <td>{t.user.name}</td>
                 <td>{t.user.email}</td>
@@ -292,6 +319,7 @@ export default function AdminTeachersPage() {
                   </button>
                 </td>
                 <td><Link to={`/admin/classes?teacherId=${t.id}`}>View classes</Link></td>
+                <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(t.user.lastLoginAt)}</td>
                 <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(t); setEditForm({ name: t.user.name, email: t.user.email }); setFormError(null) }}>Edit</button>
                   {t.user.role !== 'ADMIN' && (
