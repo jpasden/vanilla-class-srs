@@ -41,6 +41,7 @@ interface WeeklyGoal {
 interface StatsSummary {
   weeklyGoal: WeeklyGoal | null
   deckCardSets: { id: string; name: string }[]
+  personalCardSet: { id: string; cardCount: number } | null
 }
 
 type Phase = 'idle' | 'loading' | 'reviewing' | 'done'
@@ -126,7 +127,7 @@ export default function ReviewPage() {
   const { data: summary, reload: reloadSummary } = useApi<StatsSummary>(
     () => active
       ? api.get<StatsSummary>(`/students/stats/summary?enrollmentId=${active.enrollmentId}`)
-      : Promise.resolve({ weeklyGoal: null, deckCardSets: [] }),
+      : Promise.resolve({ weeklyGoal: null, deckCardSets: [], personalCardSet: null }),
     [active?.enrollmentId],
   )
 
@@ -374,6 +375,11 @@ export default function ReviewPage() {
                 <label className="form-label">Study Focus</label>
                 <select className="form-select" value={selectedFocus} onChange={(e) => setSelectedFocus(e.target.value)}>
                   <option value="">All CardSets</option>
+                  {summary.personalCardSet && (
+                    <option value={summary.personalCardSet.id}>
+                      Cards I added ({summary.personalCardSet.cardCount})
+                    </option>
+                  )}
                   {summary.weeklyGoal?.cardSetFocus?.mode === 'assigned' && (
                     <option value="__homework__">
                       Homework: {summary.weeklyGoal.cardSetFocus.cardSetNames.join(', ')}
