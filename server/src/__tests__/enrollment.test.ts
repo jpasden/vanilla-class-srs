@@ -117,7 +117,7 @@ describe('enrollStudents', () => {
     const prisma = makePrisma()
     const results = await enrollStudents(prisma as any, 'class-1', [
       { email: 'new@school.edu', name: 'New Student' },
-    ])
+    ], 'actor-1')
 
     expect(results).toHaveLength(1)
     expect(results[0].status).toBe('created')
@@ -140,7 +140,7 @@ describe('enrollStudents', () => {
 
     const results = await enrollStudents(prisma as any, 'class-1', [
       { email: 'existing@school.edu', name: 'Existing' },
-    ])
+    ], 'actor-1')
 
     expect(results[0].status).toBe('already_enrolled')
     expect(results[0].tempPassword).toBeUndefined()
@@ -158,7 +158,7 @@ describe('enrollStudents', () => {
 
     const results = await enrollStudents(prisma as any, 'class-1', [
       { email: 'existing@school.edu', name: 'Existing' },
-    ])
+    ], 'actor-1')
 
     expect(results[0].status).toBe('enrolled')
     expect(prisma._tx.enrollment.update).toHaveBeenCalledWith({
@@ -183,7 +183,7 @@ describe('enrollStudents', () => {
 
     const results = await enrollStudents(prisma as any, 'class-1', [
       { email: 'existing@school.edu', name: 'Existing' },
-    ])
+    ], 'actor-1')
 
     expect(results[0].status).toBe('enrolled')
     expect(results[0].tempPassword).toBeUndefined()
@@ -200,7 +200,7 @@ describe('enrollStudents', () => {
 
     const results = await enrollStudents(prisma as any, 'class-1', [
       { email: 'teacher@school.edu', name: 'Teacher Turned Student' },
-    ])
+    ], 'actor-1')
 
     expect(results[0].status).toBe('enrolled')
     expect(prisma._tx.user.create).not.toHaveBeenCalled()
@@ -212,7 +212,7 @@ describe('enrollStudents', () => {
 
     await enrollStudents(prisma as any, 'class-1', [
       { email: 'new@school.edu', name: 'New' },
-    ])
+    ], 'actor-1')
 
     expect(prisma._tx.cardInstance.createMany).toHaveBeenCalledOnce()
     const call = prisma._tx.cardInstance.createMany.mock.calls[0][0]
@@ -226,7 +226,7 @@ describe('enrollStudents', () => {
 
     await enrollStudents(prisma as any, 'class-1', [
       { email: 'new@school.edu', name: 'New' },
-    ])
+    ], 'actor-1')
 
     expect(prisma._tx.cardInstance.createMany).not.toHaveBeenCalled()
   })
@@ -245,7 +245,7 @@ describe('enrollStudents', () => {
       { email: 'first@school.edu', name: 'First' },
       { email: 'second@school.edu', name: 'Second' },
       { email: 'third@school.edu', name: 'Third' },
-    ])
+    ], 'actor-1')
 
     expect(results).toHaveLength(3)
     expect(results[0].status).toBe('created')
@@ -261,7 +261,7 @@ describe('enrollStudents', () => {
       { email: 'a@school.edu', name: 'A' },
       { email: 'b@school.edu', name: 'B' },
       { email: 'c@school.edu', name: 'C' },
-    ])
+    ], 'actor-1')
 
     // Should query assignments exactly once regardless of number of students
     expect(prisma.assignment.findMany).toHaveBeenCalledOnce()

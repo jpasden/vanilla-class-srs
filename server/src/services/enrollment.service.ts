@@ -20,6 +20,7 @@ import { PrismaClient, Role, CardOrigin } from '@prisma/client'
 import { parse } from 'csv-parse/sync'
 import { z } from 'zod'
 import { hashPassword, generateTempPassword } from './auth.service'
+import { logAuditEvent } from '../lib/auditLog'
 
 const EmailSchema = z.string().email()
 
@@ -122,6 +123,7 @@ export async function enrollStudents(
   prisma: PrismaClient,
   classId: string,
   rows: EnrollInput[],
+  actorUserId: string,
 ): Promise<EnrollResult[]> {
   // Load the class's MANDATORY assignments once (used for CardInstance creation)
   const mandatoryAssignments = await prisma.assignment.findMany({
@@ -207,6 +209,14 @@ export async function enrollStudents(
         const status = tempPassword ? 'created' : 'enrolled'
         return { email: row.email, name: row.name, status: status as 'created' | 'enrolled', tempPassword }
       })
+
+      if (result.status === 'created') {
+        logAuditEvent('student_account_created', {
+          actorUserId,
+          studentEmail: result.email,
+          classId,
+        })
+      }
 
       results.push(result)
     } catch (err: any) {

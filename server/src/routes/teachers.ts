@@ -175,7 +175,7 @@ router.post('/classes/:id/students', validate(AddStudentSchema), async (req: Req
     return
   }
 
-  const results = await enrollStudents(prisma, cls.id, [{ email: req.body.email, name: req.body.name }])
+  const results = await enrollStudents(prisma, cls.id, [{ email: req.body.email, name: req.body.name }], req.user!.sub)
   const result = results[0]
 
   if (result.status === 'error') {
@@ -223,7 +223,7 @@ router.post(
       return
     }
 
-    const results = await enrollStudents(prisma, cls.id, parsed.rows as { email: string; name: string }[])
+    const results = await enrollStudents(prisma, cls.id, parsed.rows as { email: string; name: string }[], req.user!.sub)
     res.json({ results })
   },
 )

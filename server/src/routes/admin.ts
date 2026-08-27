@@ -13,6 +13,7 @@ import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssi
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
 import { getStudentAdditions } from '../services/studentAdditions.service'
+import { logAuditEvent } from '../lib/auditLog'
 import {
   getLastCompletedWeekBounds,
   getCalendarWeekBounds,
@@ -338,6 +339,11 @@ router.post('/teachers', validate(CreateTeacherSchema), async (req: Request, res
     return t
   })
 
+  logAuditEvent('teacher_account_created', {
+    actorUserId: req.user!.sub,
+    teacherEmail: req.body.email,
+  })
+
   // Return the temp password once — it is never retrievable again
   res.status(201).json({ teacherId: teacher.id, tempPassword })
 })
@@ -604,7 +610,7 @@ router.post('/classes/:id/students', validate(AddStudentSchema), async (req: Req
     return
   }
 
-  const results = await enrollStudents(prisma, cls.id, [{ email: req.body.email, name: req.body.name }])
+  const results = await enrollStudents(prisma, cls.id, [{ email: req.body.email, name: req.body.name }], req.user!.sub)
   const result = results[0]
 
   if (result.status === 'error') {
@@ -647,7 +653,7 @@ router.post(
       return
     }
 
-    const results = await enrollStudents(prisma, cls.id, parsed.rows as { email: string; name: string }[])
+    const results = await enrollStudents(prisma, cls.id, parsed.rows as { email: string; name: string }[], req.user!.sub)
     res.json({ results })
   },
 )
