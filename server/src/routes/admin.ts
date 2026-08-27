@@ -371,6 +371,33 @@ router.patch('/teachers/:id', validate(PatchTeacherSchema), async (req: Request,
   }
 })
 
+// POST /api/admin/teachers/:id/reset-password
+router.post('/teachers/:id/reset-password', async (req: Request, res: Response) => {
+  const teacher = await prisma.teacher.findUnique({
+    where: { id: p(req, 'id') },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  })
+  if (!teacher) {
+    res.status(404).json({ error: 'Teacher not found' })
+    return
+  }
+
+  const tempPassword = generateTempPassword()
+  const passwordHash = await hashPassword(tempPassword)
+  await prisma.user.update({
+    where: { id: teacher.user.id },
+    data: { passwordHash, mustChangePassword: true },
+  })
+
+  logAuditEvent('teacher_password_reset', {
+    actorUserId: req.user!.sub,
+    teacherUserId: teacher.user.id,
+    teacherEmail: teacher.user.email,
+  })
+
+  res.json({ teacherName: teacher.user.name, tempPassword })
+})
+
 // DELETE /api/admin/teachers/:id  — removes teacher profile and SubjectGrade memberships.
 // Blocked if the teacher still has any classes (active OR archived) — admin must reassign
 // all classes to another teacher first. User record is retained; role is demoted to STUDENT.
