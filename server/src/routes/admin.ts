@@ -275,7 +275,7 @@ router.get('/teachers', async (_req: Request, res: Response) => {
   const teachers = await prisma.teacher.findMany({
     orderBy: { user: { name: 'asc' } },
     include: {
-      user: { select: { id: true, name: true, email: true, role: true } },
+      user: { select: { id: true, name: true, email: true, role: true, lastLoginAt: true } },
       subjectGrades: {
         include: { subjectGrade: { select: { id: true, name: true } } },
       },
@@ -664,7 +664,7 @@ router.get('/classes/:id/students', async (req: Request, res: Response) => {
     orderBy: { student: { user: { name: 'asc' } } },
     include: {
       student: {
-        include: { user: { select: { id: true, name: true, email: true } } },
+        include: { user: { select: { id: true, name: true, email: true, lastLoginAt: true } } },
       },
       deck: { select: { id: true, _count: { select: { instances: true } } } },
     },
