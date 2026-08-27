@@ -31,6 +31,26 @@ export default function AdminTeachersPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [lastLoginSortAsc, setLastLoginSortAsc] = useState<boolean | null>(null)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  const toggleRow = (teacherId: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(teacherId)) next.delete(teacherId)
+      else next.add(teacherId)
+      return next
+    })
+  }
+
+  // Classic expand-all/collapse-all: if anything is currently collapsed,
+  // expand everything; only collapse everything once all rows are already
+  // expanded. Computed fresh each click rather than tracked as its own
+  // flag, so it can never disagree with the row states it's summarizing.
+  const allRowsExpanded = !!teachers?.length && teachers.every((t) => expandedRows.has(t.id))
+  const toggleAllRows = () => {
+    if (!teachers) return
+    setExpandedRows(allRowsExpanded ? new Set() : new Set(teachers.map((t) => t.id)))
+  }
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault()
@@ -207,6 +227,34 @@ export default function AdminTeachersPage() {
               <label className="form-label">Email</label>
               <input className="form-input" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
             </div>
+            <div className="form-group">
+              <label className="form-label">Actions</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { const t = editing; setEditing(null); setFormError(null); setResetConfirm(t) }}
+                >
+                  Reset Password
+                </button>
+                {editing.user.role !== 'ADMIN' && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => { const t = editing; setEditing(null); setFormError(null); setPromoting(t) }}
+                  >
+                    Promote to Admin
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() => { const t = editing; setEditing(null); setFormError(null); setOffboarding(t) }}
+                >
+                  Offboard
+                </button>
+              </div>
+            </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
@@ -344,12 +392,14 @@ export default function AdminTeachersPage() {
               <th>Name</th>
               <th>Email</th>
               <th>Role</th>
-              <th>Subject Grades</th>
+              <th style={{ cursor: 'pointer' }} onClick={toggleAllRows}>
+                Subject Grades {allRowsExpanded ? '▼' : '▶'}
+              </th>
               <th>Classes</th>
               <th style={{ cursor: 'pointer' }} onClick={() => setLastLoginSortAsc((v) => (v === false ? true : false))}>
                 Last Login {lastLoginSortAsc === null ? '' : lastLoginSortAsc ? '↑' : '↓'}
               </th>
-              <th style={{ width: 220 }}>Actions</th>
+              <th style={{ width: 80 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -360,30 +410,32 @@ export default function AdminTeachersPage() {
                 <td>{t.user.email}</td>
                 <td><span className={`badge badge-${t.user.role === 'ADMIN' ? 'red' : 'blue'}`}>{t.user.role}</span></td>
                 <td>
-                  {t.subjectGrades.map((m) => (
-                    <span key={m.subjectGrade.id} style={{ marginRight: 4 }}>
-                      <span className="badge badge-gray">{m.subjectGrade.name}</span>
-                      <button
-                        onClick={() => setRemovingSg({ teacher: t, sg: m.subjectGrade })}
-                        className="badge btn-danger"
-                        style={{ border: 'none', cursor: 'pointer', fontWeight: 'bold', marginLeft: 2 }}
-                        title="Remove"
-                      >✕</button>
-                    </span>
-                  ))}
-                  <button className="btn btn-secondary btn-sm" style={{ marginLeft: 4 }} onClick={() => { setFormError(null); setAssignSgId(''); setShowAssign(t) }}>
+                  <span style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleRow(t.id)}>
+                    {expandedRows.has(t.id) ? '▼' : '▶'} ({t.subjectGrades.length})
+                  </span>
+                  {expandedRows.has(t.id) && (
+                    <ol style={{ margin: '6px 0 0', paddingLeft: 18, textAlign: 'left' }}>
+                      {t.subjectGrades.map((m) => (
+                        <li key={m.subjectGrade.id} style={{ marginBottom: 2 }}>
+                          {m.subjectGrade.name}
+                          <button
+                            onClick={() => setRemovingSg({ teacher: t, sg: m.subjectGrade })}
+                            className="badge btn-danger"
+                            style={{ border: 'none', cursor: 'pointer', fontWeight: 'bold', marginLeft: 4 }}
+                            title="Remove"
+                          >✕</button>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => { setFormError(null); setAssignSgId(''); setShowAssign(t) }}>
                     + SG
                   </button>
                 </td>
                 <td><Link to={`/admin/classes?teacherId=${t.id}`}>View classes</Link></td>
                 <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(t.user.lastLoginAt)}</td>
-                <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                <td>
                   <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(t); setEditForm({ name: t.user.name, email: t.user.email }); setFormError(null) }}>Edit</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => { setFormError(null); setResetConfirm(t) }}>Reset Password</button>
-                  {t.user.role !== 'ADMIN' && (
-                    <button className="btn btn-secondary btn-sm" onClick={() => { setFormError(null); setPromoting(t) }}>Promote to Admin</button>
-                  )}
-                  <button className="btn btn-danger btn-sm" onClick={() => { setFormError(null); setOffboarding(t) }}>Offboard</button>
                 </td>
               </tr>
             ))}
