@@ -116,7 +116,17 @@ export default function ReviewPage() {
   // Set when a review-start attempt comes back with zero cards, so we can offer the right
   // next step (study more new words / review ahead of schedule) instead of a dead end.
   const [emptyReason, setEmptyReason] = useState<'capped' | 'exhausted' | null>(null)
+  // Set when finishSession fails right after the last card is graded — the card is
+  // already swiped away with nothing left to review, so rather than leave the student
+  // staring at a stale card with no grade buttons, show an explicit retry affordance.
+  const [finishPending, setFinishPending] = useState<{ sessionId: string; reviewed: number } | null>(null)
+  const [finishing, setFinishing] = useState(false)
   const finishStageRef = useRef<HTMLDivElement>(null)
+  // Synchronous double-submit guard for gradeCard — `grading` state alone isn't
+  // enough, since disabled={grading} on the button doesn't take effect in the
+  // DOM until the next render, leaving a window where a fast double-tap can
+  // fire gradeCard twice for the same card before React re-renders.
+  const gradingRef = useRef(false)
 
   // Drives the Study Focus dropdown. '' = All CardSets, '__homework__' = the
   // homework-assigned CardSet(s) as a group (may be more than one), or a
@@ -208,7 +218,8 @@ export default function ReviewPage() {
   }
 
   const gradeCard = async (grade: number) => {
-    if (!session || grading) return
+    if (!session || gradingRef.current) return
+    gradingRef.current = true
     setGrading(true)
     const responseTimeMs = Date.now() - startTime
 
@@ -282,19 +293,25 @@ export default function ReviewPage() {
       setError(e instanceof ApiError ? e.message : 'Failed to grade card')
       setCardAnim(null)
     } finally {
+      gradingRef.current = false
       setGrading(false)
     }
   }
 
   const finishSession = useCallback(async (sessionId: string, reviewed?: number) => {
+    setFinishing(true)
     try {
       const result = await api.post<{ cardsReviewed: number; accuracyRate: number | null; weeklyGoal: WeeklyGoal | null }>('/students/review/finish', { sessionId })
       setSessionResult(result)
       setHeadline(pickRandom(ENCOURAGEMENT[accuracyTier(result.accuracyRate)]))
       setPhase('done')
+      setFinishPending(null)
       reloadSummary()
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to finish session')
+      setFinishPending({ sessionId, reviewed: reviewed ?? 0 })
+    } finally {
+      setFinishing(false)
     }
   }, [reloadSummary])
 
@@ -449,7 +466,7 @@ export default function ReviewPage() {
           {/* Progress */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
             <span>{cardIndex + 1} / {session!.cards.length}</span>
-            {confirmFinish ? (
+            {finishPending ? null : confirmFinish ? (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>End session?</span>
                 <button className="btn btn-danger btn-sm" disabled={grading} onClick={async () => { await finishSession(session!.sessionId); setConfirmFinish(false) }}>End</button>
@@ -463,6 +480,35 @@ export default function ReviewPage() {
             <div className="progress-fill" style={{ width: `${((cardIndex + 1) / session!.cards.length) * 100}%` }} />
           </div>
 
+          {finishPending ? (
+            /* The last card was already graded and swiped away — nothing left to
+               review — but submitting the finished session failed (e.g. a dropped
+               connection). Show an explicit retry instead of leaving the student
+               staring at the stale, already-swiped card with no grade buttons. */
+            <div className="review-flip-outer" style={{ height: 260 }}>
+              <div
+                className="review-flip-face"
+                style={{
+                  background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12,
+                  padding: 'clamp(20px, 5vw, 40px) clamp(16px, 4vw, 32px)', textAlign: 'center',
+                  height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)', gap: 16,
+                }}
+              >
+                <p style={{ fontSize: 'var(--text-base)' }}>
+                  You finished all your cards, but we couldn't save your results — check your connection and try again.
+                </p>
+                <button
+                  className="btn btn-primary"
+                  disabled={finishing}
+                  onClick={() => finishSession(finishPending.sessionId, finishPending.reviewed)}
+                >
+                  {finishing ? 'Retrying…' : 'Try Again'}
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Card — 3D pop-flip with a slight random tilt/drift on each flip (demos/anim-demo/flip-final.html),
               swiped off in a grade-specific diagonal direction when graded (demos/anim-demo/next-card-final-2.html) */}
           <div
@@ -556,6 +602,8 @@ export default function ReviewPage() {
                 ))}
               </div>
             </>
+          )}
+          </>
           )}
 
           {error && <div className="alert alert-danger" style={{ marginTop: 16 }}>{error}</div>}
