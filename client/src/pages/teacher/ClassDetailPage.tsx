@@ -63,6 +63,9 @@ export default function TeacherClassDetailPage() {
   const [removeConfirm, setRemoveConfirm] = useState<Assignment | null>(null)
   const [unenrollConfirm, setUnenrollConfirm] = useState<Enrollment | null>(null)
   const [unenrollTyped, setUnenrollTyped] = useState('')
+  const [editingStudent, setEditingStudent] = useState<Enrollment | null>(null)
+  const [editStudentForm, setEditStudentForm] = useState({ name: '', email: '' })
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState<Enrollment | null>(null)
   const [showHw, setShowHw] = useState(false)
   const [studentForm, setStudentForm] = useState({ email: '', name: '' })
   const [newStudentResult, setNewStudentResult] = useState<{ status: string; tempPassword?: string } | null>(null)
@@ -94,13 +97,37 @@ export default function TeacherClassDetailPage() {
     }
   }
 
-  const handleResetStudentPassword = async (enr: Enrollment) => {
-    if (!confirm(`Reset password for ${enr.student.user.name}? They will need the new temp password to log in.`)) return
+  const handleResetStudentPassword = async () => {
+    if (!resetPasswordConfirm) return
+    setSaving(true)
+    setFormError(null)
     try {
-      const result = await api.post<{ tempPassword: string }>(`/teachers/classes/${id}/students/${enr.student.id}/reset-password`, {})
-      setResetResult([{ studentName: enr.student.user.name, tempPassword: result.tempPassword }])
+      const result = await api.post<{ tempPassword: string }>(
+        `/teachers/classes/${id}/students/${resetPasswordConfirm.student.id}/reset-password`,
+        {},
+      )
+      setResetPasswordConfirm(null)
+      setResetResult([{ studentName: resetPasswordConfirm.student.user.name, tempPassword: result.tempPassword }])
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : 'Failed')
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEditStudent = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editingStudent) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      await api.patch(`/teachers/classes/${id}/students/${editingStudent.student.id}`, editStudentForm)
+      setEditingStudent(null)
+      reloadEnrollments()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Save failed')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -384,6 +411,70 @@ export default function TeacherClassDetailPage() {
               </div>
             </Modal>
           )}
+          {editingStudent && (
+            <Modal title={`Edit — ${editingStudent.student.user.name}`} onClose={() => setEditingStudent(null)}>
+              <form onSubmit={handleEditStudent}>
+                {formError && <div className="alert alert-danger">{formError}</div>}
+                <div className="form-group">
+                  <label className="form-label">Name</label>
+                  <input
+                    className="form-input"
+                    value={editStudentForm.name}
+                    onChange={(e) => setEditStudentForm({ ...editStudentForm, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input
+                    className="form-input"
+                    type="email"
+                    value={editStudentForm.email}
+                    onChange={(e) => setEditStudentForm({ ...editStudentForm, email: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Other Actions</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { const e = editingStudent; setEditingStudent(null); setFormError(null); setResetPasswordConfirm(e) }}
+                    >
+                      Reset Password
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => { const e = editingStudent; setEditingStudent(null); setFormError(null); setUnenrollConfirm(e); setUnenrollTyped('') }}
+                    >
+                      Unenroll
+                    </button>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setEditingStudent(null)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                </div>
+              </form>
+            </Modal>
+          )}
+          {resetPasswordConfirm && (
+            <Modal title="Reset student password" onClose={() => setResetPasswordConfirm(null)}>
+              <p>
+                Reset the password for <strong>{resetPasswordConfirm.student.user.name}</strong>? Their current
+                password will stop working immediately, and they'll need the new one-time password to log in.
+              </p>
+              {formError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{formError}</div>}
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setResetPasswordConfirm(null)}>Cancel</button>
+                <button className="btn btn-danger" disabled={saving} onClick={handleResetStudentPassword}>
+                  {saving ? 'Resetting…' : 'Reset Password'}
+                </button>
+              </div>
+            </Modal>
+          )}
           <div className="page-header" style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-primary btn-sm" onClick={() => { setFormError(null); setNewStudentResult(null); setStudentForm({ email: '', name: '' }); setShowAddStudent(true) }}>+ Add Student</button>
@@ -420,8 +511,12 @@ export default function TeacherClassDetailPage() {
                       to={`/teacher/classes/${id}/students/${enr.student.id}`}
                       className="btn btn-secondary btn-sm"
                     >View Cards</Link>
-                    <button className="btn btn-secondary btn-sm" onClick={() => handleResetStudentPassword(enr)}>Reset Password</button>
-                    <button className="btn btn-danger btn-sm" onClick={() => { setUnenrollConfirm(enr); setUnenrollTyped('') }}>Unenroll</button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { setEditingStudent(enr); setEditStudentForm({ name: enr.student.user.name, email: enr.student.user.email }); setFormError(null) }}
+                    >
+                      Edit
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -228,6 +228,47 @@ router.post(
   },
 )
 
+const PatchStudentSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+})
+
+// PATCH /api/teachers/classes/:id/students/:studentId  — edit name/email
+router.patch(
+  '/classes/:id/students/:studentId',
+  validate(PatchStudentSchema),
+  async (req: Request, res: Response) => {
+    const teacher = await getTeacher(req.user!.sub)
+    if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
+
+    const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+    if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+      res.status(404).json({ error: 'Class not found' }); return
+    }
+
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { classId: cls.id, student: { id: p(req, 'studentId') }, archivedAt: null },
+      include: { student: { include: { user: { select: { id: true } } } } },
+    })
+    if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
+
+    try {
+      const updated = await prisma.user.update({
+        where: { id: enrollment.student.user.id },
+        data: req.body,
+        select: { id: true, name: true, email: true },
+      })
+      res.json(updated)
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        res.status(409).json({ error: 'Email already in use' })
+        return
+      }
+      throw err
+    }
+  },
+)
+
 // POST /api/teachers/classes/:id/students/:studentId/reset-password
 router.post('/classes/:id/students/:studentId/reset-password', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)

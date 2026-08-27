@@ -775,6 +775,62 @@ router.delete('/classes/:id/students/:studentId', async (req: Request, res: Resp
   res.json({ ok: true })
 })
 
+const PatchStudentSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+})
+
+// PATCH /api/admin/classes/:id/students/:studentId  — edit name/email
+router.patch(
+  '/classes/:id/students/:studentId',
+  validate(PatchStudentSchema),
+  async (req: Request, res: Response) => {
+    const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+    if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { classId: cls.id, student: { id: p(req, 'studentId') }, archivedAt: null },
+      include: { student: { include: { user: { select: { id: true } } } } },
+    })
+    if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
+
+    try {
+      const updated = await prisma.user.update({
+        where: { id: enrollment.student.user.id },
+        data: req.body,
+        select: { id: true, name: true, email: true },
+      })
+      res.json(updated)
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        res.status(409).json({ error: 'Email already in use' })
+        return
+      }
+      throw err
+    }
+  },
+)
+
+// POST /api/admin/classes/:id/students/:studentId/reset-password
+router.post('/classes/:id/students/:studentId/reset-password', async (req: Request, res: Response) => {
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+  const enrollment = await prisma.enrollment.findFirst({
+    where: { classId: cls.id, student: { id: p(req, 'studentId') }, archivedAt: null },
+    include: { student: { include: { user: { select: { id: true } } } } },
+  })
+  if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
+
+  const tempPassword = generateTempPassword()
+  const passwordHash = await hashPassword(tempPassword)
+  await prisma.user.update({
+    where: { id: enrollment.student.user.id },
+    data: { passwordHash, mustChangePassword: true },
+  })
+  res.json({ tempPassword })
+})
+
 // ─────────────────────────────────────────────
 // CardSet creation + promotion (spec §10)
 // Admin can author a CardSet directly (created straight to DEPARTMENTAL,

@@ -5,6 +5,7 @@ import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
 import { CsvImportModal } from '../../components/CsvImportModal'
 import { formatLastLogin } from '../../utils/formatDate'
+import { downloadPasswordSheet, printPasswordSlips } from '../../utils/passwordSheet'
 
 interface Class {
   id: string; name: string
@@ -73,6 +74,10 @@ export default function AdminClassDetailPage() {
   const [removeConfirm, setRemoveConfirm] = useState<Assignment | null>(null)
   const [unenrollConfirm, setUnenrollConfirm] = useState<Enrollment | null>(null)
   const [unenrollTyped, setUnenrollTyped] = useState('')
+  const [editingStudent, setEditingStudent] = useState<Enrollment | null>(null)
+  const [editStudentForm, setEditStudentForm] = useState({ name: '', email: '' })
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState<Enrollment | null>(null)
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ studentName: string; tempPassword: string } | null>(null)
   const [studentForm, setStudentForm] = useState({ email: '', name: '' })
   const [newStudentResult, setNewStudentResult] = useState<{ status: string; tempPassword?: string } | null>(null)
   const [assignForm, setAssignForm] = useState({ cardSetId: '', type: 'MANDATORY', priority: 0 })
@@ -112,6 +117,40 @@ export default function AdminClassDetailPage() {
       reloadEnrollments()
     } catch (e) {
       alert(e instanceof ApiError ? e.message : 'Failed')
+    }
+  }
+
+  const handleEditStudent = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editingStudent) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      await api.patch(`/admin/classes/${id}/students/${editingStudent.student.id}`, editStudentForm)
+      setEditingStudent(null)
+      reloadEnrollments()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleResetStudentPassword = async () => {
+    if (!resetPasswordConfirm) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      const result = await api.post<{ tempPassword: string }>(
+        `/admin/classes/${id}/students/${resetPasswordConfirm.student.id}/reset-password`,
+        {},
+      )
+      setResetPasswordConfirm(null)
+      setResetPasswordResult({ studentName: resetPasswordConfirm.student.user.name, tempPassword: result.tempPassword })
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -363,7 +402,12 @@ export default function AdminClassDetailPage() {
                   <td>{enr.deck?._count.instances ?? 0}</td>
                   <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(enr.student.user.lastLoginAt)}</td>
                   <td>
-                    <button className="btn btn-danger btn-sm" onClick={() => { setUnenrollConfirm(enr); setUnenrollTyped('') }}>Unenroll</button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { setEditingStudent(enr); setEditStudentForm({ name: enr.student.user.name, email: enr.student.user.email }); setFormError(null) }}
+                    >
+                      Edit
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -372,6 +416,94 @@ export default function AdminClassDetailPage() {
           </div>
           </div>
         </div>
+      )}
+
+      {editingStudent && (
+        <Modal title={`Edit — ${editingStudent.student.user.name}`} onClose={() => setEditingStudent(null)}>
+          <form onSubmit={handleEditStudent}>
+            {formError && <div className="alert alert-danger">{formError}</div>}
+            <div className="form-group">
+              <label className="form-label">Name</label>
+              <input
+                className="form-input"
+                value={editStudentForm.name}
+                onChange={(e) => setEditStudentForm({ ...editStudentForm, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input
+                className="form-input"
+                type="email"
+                value={editStudentForm.email}
+                onChange={(e) => setEditStudentForm({ ...editStudentForm, email: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Other Actions</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { const e = editingStudent; setEditingStudent(null); setFormError(null); setResetPasswordConfirm(e) }}
+                >
+                  Reset Password
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() => { const e = editingStudent; setEditingStudent(null); setFormError(null); setUnenrollConfirm(e); setUnenrollTyped('') }}
+                >
+                  Unenroll
+                </button>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setEditingStudent(null)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {resetPasswordConfirm && (
+        <Modal title="Reset student password" onClose={() => setResetPasswordConfirm(null)}>
+          <p>
+            Reset the password for <strong>{resetPasswordConfirm.student.user.name}</strong>? Their current
+            password will stop working immediately, and they'll need the new one-time password to log in.
+          </p>
+          {formError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{formError}</div>}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setResetPasswordConfirm(null)}>Cancel</button>
+            <button className="btn btn-danger" disabled={saving} onClick={handleResetStudentPassword}>
+              {saving ? 'Resetting…' : 'Reset Password'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {resetPasswordResult && (
+        <Modal title="Password Reset" onClose={() => setResetPasswordResult(null)} preventDismiss>
+          <div className="alert alert-success" style={{ marginBottom: 16 }}>
+            <strong>{resetPasswordResult.studentName}</strong>'s password has been reset.
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 4 }}>Temporary password:</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 600, letterSpacing: 1 }}>{resetPasswordResult.tempPassword}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 6 }}>
+              This is the only copy — passwords are hashed on creation and cannot be shown again. They must change it on first login.
+            </div>
+          </div>
+          <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={() => downloadPasswordSheet([resetPasswordResult])}>Download CSV</button>
+              <button className="btn btn-secondary" onClick={() => printPasswordSlips([resetPasswordResult], cls?.name ?? 'Password Reset')}>Print slip</button>
+            </div>
+            <button className="btn btn-primary" onClick={() => setResetPasswordResult(null)}>Done</button>
+          </div>
+        </Modal>
       )}
 
       {/* Confirm large assignment modal */}
