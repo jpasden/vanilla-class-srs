@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, FormEvent, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
@@ -228,7 +228,7 @@ export default function AdminTeachersPage() {
               <input className="form-input" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
             </div>
             <div className="form-group">
-              <label className="form-label">Actions</label>
+              <label className="form-label">Other Actions</label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
@@ -405,39 +405,45 @@ export default function AdminTeachersPage() {
           <tbody>
             {sortedTeachers?.length === 0 && <tr><td colSpan={7} className="table-empty">No teachers yet.</td></tr>}
             {sortedTeachers?.map((t) => (
-              <tr key={t.id}>
-                <td>{t.user.name}</td>
-                <td>{t.user.email}</td>
-                <td><span className={`badge badge-${t.user.role === 'ADMIN' ? 'red' : 'blue'}`}>{t.user.role}</span></td>
-                <td>
-                  <span style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleRow(t.id)}>
-                    {expandedRows.has(t.id) ? '▼' : '▶'} ({t.subjectGrades.length})
-                  </span>
-                  {expandedRows.has(t.id) && (
-                    <ol style={{ margin: '6px 0 0', paddingLeft: 18, textAlign: 'left' }}>
-                      {t.subjectGrades.map((m) => (
-                        <li key={m.subjectGrade.id} style={{ marginBottom: 2 }}>
-                          {m.subjectGrade.name}
-                          <button
-                            onClick={() => setRemovingSg({ teacher: t, sg: m.subjectGrade })}
-                            className="badge btn-danger"
-                            style={{ border: 'none', cursor: 'pointer', fontWeight: 'bold', marginLeft: 4 }}
-                            title="Remove"
-                          >✕</button>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                  <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => { setFormError(null); setAssignSgId(''); setShowAssign(t) }}>
-                    + SG
-                  </button>
-                </td>
-                <td><Link to={`/admin/classes?teacherId=${t.id}`}>View classes</Link></td>
-                <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(t.user.lastLoginAt)}</td>
-                <td>
-                  <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(t); setEditForm({ name: t.user.name, email: t.user.email }); setFormError(null) }}>Edit</button>
-                </td>
-              </tr>
+              <Fragment key={t.id}>
+                <tr>
+                  <td>{t.user.name}</td>
+                  <td>{t.user.email}</td>
+                  <td><span className={`badge badge-${t.user.role === 'ADMIN' ? 'red' : 'blue'}`}>{t.user.role}</span></td>
+                  <td>
+                    <span style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleRow(t.id)}>
+                      {expandedRows.has(t.id) ? '▼' : '▶'} ({t.subjectGrades.length})
+                    </span>
+                    <button className="btn btn-secondary btn-sm" style={{ marginLeft: 8 }} onClick={() => { setFormError(null); setAssignSgId(''); setShowAssign(t) }}>
+                      + SG
+                    </button>
+                  </td>
+                  <td><Link to={`/admin/classes?teacherId=${t.id}`}>View classes</Link></td>
+                  <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(t.user.lastLoginAt)}</td>
+                  <td>
+                    <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(t); setEditForm({ name: t.user.name, email: t.user.email }); setFormError(null) }}>Edit</button>
+                  </td>
+                </tr>
+                {expandedRows.has(t.id) && (
+                  <tr>
+                    <td colSpan={7} style={{ paddingTop: 4, paddingBottom: 12 }}>
+                      <ol style={{ margin: 0, paddingLeft: 18, textAlign: 'left' }}>
+                        {t.subjectGrades.map((m) => (
+                          <li key={m.subjectGrade.id} style={{ marginBottom: 2 }}>
+                            {m.subjectGrade.name}
+                            <button
+                              onClick={() => setRemovingSg({ teacher: t, sg: m.subjectGrade })}
+                              className="badge btn-danger"
+                              style={{ border: 'none', cursor: 'pointer', fontWeight: 'bold', marginLeft: 4 }}
+                              title="Remove"
+                            >✕</button>
+                          </li>
+                        ))}
+                      </ol>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>

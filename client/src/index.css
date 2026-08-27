@@ -201,7 +201,7 @@ button, input, select, textarea {
   letter-spacing: 0.5px;
 }
 .table td { padding: 10px 14px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
-.table tbody tr:hover { background: var(--color-mango); }
+.table tbody tr:hover { background: var(--color-cornsilk); }
 .table-empty { text-align: center; color: var(--color-text-muted); padding: 32px !important; }
 .table-scroll { overflow-x: auto; }
 
