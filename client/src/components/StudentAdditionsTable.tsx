@@ -122,6 +122,7 @@ export default function StudentAdditionsTable({
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
       {data && (
+        <div className="card">
         <div className="table-scroll">
           <table className="table">
             <thead>
@@ -152,6 +153,7 @@ export default function StudentAdditionsTable({
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       )}
     </div>

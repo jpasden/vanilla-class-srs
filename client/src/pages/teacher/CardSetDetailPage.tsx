@@ -331,6 +331,7 @@ export default function TeacherCardSetDetailPage() {
       )}
 
       {/* Cards table */}
+      <div className="card">
       <div className="table-scroll">
         <table className="table">
           <thead>
@@ -358,6 +359,7 @@ export default function TeacherCardSetDetailPage() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   )

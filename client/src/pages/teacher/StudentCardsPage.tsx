@@ -47,6 +47,7 @@ export default function TeacherStudentCardsPage() {
         <div className="alert alert-info">This student has not added any personal cards yet.</div>
       )}
       {cards && cards.length > 0 && (
+        <div className="card">
         <div className="table-scroll">
         <table className="table">
           <thead>
@@ -74,6 +75,7 @@ export default function TeacherStudentCardsPage() {
             ))}
           </tbody>
         </table>
+        </div>
         </div>
       )}
     </div>
