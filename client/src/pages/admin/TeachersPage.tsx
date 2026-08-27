@@ -426,21 +426,23 @@ export default function AdminTeachersPage() {
                 </tr>
                 {expandedRows.has(t.id) && (
                   <tr>
-                    <td colSpan={7} style={{ paddingTop: 4, paddingBottom: 12 }}>
+                    <td colSpan={3}></td>
+                    <td style={{ paddingTop: 4, paddingBottom: 12, verticalAlign: 'top' }}>
                       <ol style={{ margin: 0, paddingLeft: 18, textAlign: 'left' }}>
                         {t.subjectGrades.map((m) => (
                           <li key={m.subjectGrade.id} style={{ marginBottom: 2 }}>
-                            {m.subjectGrade.name}
+                            <Link to={`/admin/classes?subjectGradeId=${m.subjectGrade.id}`}>{m.subjectGrade.name}</Link>
                             <button
                               onClick={() => setRemovingSg({ teacher: t, sg: m.subjectGrade })}
                               className="badge btn-danger"
-                              style={{ border: 'none', cursor: 'pointer', fontWeight: 'bold', marginLeft: 4 }}
+                              style={{ border: 'none', cursor: 'pointer', fontWeight: 'bold', marginLeft: 10 }}
                               title="Remove"
                             >✕</button>
                           </li>
                         ))}
                       </ol>
                     </td>
+                    <td colSpan={3}></td>
                   </tr>
                 )}
               </Fragment>
