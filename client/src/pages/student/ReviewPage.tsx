@@ -127,6 +127,11 @@ export default function ReviewPage() {
   // DOM until the next render, leaving a window where a fast double-tap can
   // fire gradeCard twice for the same card before React re-renders.
   const gradingRef = useRef(false)
+  // On short/landscape viewports, the flip card + progress bar + 4 stacked grade
+  // buttons can exceed the visible viewport height, pushing the buttons below the
+  // fold with no visual cue that the page scrolls. Scrolling them into view the
+  // moment they appear means a student never has to discover that on their own.
+  const gradeButtonsRef = useRef<HTMLDivElement>(null)
 
   // Drives the Study Focus dropdown. '' = All CardSets, '__homework__' = the
   // homework-assigned CardSet(s) as a group (may be more than one), or a
@@ -145,6 +150,15 @@ export default function ReviewPage() {
     const focus = summary?.weeklyGoal?.cardSetFocus
     setSelectedFocus(focus?.mode === 'assigned' ? '__homework__' : '')
   }, [summary])
+
+  // Ensure the grade buttons are actually visible the moment they appear, in case
+  // the flip card + progress bar have already filled the viewport (short screens,
+  // landscape phones) — the page does scroll, but nothing else signals that.
+  useEffect(() => {
+    if (flipped) {
+      gradeButtonsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [flipped])
 
   if (!active) { navigate('/student'); return null }
 
@@ -564,7 +578,7 @@ export default function ReviewPage() {
 
           {/* Grade buttons — vertically stacked, full width */}
           {flipped && (
-            <>
+            <div ref={gradeButtonsRef}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 24 }}>
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>How well do you know this?</span>
                 <button
@@ -601,7 +615,7 @@ export default function ReviewPage() {
                   </button>
                 ))}
               </div>
-            </>
+            </div>
           )}
           </>
           )}
