@@ -481,6 +481,19 @@ button, input, select, textarea {
 .login-split-panel:first-child { border-radius: var(--radius) 0 0 var(--radius); }
 .login-split-panel:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
 
+/* ── Print ─────────────────────────────────────────────────────────────────
+   .app-main is a fixed-height (100vh) scroll box on screen, which clips
+   anything below the fold when printed — the print engine only rasterizes
+   what fits in the constrained box, not the full scrollable content. Printing
+   needs the layout to flow as a normal document instead. */
+@media print {
+  .app-layout { display: block; height: auto; overflow: visible; }
+  .app-sidebar, .app-topbar-toggle, .app-drawer-overlay { display: none; }
+  .app-main { overflow: visible; height: auto; padding: 0; }
+  .table-scroll, .tabs { overflow: visible !important; }
+  [style*='overflow-x' i] { overflow-x: visible !important; }
+}
+
 /* ── Mobile topbar + drawer nav ───────────────────────────────────────────── */
 
 .app-topbar-toggle {
