@@ -10,7 +10,7 @@ interface Class {
   id: string; name: string
   teacher: { id: string; user: { name: string } }
   subjectGrade: { id: string; name: string }
-  _count: { enrollments: number }
+  _count: { enrollments: number; assignments: number }
 }
 
 export default function AdminClassesPage() {
@@ -154,13 +154,14 @@ export default function AdminClassesPage() {
         <div className="card">
         <div className="table-scroll">
         <table className="table">
-          <thead><tr><th>Name</th><th>Subject Grade</th><th>Teacher</th><th>Students</th><th style={{ width: 160 }}>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Subject Grade</th><th>CardSets</th><th>Teacher</th><th>Students</th><th style={{ width: 160 }}>Actions</th></tr></thead>
           <tbody>
-            {classes.length === 0 && <tr><td colSpan={5} className="table-empty">{showArchived ? 'No archived classes.' : 'No classes yet.'}</td></tr>}
+            {classes.length === 0 && <tr><td colSpan={6} className="table-empty">{showArchived ? 'No archived classes.' : 'No classes yet.'}</td></tr>}
             {classes.map((c) => (
               <tr key={c.id}>
                 <td>{showArchived ? c.name : <Link to={`/admin/classes/${c.id}`}>{c.name}</Link>}</td>
                 <td>{c.subjectGrade.name}</td>
+                <td>{c._count.assignments}</td>
                 <td>{c.teacher.user.name}</td>
                 <td>{c._count.enrollments}</td>
                 <td style={{ display: 'flex', gap: 4 }}>

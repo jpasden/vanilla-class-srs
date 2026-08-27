@@ -524,7 +524,7 @@ router.get('/classes', async (req: Request, res: Response) => {
     include: {
       teacher: { include: { user: { select: { id: true, name: true } } } },
       subjectGrade: { select: { id: true, name: true } },
-      _count: { select: { enrollments: true } },
+      _count: { select: { enrollments: true, assignments: true } },
     },
   })
   res.json(classes)
