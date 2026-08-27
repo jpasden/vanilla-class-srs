@@ -125,6 +125,7 @@ export default function AdminSubjectGradesPage() {
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
       {sgs && (
+        <div className="card">
         <div className="table-scroll">
         <table className="table">
           <thead><tr><th>Name</th><th>Department</th><th>Classes</th><th>Teachers</th><th style={{ width: 120 }}>Actions</th></tr></thead>
@@ -150,6 +151,7 @@ export default function AdminSubjectGradesPage() {
             ))}
           </tbody>
         </table>
+        </div>
         </div>
       )}
     </div>

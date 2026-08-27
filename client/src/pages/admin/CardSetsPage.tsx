@@ -173,6 +173,7 @@ export default function AdminCardSetsPage() {
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
       {css && (
+        <div className="card">
         <div className="table-scroll">
         <table className="table">
           <thead><tr><th>Name</th><th>Status</th><th>Owner</th><th>Cards</th><th>Actions</th></tr></thead>
@@ -209,6 +210,7 @@ export default function AdminCardSetsPage() {
             ))}
           </tbody>
         </table>
+        </div>
         </div>
       )}
     </div>

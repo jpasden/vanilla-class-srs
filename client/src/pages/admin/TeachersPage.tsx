@@ -280,6 +280,7 @@ export default function AdminTeachersPage() {
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
       {teachers && (
+        <div className="card">
         <div className="table-scroll">
         <table className="table">
           <thead>
@@ -331,6 +332,7 @@ export default function AdminTeachersPage() {
             ))}
           </tbody>
         </table>
+        </div>
         </div>
       )}
     </div>

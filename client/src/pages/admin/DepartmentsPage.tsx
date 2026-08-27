@@ -128,6 +128,7 @@ export default function AdminDepartmentsPage() {
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
       {depts && (
+        <div className="card">
         <div className="table-scroll">
         <table className="table">
           <thead>
@@ -159,6 +160,7 @@ export default function AdminDepartmentsPage() {
             ))}
           </tbody>
         </table>
+        </div>
         </div>
       )}
     </div>

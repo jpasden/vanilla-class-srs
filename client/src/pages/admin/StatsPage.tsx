@@ -46,7 +46,8 @@ export default function AdminStatsPage() {
       {rollupLoading && <div className="spinner" />}
       {rollupError && <div className="alert alert-danger">{rollupError}</div>}
       {rollup && (
-        <div className="table-scroll" style={{ marginBottom: 32 }}>
+        <div className="card" style={{ marginBottom: 32 }}>
+        <div className="table-scroll">
           <table className="table">
             <thead>
               <tr>
@@ -89,6 +90,7 @@ export default function AdminStatsPage() {
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       )}
     </div>

@@ -147,6 +147,7 @@ export default function AdminClassesPage() {
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
       {classes && (
+        <div className="card">
         <div className="table-scroll">
         <table className="table">
           <thead><tr><th>Name</th><th>Subject Grade</th><th>Teacher</th><th>Students</th><th style={{ width: 160 }}>Actions</th></tr></thead>
@@ -172,6 +173,7 @@ export default function AdminClassesPage() {
             ))}
           </tbody>
         </table>
+        </div>
         </div>
       )}
     </div>
