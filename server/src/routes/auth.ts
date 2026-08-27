@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import { z } from 'zod'
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import {
@@ -17,14 +17,23 @@ import { requireAuth } from '../middleware/auth'
 
 const router = asyncRouter()
 
-// A classroom on shared wifi can generate bursts of legitimate retries, so this
-// stays generous — it's here to blunt scripted guessing, not to police typos.
+// Keyed by IP + email (not IP alone): a classroom on shared wifi/NAT shares one
+// public IP, and an IP-only key would let one student mistyping their password
+// lock out every classmate behind the same router. Keying on the pair means the
+// limit still blunts scripted guessing against a single account, without one
+// student's typos affecting anyone else's login.
+export function authRateLimitKey(req: Request): string {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
+  return `${ipKeyGenerator(req.ip ?? '')}:${email}`
+}
+
 const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts. Please wait a few minutes and try again.' },
+  keyGenerator: authRateLimitKey,
 })
 
 // ─── POST /api/auth/login ────────────────────────────────────────────────────
