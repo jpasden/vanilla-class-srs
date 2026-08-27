@@ -14,6 +14,7 @@ import {
 } from '../services/auth.service'
 import { sendPasswordResetEmail } from '../services/email.service'
 import { requireAuth } from '../middleware/auth'
+import { logAuditEvent } from '../lib/auditLog'
 
 const router = asyncRouter()
 
@@ -59,11 +60,14 @@ router.post('/login', authRateLimit, async (req: Request, res: Response) => {
   const valid = await comparePassword(password, hash)
 
   if (!user || !valid) {
+    logAuditEvent('login_failure', { email, ip: req.ip })
     res.status(401).json({ error: 'Invalid email or password' })
     return
   }
 
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+
+  logAuditEvent('login_success', { userId: user.id, email: user.email, role: user.role, ip: req.ip })
 
   setAuthCookies(res, user.id, user.role)
 
@@ -81,6 +85,7 @@ router.post('/login', authRateLimit, async (req: Request, res: Response) => {
 // ─── POST /api/auth/logout ───────────────────────────────────────────────────
 
 router.post('/logout', (_req: Request, res: Response) => {
+  logAuditEvent('logout')
   clearAuthCookies(res)
   res.json({ ok: true })
 })
@@ -141,6 +146,7 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
 
   const valid = await comparePassword(parsed.data.currentPassword, user.passwordHash)
   if (!valid) {
+    logAuditEvent('password_change_failure', { userId: user.id, email: user.email, reason: 'current_password_incorrect' })
     res.status(400).json({ error: 'Current password is incorrect' })
     return
   }
@@ -150,6 +156,8 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
     where: { id: user.id },
     data: { passwordHash: newHash, mustChangePassword: false },
   })
+
+  logAuditEvent('password_change_success', { userId: user.id, email: user.email })
 
   res.json({ ok: true })
 })
@@ -170,8 +178,10 @@ router.post('/forgot-password', authRateLimit, async (req: Request, res: Respons
 
   const user = await prisma.user.findUnique({ where: { email: parsed.data.email } })
 
-  // Always respond 200 — don't leak whether the email is registered
+  // Always respond 200 — don't leak whether the email is registered. The audit
+  // log entry below is server-side only, never reflected back in the response.
   if (!user) {
+    logAuditEvent('password_reset_requested', { email: parsed.data.email, userFound: false })
     res.json({ ok: true })
     return
   }
@@ -191,6 +201,8 @@ router.post('/forgot-password', authRateLimit, async (req: Request, res: Respons
   const clientUrl = process.env.CLIENT_URL ?? 'http://localhost:5173'
   const resetUrl = `${clientUrl}/reset-password?token=${raw}`
   await sendPasswordResetEmail(user.email, resetUrl)
+
+  logAuditEvent('password_reset_requested', { userId: user.id, email: user.email, userFound: true })
 
   res.json({ ok: true })
 })
@@ -218,6 +230,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   })
 
   if (!matched || matched.usedAt !== null || matched.expiresAt < new Date()) {
+    logAuditEvent('password_reset_failure', { reason: !matched ? 'token_not_found' : matched.usedAt !== null ? 'token_already_used' : 'token_expired' })
     res.status(400).json({ error: 'Invalid or expired reset token' })
     return
   }
@@ -234,6 +247,8 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       data: { passwordHash: newHash, mustChangePassword: false },
     }),
   ])
+
+  logAuditEvent('password_reset_success', { userId: matched.userId })
 
   res.json({ ok: true })
 })
