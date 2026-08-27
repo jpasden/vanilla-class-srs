@@ -54,6 +54,8 @@ router.post('/login', authRateLimit, async (req: Request, res: Response) => {
     return
   }
 
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+
   setAuthCookies(res, user.id, user.role)
 
   res.json({
