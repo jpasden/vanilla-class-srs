@@ -2,3 +2,14 @@ node_modules/
 dist/
 .env
 *.env.local
+
+# Security review of a live deployment — remove this line once C1 and H1 are fixed
+docs/PRE_LAUNCH_REVIEW.md
+
+# Manual/agent-driven browser verification screenshots — not build artifacts
+screenshots/
+
+# Audit log (bind-mounted from the server container) and DB backups — server
+# state, not source
+logs/
+backups/

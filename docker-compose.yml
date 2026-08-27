@@ -17,6 +17,8 @@ services:
     depends_on:
       - db
     env_file: .env
+    volumes:
+      - ./logs:/app/logs
 
   client:
     build:
