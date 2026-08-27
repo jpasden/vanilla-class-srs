@@ -12,11 +12,15 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (authLoading) return
-    if (user && !user.mustChangePassword) {
-      if (user.role === 'ADMIN') navigate('/admin/departments', { replace: true })
-      else if (user.role === 'TEACHER') navigate('/teacher/classes', { replace: true })
-      else navigate('/student', { replace: true })
+    if (authLoading || !user) return
+    if (user.mustChangePassword) {
+      navigate('/change-password', { replace: true })
+    } else if (user.role === 'ADMIN') {
+      navigate('/admin/departments', { replace: true })
+    } else if (user.role === 'TEACHER') {
+      navigate('/teacher/classes', { replace: true })
+    } else {
+      navigate('/student', { replace: true })
     }
   }, [user, authLoading, navigate])
 
