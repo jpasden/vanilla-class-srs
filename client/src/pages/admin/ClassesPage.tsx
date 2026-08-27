@@ -161,7 +161,7 @@ export default function AdminClassesPage() {
               <tr key={c.id}>
                 <td>{showArchived ? c.name : <Link to={`/admin/classes/${c.id}`}>{c.name}</Link>}</td>
                 <td>{c.subjectGrade.name}</td>
-                <td>{c._count.assignments}</td>
+                <td>{c._count.assignments > 0 ? <Link to={`/admin/classes/${c.id}?tab=assignments`}>{c._count.assignments}</Link> : 0}</td>
                 <td>{c.teacher.user.name}</td>
                 <td>{c._count.enrollments}</td>
                 <td style={{ display: 'flex', gap: 4 }}>
