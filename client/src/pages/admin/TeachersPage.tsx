@@ -12,6 +12,7 @@ interface Teacher {
   user: { id: string; name: string; email: string; role: string; lastLoginAt: string | null }
   subjectGrades: { subjectGrade: SubjectGrade }[]
 }
+interface Admin { id: string; name: string; email: string; hasTeacherProfile: boolean; protected: boolean }
 
 export default function AdminTeachersPage() {
   const { data: teachers, loading, error, reload } = useApi<Teacher[]>(() => api.get('/admin/teachers'))
@@ -19,9 +20,11 @@ export default function AdminTeachersPage() {
   const { data: eligibleAdmins, reload: reloadEligibleAdmins } = useApi<{ id: string; name: string; email: string }[]>(
     () => api.get('/admin/teachers/eligible-admins'),
   )
+  const { data: admins, reload: reloadAdmins } = useApi<Admin[]>(() => api.get('/admin/admins'))
   const [showCreate, setShowCreate] = useState(false)
   const [showAddAdmin, setShowAddAdmin] = useState(false)
   const [addAdminUserId, setAddAdminUserId] = useState('')
+  const [demoteConfirm, setDemoteConfirm] = useState<Admin | null>(null)
   const [editing, setEditing] = useState<Teacher | null>(null)
   const [showAssign, setShowAssign] = useState<Teacher | null>(null)
   const [promoting, setPromoting] = useState<Teacher | null>(null)
@@ -91,6 +94,23 @@ export default function AdminTeachersPage() {
     }
   }
 
+  const handleDemoteAdmin = async () => {
+    if (!demoteConfirm) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      await api.post(`/admin/admins/${demoteConfirm.id}/demote`, {})
+      setDemoteConfirm(null)
+      reloadAdmins()
+      reload()
+      reloadEligibleAdmins()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleEdit = async (e: FormEvent) => {
     e.preventDefault()
     if (!editing) return
@@ -144,6 +164,7 @@ export default function AdminTeachersPage() {
       await api.post(`/admin/teachers/${promoting.id}/promote-admin`)
       setPromoting(null)
       reload()
+      reloadAdmins()
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : 'Failed')
     } finally {
@@ -260,6 +281,19 @@ export default function AdminTeachersPage() {
               <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Adding…' : 'Add'}</button>
             </div>
           </form>
+        </Modal>
+      )}
+      {demoteConfirm && (
+        <Modal title="Demote admin" onClose={() => setDemoteConfirm(null)}>
+          <p>
+            Remove admin access from <strong>{demoteConfirm.name}</strong>? They'll go back to
+            {demoteConfirm.hasTeacherProfile ? ' being a regular teacher.' : ' a student account (they have no teacher profile).'}
+          </p>
+          {formError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{formError}</div>}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setDemoteConfirm(null)}>Cancel</button>
+            <button className="btn btn-danger" disabled={saving} onClick={handleDemoteAdmin}>{saving ? 'Demoting…' : 'Demote'}</button>
+          </div>
         </Modal>
       )}
       {editing && (
@@ -421,6 +455,30 @@ export default function AdminTeachersPage() {
             </div>
           </form>
         </Modal>
+      )}
+      {admins && admins.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <h2 style={{ marginTop: 0 }}>Admins</h2>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {admins.map((a) => (
+              <li key={a.id} style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>{a.name} <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>({a.email})</span></span>
+                {a.protected ? (
+                  <span className="badge badge-blue" style={{ fontSize: 11 }}>Protected</span>
+                ) : (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={admins.length <= 1}
+                    title={admins.length <= 1 ? 'Cannot demote the last remaining admin' : undefined}
+                    onClick={() => { setFormError(null); setDemoteConfirm(a) }}
+                  >
+                    Demote
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <div className="page-header">
         <h1 className="page-title">Teachers</h1>

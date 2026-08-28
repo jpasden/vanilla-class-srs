@@ -10,6 +10,7 @@ import { validate } from '../middleware/validate'
 import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { batchAddTeachers, batchAddClasses } from '../services/subjectGradeBatch.service'
+import { demoteAdmin, PROTECTED_ADMIN_USER_ID } from '../services/adminRoles.service'
 import { createClassAssignment, streamCardInstanceCreation, streamCardInstanceCreationForClasses, rollbackOrphanedAssignment, syncNewCardsToAssignedDecks, removeAssignment, resumeClassAssignment, BatchAssignClassTarget } from '../services/assignment.service'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
@@ -565,6 +566,49 @@ router.post('/teachers/:id/promote-admin', async (req: Request, res: Response) =
     select: { id: true, name: true, email: true, role: true },
   })
   res.json(updated)
+})
+
+// GET /api/admin/admins — every ADMIN user, for the demote-admin UI.
+router.get('/admins', async (_req: Request, res: Response) => {
+  const admins = await prisma.user.findMany({
+    where: { role: Role.ADMIN },
+    select: { id: true, name: true, email: true, teacherProfile: { select: { id: true } } },
+    orderBy: { name: 'asc' },
+  })
+  res.json(admins.map((a) => ({
+    id: a.id,
+    name: a.name,
+    email: a.email,
+    hasTeacherProfile: !!a.teacherProfile,
+    protected: a.id === PROTECTED_ADMIN_USER_ID,
+  })))
+})
+
+// POST /api/admin/admins/:id/demote — demote an admin back to teacher (if
+// they have a Teacher profile) or student (if not). Blocked if this would
+// leave zero admins, or if the target is the protected founding admin.
+router.post('/admins/:id/demote', async (req: Request, res: Response) => {
+  const result = await demoteAdmin(prisma, p(req, 'id'))
+  switch (result.status) {
+    case 'protected':
+      res.status(403).json({ error: 'This admin account cannot be demoted' })
+      return
+    case 'not_found':
+      res.status(404).json({ error: 'Admin not found' })
+      return
+    case 'last_admin':
+      res.status(409).json({ error: 'Cannot demote the last remaining admin' })
+      return
+    case 'ok':
+      logAuditEvent('admin_demoted', {
+        actorUserId: req.user!.sub,
+        demotedUserId: result.user.id,
+        demotedEmail: result.user.email,
+        newRole: result.user.role,
+      })
+      res.json(result.user)
+      return
+  }
 })
 
 // POST /api/admin/teachers/:id/subject-grades  — assign teacher to subject grade(s)
