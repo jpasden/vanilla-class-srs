@@ -43,7 +43,6 @@ export default function AdminBatchOperationsPage() {
   const [savingTeachers, setSavingTeachers] = useState(false)
 
   const assignedTeacherIds = new Set(sg?.teachers.map((t) => t.teacher.id) ?? [])
-  const candidateTeachers = allTeachers?.filter((t) => !assignedTeacherIds.has(t.id)) ?? []
 
   const toggleTeacher = (teacherId: string) => {
     setSelectedTeacherIds((prev) => {
@@ -229,17 +228,31 @@ export default function AdminBatchOperationsPage() {
       {/* Section A — Batch Add Teachers */}
       <div className="card" style={{ marginBottom: 24 }}>
         <h2 style={{ marginTop: 0 }}>Add Teachers</h2>
-        {candidateTeachers.length === 0 ? (
-          <p style={{ color: 'var(--color-text-muted)' }}>All teachers are already assigned to this Subject Grade.</p>
+        {!allTeachers?.length ? (
+          <p style={{ color: 'var(--color-text-muted)' }}>No teachers exist yet.</p>
         ) : (
           <form onSubmit={handleAddTeachers}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12, maxHeight: 240, overflowY: 'auto' }}>
-              {candidateTeachers.map((t) => (
-                <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input type="checkbox" checked={selectedTeacherIds.has(t.id)} onChange={() => toggleTeacher(t.id)} />
-                  {t.user.name} <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{t.user.email}</span>
-                </label>
-              ))}
+              {allTeachers.map((t) => {
+                const alreadyAdded = assignedTeacherIds.has(t.id)
+                return (
+                  <label
+                    key={t.id}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, color: alreadyAdded ? 'var(--color-text-muted)' : undefined }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedTeacherIds.has(t.id)}
+                      disabled={alreadyAdded}
+                      onChange={() => toggleTeacher(t.id)}
+                    />
+                    {t.user.name} <span style={{ fontSize: 12 }}>{t.user.email}</span>
+                    {alreadyAdded && (
+                      <span style={{ color: 'var(--color-danger)', fontSize: 12 }}>(already added)</span>
+                    )}
+                  </label>
+                )
+              })}
             </div>
             {teacherError && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{teacherError}</div>}
             <button type="submit" className="btn btn-primary" disabled={savingTeachers || selectedTeacherIds.size === 0}>
