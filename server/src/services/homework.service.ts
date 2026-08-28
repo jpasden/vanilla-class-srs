@@ -12,7 +12,12 @@
 
 import { PrismaClient } from '@prisma/client'
 
-export const DEFAULT_MIN_CARDS_PER_SESSION = 20
+// Matches the default newCardsPerDay pacing cap (shared/fsrs/constants.ts) so
+// a session is achievable from day one — a fresh MANDATORY assignment can
+// only ever serve up to newCardsPerDay new cards until some have graduated
+// out of NEW state and become due again, which can take several days
+// depending on grades given (see FSRS interval scheduling).
+export const DEFAULT_MIN_CARDS_PER_SESSION = 10
 export const DEFAULT_PERIOD_DAYS = 7
 export const DEFAULT_ALERT_THRESHOLD_DAYS = 2
 
