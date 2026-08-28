@@ -16,7 +16,12 @@ interface Teacher {
 export default function AdminTeachersPage() {
   const { data: teachers, loading, error, reload } = useApi<Teacher[]>(() => api.get('/admin/teachers'))
   const { data: sgs } = useApi<SubjectGrade[]>(() => api.get('/admin/subject-grades'))
+  const { data: eligibleAdmins, reload: reloadEligibleAdmins } = useApi<{ id: string; name: string; email: string }[]>(
+    () => api.get('/admin/teachers/eligible-admins'),
+  )
   const [showCreate, setShowCreate] = useState(false)
+  const [showAddAdmin, setShowAddAdmin] = useState(false)
+  const [addAdminUserId, setAddAdminUserId] = useState('')
   const [editing, setEditing] = useState<Teacher | null>(null)
   const [showAssign, setShowAssign] = useState<Teacher | null>(null)
   const [promoting, setPromoting] = useState<Teacher | null>(null)
@@ -63,6 +68,24 @@ export default function AdminTeachersPage() {
       reload()
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : 'Create failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddAdminAsTeacher = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!addAdminUserId) return
+    setSaving(true)
+    setFormError(null)
+    try {
+      await api.post('/admin/teachers/from-existing-user', { userId: addAdminUserId })
+      setShowAddAdmin(false)
+      setAddAdminUserId('')
+      reload()
+      reloadEligibleAdmins()
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
     } finally {
       setSaving(false)
     }
@@ -211,6 +234,30 @@ export default function AdminTeachersPage() {
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Creating…' : 'Create'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {showAddAdmin && (
+        <Modal title="Add Admin as Teacher" onClose={() => setShowAddAdmin(false)}>
+          <form onSubmit={handleAddAdminAsTeacher}>
+            {formError && <div className="alert alert-danger">{formError}</div>}
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+              Gives an existing admin a teacher profile too — same login, no new
+              account. They keep full admin access and also gain teacher access
+              (own classes, CardSets, etc). Students never see that they're an admin.
+            </p>
+            <div className="form-group">
+              <label className="form-label">Admin</label>
+              <select className="form-select" value={addAdminUserId} onChange={(e) => setAddAdminUserId(e.target.value)} required>
+                {eligibleAdmins?.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.email})</option>
+                ))}
+              </select>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowAddAdmin(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Adding…' : 'Add'}</button>
             </div>
           </form>
         </Modal>
@@ -377,9 +424,19 @@ export default function AdminTeachersPage() {
       )}
       <div className="page-header">
         <h1 className="page-title">Teachers</h1>
-        <button className="btn btn-primary" onClick={() => { setFormError(null); setForm({ name: '', email: '', subjectGradeIds: [] }); setShowCreate(true) }}>
-          + New Teacher
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {!!eligibleAdmins?.length && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => { setFormError(null); setAddAdminUserId(eligibleAdmins[0].id); setShowAddAdmin(true) }}
+            >
+              + Add Admin as Teacher
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={() => { setFormError(null); setForm({ name: '', email: '', subjectGradeIds: [] }); setShowCreate(true) }}>
+            + New Teacher
+          </button>
+        </div>
       </div>
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}

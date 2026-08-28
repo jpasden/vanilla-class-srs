@@ -47,7 +47,11 @@ function RequireAuth({ children, role }: { children: JSX.Element; role?: string 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
   if (!user) return <Navigate to="/login" replace />
   if (user.mustChangePassword) return <Navigate to="/change-password" replace />
-  if (role && user.role !== role) return <Navigate to="/" replace />
+  // Admins can also act as teachers (mirrors the server's requireTeacher,
+  // which allows ADMIN through) — an admin with a Teacher profile can use
+  // /teacher/* alongside /admin/* under one login.
+  const allowed = role === 'TEACHER' ? user.role === 'TEACHER' || user.role === 'ADMIN' : !role || user.role === role
+  if (!allowed) return <Navigate to="/" replace />
   return children
 }
 

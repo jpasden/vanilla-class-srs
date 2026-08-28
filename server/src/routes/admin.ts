@@ -338,6 +338,67 @@ router.get('/teachers', async (_req: Request, res: Response) => {
   res.json(teachers)
 })
 
+// GET /api/admin/teachers/eligible-admins — admins who don't already have a
+// Teacher profile, for the "add an admin as a teacher too" flow. requireTeacher
+// already allows ADMIN through, and every teachers.ts route resolves identity
+// via Teacher.userId (not role), so an admin with a Teacher row can fully use
+// /teacher/* alongside /admin/* under one login. Must be registered before
+// GET /teachers/:id or Express would treat "eligible-admins" as an :id.
+router.get('/teachers/eligible-admins', async (_req: Request, res: Response) => {
+  const admins = await prisma.user.findMany({
+    where: { role: Role.ADMIN, teacherProfile: null },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: 'asc' },
+  })
+  res.json(admins)
+})
+
+// POST /api/admin/teachers/from-existing-user — give an existing ADMIN user a
+// Teacher profile too, without creating a second account or changing their
+// role. They keep full admin access and also gain teacher access.
+const CreateTeacherFromExistingSchema = z.object({
+  userId: z.string().uuid(),
+  subjectGradeIds: z.array(z.string().uuid()).optional(),
+})
+
+router.post(
+  '/teachers/from-existing-user',
+  validate(CreateTeacherFromExistingSchema),
+  async (req: Request, res: Response) => {
+    const user = await prisma.user.findUnique({ where: { id: req.body.userId } })
+    if (!user || user.role !== Role.ADMIN) {
+      res.status(400).json({ error: 'User not found or not an admin' })
+      return
+    }
+    const existing = await prisma.teacher.findUnique({ where: { userId: user.id } })
+    if (existing) {
+      res.status(409).json({ error: 'This admin already has a teacher profile' })
+      return
+    }
+
+    const teacher = await prisma.$transaction(async (tx) => {
+      const t = await tx.teacher.create({ data: { userId: user.id } })
+      if (req.body.subjectGradeIds?.length) {
+        await tx.teacherSubjectGrade.createMany({
+          data: req.body.subjectGradeIds.map((sgId: string) => ({
+            teacherId: t.id,
+            subjectGradeId: sgId,
+          })),
+        })
+      }
+      return t
+    })
+
+    logAuditEvent('teacher_profile_added_to_admin', {
+      actorUserId: req.user!.sub,
+      adminUserId: user.id,
+      adminEmail: user.email,
+    })
+
+    res.status(201).json({ teacherId: teacher.id })
+  },
+)
+
 // GET /api/admin/teachers/:id
 router.get('/teachers/:id', async (req: Request, res: Response) => {
   const teacher = await prisma.teacher.findUnique({
