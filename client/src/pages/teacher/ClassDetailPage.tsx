@@ -66,6 +66,7 @@ export default function TeacherClassDetailPage() {
   const [editingStudent, setEditingStudent] = useState<Enrollment | null>(null)
   const [editStudentForm, setEditStudentForm] = useState({ name: '', email: '' })
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState<Enrollment | null>(null)
+  const [showResetAllConfirm, setShowResetAllConfirm] = useState(false)
   const [showHw, setShowHw] = useState(false)
   const [studentForm, setStudentForm] = useState({ email: '', name: '' })
   const [newStudentResult, setNewStudentResult] = useState<{ status: string; tempPassword?: string } | null>(null)
@@ -144,13 +145,16 @@ export default function TeacherClassDetailPage() {
   }
 
   const handleResetAllPasswords = async () => {
-    const count = enrollments?.length ?? 0
-    if (!confirm(`Reset passwords for all ${count} students in this class? They will all need the new temp password to log in.`)) return
+    setSaving(true)
+    setFormError(null)
     try {
       const result = await api.post<{ results: { studentName: string; tempPassword: string }[]; count: number }>(`/teachers/classes/${id}/reset-passwords`, {})
+      setShowResetAllConfirm(false)
       setResetResult(result.results)
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : 'Failed')
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -343,6 +347,24 @@ export default function TeacherClassDetailPage() {
               templateHint='CSV format: name,email — one student per row. Existing users will be enrolled without duplicating their account.'
             />
           )}
+          {showResetAllConfirm && (
+            <Modal title="Reset all passwords" onClose={() => setShowResetAllConfirm(false)}>
+              <p>
+                This will force all students to log in with a new password (provided by you), and
+                then to change that password to their own password. It's generally not a good idea
+                to do this if most of the students have already created their accounts. (One good
+                reason to do it is if you lost the original student login passwords.) Are you sure
+                you want to do this?
+              </p>
+              {formError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{formError}</div>}
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowResetAllConfirm(false)}>Cancel</button>
+                <button className="btn btn-danger" disabled={saving} onClick={handleResetAllPasswords}>
+                  {saving ? 'Resetting…' : 'Yes, Reset All Passwords'}
+                </button>
+              </div>
+            </Modal>
+          )}
           {resetResult && (
             <Modal title={resetResult.length === 1 ? 'Password Reset' : 'Class Passwords Reset'} onClose={() => setResetResult(null)}>
               <div className="alert alert-success" style={{ marginBottom: 16 }}>
@@ -480,7 +502,7 @@ export default function TeacherClassDetailPage() {
               <button className="btn btn-primary btn-sm" onClick={() => { setFormError(null); setNewStudentResult(null); setStudentForm({ email: '', name: '' }); setShowAddStudent(true) }}>+ Add Student</button>
               <button className="btn btn-secondary btn-sm" onClick={() => setShowImportStudents(true)}>Import CSV</button>
               {enrollments && enrollments.length > 0 && (
-                <button className="btn btn-secondary btn-sm" onClick={handleResetAllPasswords}>Reset All Passwords</button>
+                <button className="btn btn-danger btn-sm" onClick={() => { setFormError(null); setShowResetAllConfirm(true) }}>Reset All Passwords</button>
               )}
             </div>
           </div>
