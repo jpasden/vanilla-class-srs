@@ -108,11 +108,12 @@ export default function TeacherStudentStatsPage() {
   const { classId, studentId } = useParams<{ classId: string; studentId: string }>()
   const location = useLocation()
   const { studentName } = (location.state as { studentName: string } | null) ?? { studentName: 'Student' }
+  const isAdmin = location.pathname.startsWith('/admin')
 
   const [tab, setTab] = useState<Tab>('overview')
   const tz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
-  const base = `/teachers/classes/${classId}/students/${studentId}/stats`
+  const base = `${isAdmin ? '/admin' : '/teachers'}/classes/${classId}/students/${studentId}/stats`
 
   const { data: summary, loading: sumLoad, error: sumError } = useApi<Summary>(
     () => api.get(`${base}/summary?tz=${tz}`),
@@ -145,7 +146,7 @@ export default function TeacherStudentStatsPage() {
   return (
     <div>
       <div style={{ marginBottom: 4 }}>
-        <Link to={`/teacher/classes/${classId}`} style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+        <Link to={`${isAdmin ? '/admin' : '/teacher'}/classes/${classId}`} style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
           ← Class
         </Link>
       </div>

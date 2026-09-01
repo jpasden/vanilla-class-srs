@@ -42,11 +42,11 @@ function pct(v: number | null) {
   return v === null ? '—' : `${Math.round(v * 100)}%`
 }
 
-export default function ClassStatsPanel({ classId }: { classId: string }) {
+export default function ClassStatsPanel({ classId, basePath = '/teachers' }: { classId: string; basePath?: '/teachers' | '/admin' }) {
   const [days, setDays] = useState(30)
   const { data: stats, loading, error, reload } = useApi<StatsData>(
-    () => api.get(`/teachers/classes/${classId}/stats?days=${days}`),
-    [classId, days]
+    () => api.get(`${basePath}/classes/${classId}/stats?days=${days}`),
+    [classId, days, basePath]
   )
   const [tab, setTab] = useState<StatsTab>('leaderboard')
   const [expandedAdoption, setExpandedAdoption] = useState<Set<string>>(new Set())
@@ -147,7 +147,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
                 <tr key={s.studentId}>
                   <td style={{ color: 'var(--color-text-muted)' }}>{i + 1}</td>
                   <td>
-                    <Link to={`/teacher/classes/${classId}/students/${s.studentId}/stats`} state={{ studentName: s.name }}>
+                    <Link to={`${basePath === '/admin' ? '/admin' : '/teacher'}/classes/${classId}/students/${s.studentId}/stats`} state={{ studentName: s.name }}>
                       {s.name}
                     </Link>
                   </td>
@@ -325,7 +325,7 @@ export default function ClassStatsPanel({ classId }: { classId: string }) {
           has its own date-range controls rather than the shared `days` lookback. */}
       {tab === 'additions' && (
         <div className="card">
-          <StudentAdditionsTable fetchUrl={`/teachers/classes/${classId}/student-additions`} />
+          <StudentAdditionsTable fetchUrl={`${basePath}/classes/${classId}/student-additions`} />
         </div>
       )}
     </div>

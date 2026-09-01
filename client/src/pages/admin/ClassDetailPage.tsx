@@ -6,6 +6,7 @@ import { Modal } from '../../components/Modal'
 import { CsvImportModal } from '../../components/CsvImportModal'
 import { formatLastLogin } from '../../utils/formatDate'
 import { downloadPasswordSheet, printPasswordSlips } from '../../utils/passwordSheet'
+import ClassStatsPanel from '../teacher/ClassStatsPanel'
 
 interface Class {
   id: string; name: string
@@ -36,7 +37,7 @@ interface HomeworkData {
   compliance: ClassCompliance | null
 }
 
-type Tab = 'students' | 'assignments' | 'homework'
+type Tab = 'students' | 'assignments' | 'homework' | 'stats'
 
 interface AssignConfirm {
   cardSetId: string
@@ -54,7 +55,7 @@ interface ProgressLine {
   total: number
 }
 
-const VALID_TABS: Tab[] = ['students', 'assignments', 'homework']
+const VALID_TABS: Tab[] = ['students', 'assignments', 'homework', 'stats']
 
 export default function AdminClassDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -311,7 +312,7 @@ export default function AdminClassDetailPage() {
       </div>
 
       <div className="tabs">
-        {(['students', 'assignments', 'homework'] as Tab[]).map((t) => (
+        {(['students', 'assignments', 'homework', 'stats'] as Tab[]).map((t) => (
           <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
             {t === 'assignments' ? 'CardSets' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -471,11 +472,15 @@ export default function AdminClassDetailPage() {
               {!sortedEnrollments?.length && <tr><td colSpan={5} className="table-empty">No students enrolled.</td></tr>}
               {sortedEnrollments?.map((enr) => (
                 <tr key={enr.id}>
-                  <td>{enr.student.user.name}</td>
+                  <td><Link to={`/admin/classes/${id}/students/${enr.student.id}/stats`} state={{ studentName: enr.student.user.name }}>{enr.student.user.name}</Link></td>
                   <td>{enr.student.user.email}</td>
                   <td>{enr.deck?._count.instances ?? 0}</td>
                   <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(enr.student.user.lastLoginAt)}</td>
-                  <td>
+                  <td style={{ display: 'flex', gap: 4 }}>
+                    <Link
+                      to={`/admin/classes/${id}/students/${enr.student.id}`}
+                      className="btn btn-secondary btn-sm"
+                    >View Cards</Link>
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => { setEditingStudent(enr); setEditStudentForm({ name: enr.student.user.name, email: enr.student.user.email }); setFormError(null) }}
@@ -830,6 +835,8 @@ export default function AdminClassDetailPage() {
           )}
         </div>
       )}
+
+      {tab === 'stats' && id && <ClassStatsPanel classId={id} basePath="/admin" />}
     </div>
   )
 }

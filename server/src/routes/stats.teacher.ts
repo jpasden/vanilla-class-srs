@@ -12,6 +12,7 @@
  */
 
 import { Request, Response } from 'express'
+import { PrismaClient, Class } from '@prisma/client'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { labelsForClass } from '../services/departmentLabels.service'
@@ -33,24 +34,19 @@ async function getTeacher(userId: string) {
   return prisma.teacher.findUnique({ where: { userId } })
 }
 
-// ── GET /api/teachers/classes/:id/stats ──────────────────────────────────────
-
-router.get('/', async (req: Request, res: Response) => {
-  const teacher = await getTeacher(req.user!.sub)
-  if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
-
-  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
-  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
-    res.status(404).json({ error: 'Class not found' }); return
-  }
-
+/**
+ * The actual §14.1-§14.8 stats computation, shared by the teacher route
+ * below (owner-only) and the admin route (server/src/routes/admin.ts,
+ * any class — no ownership check) so the two surfaces can never drift.
+ */
+export async function buildClassStats(db: PrismaClient, cls: Class, req: Request) {
   const cardSetId = req.query.cardSetId as string | undefined
   const days = Math.min(365, Math.max(1, parseInt(req.query.days as string ?? '30') || 30))
   const since = daysAgo(days)
   const now = new Date()
 
   // Load all enrollments for the class
-  const enrollments = await prisma.enrollment.findMany({
+  const enrollments = await db.enrollment.findMany({
     where: { classId: cls.id, archivedAt: null },
     include: {
       student: { include: { user: { select: { id: true, name: true, email: true } } } },
@@ -66,7 +62,7 @@ router.get('/', async (req: Request, res: Response) => {
   const instanceFilter: any = { deckId: { in: deckIds } }
   if (cardSetId) instanceFilter.card = { cardSetId }
 
-  const allInstances = await prisma.cardInstance.findMany({
+  const allInstances = await db.cardInstance.findMany({
     where: instanceFilter,
     include: {
       card: { select: { id: true, word: true, cardSetId: true } },
@@ -113,7 +109,7 @@ router.get('/', async (req: Request, res: Response) => {
       leaderboard.push({ studentId: enrollment.student.id, name: enrollment.student.user.name, totalReps: 0, accuracyRate: null })
       continue
     }
-    const events = await prisma.reviewEvent.findMany({
+    const events = await db.reviewEvent.findMany({
       where: {
         reviewedAt: { gte: since },
         session: { deckId: enrollment.deck.id },
@@ -133,7 +129,7 @@ router.get('/', async (req: Request, res: Response) => {
   for (const row of leaderboard) {
     let flag: string | null = null
     if (row.accuracyRate !== null) {
-      const sessionCount = row.totalReps > 0 ? await prisma.reviewSession.count({
+      const sessionCount = row.totalReps > 0 ? await db.reviewSession.count({
         where: {
           deck: { enrollment: { studentId: row.studentId, classId: cls.id } },
           endedAt: { not: null },
@@ -172,7 +168,7 @@ router.get('/', async (req: Request, res: Response) => {
 
   // ── §14.5 Recent Student Additions ───────────────────────────────────────
   // Last 20 student-added cards across the class.
-  const recentAdditions = await prisma.cardInstance.findMany({
+  const recentAdditions = await db.cardInstance.findMany({
     where: {
       deckId: { in: deckIds },
       origin: 'STUDENT_ADDED',
@@ -195,13 +191,13 @@ router.get('/', async (req: Request, res: Response) => {
   }))
 
   // ── §14.6 Optional CardSet Adoption ──────────────────────────────────────
-  const optionalAssignments = await prisma.assignment.findMany({
+  const optionalAssignments = await db.assignment.findMany({
     where: { classId: cls.id, type: 'OPTIONAL' },
     include: { cardSet: { select: { id: true, name: true } } },
   })
   const optionalAdoption = await Promise.all(
     optionalAssignments.map(async (asgn) => {
-      const adopted = await prisma.cardInstance.findMany({
+      const adopted = await db.cardInstance.findMany({
         where: {
           deckId: { in: deckIds },
           origin: 'OPTIONAL',
@@ -227,7 +223,7 @@ router.get('/', async (req: Request, res: Response) => {
   // ── §14.7 Time-Based Graphs ───────────────────────────────────────────────
   // Fetch extra 7 days so rolling accuracy windows have data from day 1.
   const accuracySince = daysAgo(days + 7)
-  const classEvents = await prisma.reviewEvent.findMany({
+  const classEvents = await db.reviewEvent.findMany({
     where: {
       reviewedAt: { gte: accuracySince },
       session: { deckId: { in: deckIds } },
@@ -268,7 +264,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   // Due card forecast (class aggregate)
-  const allNonNewInstances = await prisma.cardInstance.findMany({
+  const allNonNewInstances = await db.cardInstance.findMany({
     where: { deckId: { in: deckIds }, state: { not: 'NEW' } },
     select: { due: true, deckId: true },
   })
@@ -303,7 +299,7 @@ router.get('/', async (req: Request, res: Response) => {
     .sort((a, b) => b.overdueCount - a.overdueCount)
 
   // Deck growth over time — new CardInstances per day (class aggregate) — §14.7
-  const allNewInstances = await prisma.cardInstance.findMany({
+  const allNewInstances = await db.cardInstance.findMany({
     where: {
       deckId: { in: deckIds },
       createdAt: { gte: since },
@@ -326,11 +322,11 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   // ── §14.8 Homework Compliance ─────────────────────────────────────────────
-  const homeworkCompliance = await getClassCompliance(prisma, cls.id, now)
+  const homeworkCompliance = await getClassCompliance(db, cls.id, now)
 
-  const labels = await labelsForClass(prisma, cls.id)
+  const labels = await labelsForClass(db, cls.id)
 
-  res.json({
+  return {
     classId: cls.id,
     className: cls.name,
     masteryMatrix,
@@ -346,7 +342,22 @@ router.get('/', async (req: Request, res: Response) => {
     overdueByStudent,
     deckGrowthDaily,
     homeworkCompliance,
-  })
+  }
+}
+
+// ── GET /api/teachers/classes/:id/stats ──────────────────────────────────────
+
+router.get('/', async (req: Request, res: Response) => {
+  const teacher = await getTeacher(req.user!.sub)
+  if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
+
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+    res.status(404).json({ error: 'Class not found' }); return
+  }
+
+  const result = await buildClassStats(prisma, cls, req)
+  res.json(result)
 })
 
 export default router

@@ -92,6 +92,8 @@ export default function App() {
               <Route path="cardsets/:id" element={<AdminCardSetDetailPage />} />
               <Route path="classes" element={<AdminClassesPage />} />
               <Route path="classes/:id" element={<AdminClassDetailPage />} />
+              <Route path="classes/:id/students/:studentId" element={<TeacherStudentCardsPage />} />
+              <Route path="classes/:classId/students/:studentId/stats" element={<TeacherStudentStatsPage />} />
               <Route path="stats" element={<AdminStatsPage />} />
               <Route path="stats/student-additions" element={<AdminStudentAdditionsPage />} />
             </Route>

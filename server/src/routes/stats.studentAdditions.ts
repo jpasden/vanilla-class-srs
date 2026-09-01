@@ -53,3 +53,18 @@ router.get('/', async (req: Request, res: Response) => {
 })
 
 export default router
+
+/**
+ * Same query, for admin — any class, no ownership check. Exported as a
+ * plain function (not a router) since admin.ts needs it under its own
+ * route path/param name (:id, matching every other admin class route),
+ * not this router's :id-mounted-as-parent-param shape.
+ */
+export async function getClassStudentAdditions(classId: string, req: Request) {
+  const cls = await prisma.class.findUnique({ where: { id: classId } })
+  if (!cls || cls.archivedAt) return null
+
+  const { start, end } = resolveRange(req)
+  const additions = await getStudentAdditions(prisma, [cls.id], start, end)
+  return { additions, rangeStart: start, rangeEnd: end }
+}

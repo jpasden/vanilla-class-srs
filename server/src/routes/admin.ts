@@ -12,9 +12,12 @@ import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/
 import { batchAddTeachers, batchAddClasses } from '../services/subjectGradeBatch.service'
 import { demoteAdmin, PROTECTED_ADMIN_USER_ID } from '../services/adminRoles.service'
 import { resetAllClassPasswords } from '../services/classPasswordReset.service'
+import { buildClassStats } from './stats.teacher'
+import teacherStudentStatsRouter from './stats.teacher-student'
+import { getClassStudentAdditions } from './stats.studentAdditions'
 import { createClassAssignment, streamCardInstanceCreation, streamCardInstanceCreationForClasses, rollbackOrphanedAssignment, syncNewCardsToAssignedDecks, removeAssignment, resumeClassAssignment, BatchAssignClassTarget } from '../services/assignment.service'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
-import { labelsForCardSet } from '../services/departmentLabels.service'
+import { labelsForCardSet, labelsForClass } from '../services/departmentLabels.service'
 import { getStudentAdditions } from '../services/studentAdditions.service'
 import { logAuditEvent } from '../lib/auditLog'
 import {
@@ -946,6 +949,28 @@ router.post('/classes/:id/reset-passwords', async (req: Request, res: Response) 
   res.json({ results, count: results.length })
 })
 
+// GET /api/admin/classes/:id/students/:studentId/cards — a student's
+// personally-added cards for this class, any class (no ownership check).
+router.get('/classes/:id/students/:studentId/cards', async (req: Request, res: Response) => {
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+  const enrollment = await prisma.enrollment.findFirst({
+    where: { classId: cls.id, student: { id: p(req, 'studentId') } },
+    include: { personalCardSet: { include: { cards: { orderBy: { createdAt: 'desc' } } } } },
+  })
+  if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
+
+  const labels = await labelsForClass(prisma, cls.id)
+  res.json({ cards: enrollment.personalCardSet?.cards ?? [], ...labels })
+})
+
+// Per-student stats — reuses the same router mounted under /api/teachers/*.
+// Its internal auth helper already special-cases ADMIN (see
+// stats.teacher-student.ts's getEnrollmentForTeacher) to skip the
+// owns-this-class check, so this is safe to mount here unmodified.
+router.use('/classes/:classId/students/:studentId/stats', teacherStudentStatsRouter)
+
 // ─────────────────────────────────────────────
 // CardSet creation + promotion (spec §10)
 // Admin can author a CardSet directly (created straight to DEPARTMENTAL,
@@ -1036,6 +1061,25 @@ router.get('/cardsets/:id', async (req: Request, res: Response) => {
   }
   const labels = await labelsForCardSet(prisma, cs)
   res.json({ ...cs, ...labels })
+})
+
+const PatchCardSetSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+})
+
+// PATCH /api/admin/cardsets/:id  — rename/edit description, any non-archived,
+// non-personal CardSet (PRIVATE or DEPARTMENTAL) — no ownership check, same
+// as every other admin CardSet/card route in this file.
+router.patch('/cardsets/:id', validate(PatchCardSetSchema), async (req: Request, res: Response) => {
+  const cs = await getAdminEditableCardSet(p(req, 'id'))
+  if (!cs) { res.status(404).json({ error: 'CardSet not found' }); return }
+
+  const updated = await prisma.cardSet.update({
+    where: { id: cs.id },
+    data: req.body,
+  })
+  res.json(updated)
 })
 
 // DELETE /api/admin/cardsets/:id  — archives (soft delete). Existing CardInstances in
@@ -1370,6 +1414,26 @@ router.post('/classes/:id/homework', validate(AdminHomeworkSchema), async (req: 
   })
 
   res.status(201).json(hwReq)
+})
+
+// GET /api/admin/classes/:id/stats — same §14.1-§14.8 stats as the teacher
+// class-stats tab (mastery matrix, leaderboards, forecasts, homework
+// compliance, etc.), but for ANY class — no ownership check, consistent
+// with every other admin class-detail tab (Students/CardSets/Homework).
+router.get('/classes/:id/stats', async (req: Request, res: Response) => {
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+  const result = await buildClassStats(prisma, cls, req)
+  res.json(result)
+})
+
+// GET /api/admin/classes/:id/student-additions — same as the teacher
+// per-class report used by ClassStatsPanel's "Additions" tab, any class.
+router.get('/classes/:id/student-additions', async (req: Request, res: Response) => {
+  const result = await getClassStudentAdditions(p(req, 'id'), req)
+  if (!result) { res.status(404).json({ error: 'Class not found' }); return }
+  res.json(result)
 })
 
 // Admin can also create class-level assignments directly

@@ -78,6 +78,8 @@ export default function AdminCardSetDetailPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [showRename, setShowRename] = useState(false)
+  const [csName, setCsName] = useState('')
   const [deletingCard, setDeletingCard] = useState<Card | null>(null)
   const [archivingCardSet, setArchivingCardSet] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -130,6 +132,14 @@ export default function AdminCardSetDetailPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleRename = async (e: FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    try { await api.patch(`/admin/cardsets/${id}`, { name: csName }); setShowRename(false); reload() }
+    catch (e) { setFormError(e instanceof ApiError ? e.message : 'Failed') }
+    finally { setSaving(false) }
   }
 
   const handleDelete = async () => {
@@ -249,6 +259,21 @@ export default function AdminCardSetDetailPage() {
           </div>
         </Modal>
       )}
+      {showRename && (
+        <Modal title="Rename CardSet" onClose={() => setShowRename(false)}>
+          <form onSubmit={handleRename}>
+            {formError && <div className="alert alert-danger">{formError}</div>}
+            <div className="form-group">
+              <label className="form-label">New Name</label>
+              <input className="form-input" value={csName} onChange={(e) => setCsName(e.target.value)} required />
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowRename(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
       {archivingCardSet && cs && (
         <Modal title="Archive CardSet" onClose={() => setArchivingCardSet(false)}>
           <p>Archive <strong>{cs.name}</strong>?</p>
@@ -278,6 +303,7 @@ export default function AdminCardSetDetailPage() {
             </span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setCsName(cs?.name ?? ''); setFormError(null); setShowRename(true) }}>Rename</button>
             <button className="btn btn-secondary btn-sm" onClick={openCreate}>+ Add Card</button>
             <button className="btn btn-danger btn-sm" onClick={() => { setDeleteError(null); setArchivingCardSet(true) }}>Archive CardSet</button>
           </div>

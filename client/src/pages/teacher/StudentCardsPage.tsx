@@ -2,7 +2,7 @@
  * Teacher read-only view of a student's personal CardSet (spec §11).
  * Route: /teacher/classes/:classId/students/:studentId
  */
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useLocation, Link } from 'react-router-dom'
 import { api } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 
@@ -24,16 +24,18 @@ interface StudentCardsResponse {
 
 export default function TeacherStudentCardsPage() {
   const { id: classId, studentId } = useParams<{ id: string; studentId: string }>()
+  const location = useLocation()
+  const isAdmin = location.pathname.startsWith('/admin')
   const { data, loading, error } = useApi<StudentCardsResponse>(
-    () => api.get(`/teachers/classes/${classId}/students/${studentId}/cards`),
-    [classId, studentId]
+    () => api.get(`${isAdmin ? '/admin' : '/teachers'}/classes/${classId}/students/${studentId}/cards`),
+    [classId, studentId, isAdmin]
   )
   const cards = data?.cards
 
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
-        <Link to={`/teacher/classes/${classId}`} style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+        <Link to={`${isAdmin ? '/admin' : '/teacher'}/classes/${classId}`} style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
           ← Class
         </Link>
         <h1 className="page-title" style={{ marginTop: 4 }}>Student Personal Cards</h1>
