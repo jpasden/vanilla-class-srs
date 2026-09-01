@@ -11,6 +11,9 @@ interface Props {
   templateHint?: string
   /** Header shown on printed password slips — defaults to `title` if omitted. */
   printLabel?: string
+  /** If provided, shows a "Download sample CSV" button above the file picker. */
+  templateCsv?: string
+  templateFilename?: string
 }
 
 interface EnrollRowResult {
@@ -30,12 +33,25 @@ interface ImportResult {
   detectedFormat?: { name: string; email: string }
 }
 
-export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHint, printLabel }: Props) {
+export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHint, printLabel, templateCsv, templateFilename }: Props) {
   const [file, setFile] = useState<File | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleDownloadTemplate = () => {
+    if (!templateCsv) return
+    // Prepend a UTF-8 BOM so Excel correctly detects the encoding — without
+    // it, Excel often mis-renders non-ASCII characters (e.g. Chinese names).
+    const blob = new Blob(['﻿' + templateCsv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = templateFilename ?? 'vanilla-import-template.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const imported = result !== null && !result.validationErrors?.length && !result.error && !result.needsConfirmation
 
@@ -68,6 +84,17 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
     <Modal title={title} onClose={onClose}>
       {templateHint && (
         <div className="alert alert-info" style={{ fontSize: 13 }}>{templateHint}</div>
+      )}
+      {templateCsv && (
+        <div style={{ marginBottom: 16 }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 12l-4-4h2.5V2h3v6H12L8 12z"/>
+              <path d="M2 14h12v-2H2v2z"/>
+            </svg>
+            Download sample CSV
+          </button>
+        </div>
       )}
       <div className="form-group">
         <label className="form-label">Select CSV file</label>

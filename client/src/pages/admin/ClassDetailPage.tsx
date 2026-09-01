@@ -4,6 +4,7 @@ import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
 import { CsvImportModal } from '../../components/CsvImportModal'
+import { STUDENT_IMPORT_TEMPLATE_CSV, STUDENT_IMPORT_TEMPLATE_FILENAME } from '../../utils/csvTemplates'
 import { formatLastLogin } from '../../utils/formatDate'
 import { downloadPasswordSheet, printPasswordSlips } from '../../utils/passwordSheet'
 import ClassStatsPanel from '../teacher/ClassStatsPanel'
@@ -357,6 +358,8 @@ export default function AdminClassDetailPage() {
               onSuccess={() => { setShowImportStudents(false); reloadEnrollments() }}
               onClose={() => setShowImportStudents(false)}
               templateHint='CSV format: name,email — one student per row. Existing users will be enrolled without duplicating their account.'
+              templateCsv={STUDENT_IMPORT_TEMPLATE_CSV}
+              templateFilename={STUDENT_IMPORT_TEMPLATE_FILENAME}
             />
           )}
           {showResetAllConfirm && (
