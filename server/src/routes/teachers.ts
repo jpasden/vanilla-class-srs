@@ -8,6 +8,7 @@ import { requireAuth, requireTeacher, requirePasswordChanged } from '../middlewa
 import { validate } from '../middleware/validate'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { generateTempPassword, hashPassword } from '../services/auth.service'
+import { resetAllClassPasswords } from '../services/classPasswordReset.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, removeAssignment, resumeClassAssignment } from '../services/assignment.service'
 import { DEFAULT_MIN_CARDS_PER_SESSION, DEFAULT_PERIOD_DAYS, DEFAULT_ALERT_THRESHOLD_DAYS } from '../services/homework.service'
 import { labelsForClass } from '../services/departmentLabels.service'
@@ -304,25 +305,7 @@ router.post('/classes/:id/reset-passwords', async (req: Request, res: Response) 
     res.status(404).json({ error: 'Class not found' }); return
   }
 
-  const enrollments = await prisma.enrollment.findMany({
-    where: { classId: cls.id, archivedAt: null },
-    include: { student: { include: { user: { select: { id: true, name: true } } } } },
-  })
-
-  // Each student gets their own random password — a shared class-wide reset
-  // password would recreate the exact weakness this generator replaces.
-  const results = await Promise.all(
-    enrollments.map(async (e) => {
-      const tempPassword = generateTempPassword()
-      const passwordHash = await hashPassword(tempPassword)
-      await prisma.user.update({
-        where: { id: e.student.user.id },
-        data: { passwordHash, mustChangePassword: true },
-      })
-      return { studentName: e.student.user.name, tempPassword }
-    }),
-  )
-
+  const results = await resetAllClassPasswords(prisma, cls.id)
   res.json({ results, count: results.length })
 })
 

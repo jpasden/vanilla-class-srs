@@ -11,6 +11,7 @@ import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { batchAddTeachers, batchAddClasses } from '../services/subjectGradeBatch.service'
 import { demoteAdmin, PROTECTED_ADMIN_USER_ID } from '../services/adminRoles.service'
+import { resetAllClassPasswords } from '../services/classPasswordReset.service'
 import { createClassAssignment, streamCardInstanceCreation, streamCardInstanceCreationForClasses, rollbackOrphanedAssignment, syncNewCardsToAssignedDecks, removeAssignment, resumeClassAssignment, BatchAssignClassTarget } from '../services/assignment.service'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
@@ -934,6 +935,15 @@ router.post('/classes/:id/students/:studentId/reset-password', async (req: Reque
     data: { passwordHash, mustChangePassword: true },
   })
   res.json({ tempPassword })
+})
+
+// POST /api/admin/classes/:id/reset-passwords  — reset all students in class
+router.post('/classes/:id/reset-passwords', async (req: Request, res: Response) => {
+  const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+
+  const results = await resetAllClassPasswords(prisma, cls.id)
+  res.json({ results, count: results.length })
 })
 
 // ─────────────────────────────────────────────

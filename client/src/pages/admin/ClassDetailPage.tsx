@@ -78,6 +78,8 @@ export default function AdminClassDetailPage() {
   const [editStudentForm, setEditStudentForm] = useState({ name: '', email: '' })
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState<Enrollment | null>(null)
   const [resetPasswordResult, setResetPasswordResult] = useState<{ studentName: string; tempPassword: string } | null>(null)
+  const [showResetAllConfirm, setShowResetAllConfirm] = useState(false)
+  const [resetAllResult, setResetAllResult] = useState<{ studentName: string; tempPassword: string }[] | null>(null)
   const [studentForm, setStudentForm] = useState({ email: '', name: '' })
   const [newStudentResult, setNewStudentResult] = useState<{ status: string; tempPassword?: string } | null>(null)
   const [assignForm, setAssignForm] = useState({ cardSetId: '', type: 'MANDATORY', priority: 0 })
@@ -147,6 +149,23 @@ export default function AdminClassDetailPage() {
       )
       setResetPasswordConfirm(null)
       setResetPasswordResult({ studentName: resetPasswordConfirm.student.user.name, tempPassword: result.tempPassword })
+    } catch (e) {
+      setFormError(e instanceof ApiError ? e.message : 'Failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleResetAllPasswords = async () => {
+    setSaving(true)
+    setFormError(null)
+    try {
+      const result = await api.post<{ results: { studentName: string; tempPassword: string }[]; count: number }>(
+        `/admin/classes/${id}/reset-passwords`,
+        {},
+      )
+      setShowResetAllConfirm(false)
+      setResetAllResult(result.results)
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : 'Failed')
     } finally {
@@ -339,6 +358,58 @@ export default function AdminClassDetailPage() {
               templateHint='CSV format: name,email — one student per row. Existing users will be enrolled without duplicating their account.'
             />
           )}
+          {showResetAllConfirm && (
+            <Modal title="Reset all passwords" onClose={() => setShowResetAllConfirm(false)}>
+              <p>
+                This will force all students to log in with a new password (provided by you), and
+                then to change that password to their own password. It's generally not a good idea
+                to do this if most of the students have already created their accounts. (One good
+                reason to do it is if you lost the original student login passwords.) Are you sure
+                you want to do this?
+              </p>
+              {formError && <div className="alert alert-danger" style={{ marginTop: 12 }}>{formError}</div>}
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowResetAllConfirm(false)}>Cancel</button>
+                <button className="btn btn-danger" disabled={saving} onClick={handleResetAllPasswords}>
+                  {saving ? 'Resetting…' : 'Yes, Reset All Passwords'}
+                </button>
+              </div>
+            </Modal>
+          )}
+          {resetAllResult && (
+            <Modal title={resetAllResult.length === 1 ? 'Password Reset' : 'Class Passwords Reset'} onClose={() => setResetAllResult(null)}>
+              <div className="alert alert-success" style={{ marginBottom: 16 }}>
+                {resetAllResult.length === 1
+                  ? <><strong>{resetAllResult[0].studentName}</strong>'s password has been reset.</>
+                  : <><strong>{resetAllResult.length}</strong> student{resetAllResult.length !== 1 ? 's' : ''} reset.</>
+                }
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+                  This is the only copy — passwords are hashed on creation and cannot be
+                  shown again. {resetAllResult.length === 1 ? 'This student' : 'Each student'} must change it on first login.
+                </div>
+                <table className="table" style={{ fontSize: 14 }}>
+                  <thead><tr><th>Student</th><th>Temporary password</th></tr></thead>
+                  <tbody>
+                    {resetAllResult.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.studentName}</td>
+                        <td style={{ fontFamily: 'monospace', fontWeight: 600, letterSpacing: 0.5 }}>{r.tempPassword}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-secondary" onClick={() => downloadPasswordSheet(resetAllResult)}>Download CSV</button>
+                  <button className="btn btn-secondary" onClick={() => printPasswordSlips(resetAllResult, cls?.name ?? '')}>Print slips</button>
+                </div>
+                <button className="btn btn-primary" onClick={() => setResetAllResult(null)}>Done</button>
+              </div>
+            </Modal>
+          )}
           {unenrollConfirm && (
             <Modal title="Unenroll student" onClose={() => setUnenrollConfirm(null)}>
               <p>
@@ -377,6 +448,9 @@ export default function AdminClassDetailPage() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-primary btn-sm" onClick={() => { setFormError(null); setNewStudentResult(null); setStudentForm({ email: '', name: '' }); setShowAddStudent(true) }}>+ Add Student</button>
               <button className="btn btn-secondary btn-sm" onClick={() => setShowImportStudents(true)}>Import CSV</button>
+              {enrollments && enrollments.length > 0 && (
+                <button className="btn btn-danger btn-sm" onClick={() => { setFormError(null); setShowResetAllConfirm(true) }}>Reset All Passwords</button>
+              )}
             </div>
           </div>
           <div className="card">

@@ -13,6 +13,17 @@ FOSS self-hostable classroom spaced repetition system for language teachers. Rea
 - Docker + docker-compose for local dev
 - npm workspaces monorepo
 
+## Design Pattern: Admin/Teacher Feature Parity
+
+Every teacher-facing action, button, or route must also be visible and
+usable on the equivalent admin page. Admin accounts here are commonly
+dual-role (admin + teacher, via "Add Admin as Teacher" on the Teachers
+page), specifically so one login can do both jobs — hiding a teacher
+feature from the admin view of the same entity (e.g. admin's
+`/admin/classes/:id` vs teacher's `/teacher/classes/:id`) breaks that.
+When adding a new teacher-facing capability, add the same capability to
+the corresponding admin page in the same session, not as a follow-up.
+
 ## Git Workflow
 At the end of every session, before stopping:
 1. Run `git add -A`
