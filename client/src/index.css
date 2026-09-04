@@ -280,7 +280,7 @@ button, input, select, textarea {
   background: var(--color-surface);
   border-radius: var(--radius);
   padding: 28px;
-  max-width: 480px;
+  max-width: 720px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;

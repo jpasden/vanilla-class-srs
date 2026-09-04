@@ -135,20 +135,36 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
       )}
       {result?.results && (() => {
         const withPasswords = result.results.filter((r): r is EnrollRowResult & { name: string; tempPassword: string } => !!r.tempPassword && !!r.name)
+        const reactivated = result.results.filter((r) => r.status === 'enrolled' && !r.tempPassword)
+        const alreadyEnrolled = result.results.filter((r) => r.status === 'already_enrolled')
+        const className = printLabel ?? title
         return (
           <div>
-            {withPasswords.length > 0 && (
+            {(withPasswords.length > 0 || reactivated.length > 0 || alreadyEnrolled.length > 0) && (
               <div className="alert alert-success" style={{ marginBottom: 12 }}>
-                <strong>{withPasswords.length} new student{withPasswords.length !== 1 ? 's' : ''} created</strong> — each
-                gets their own one-time password below.
-                <div style={{ fontSize: 12, marginTop: 4, color: 'var(--color-text-muted)' }}>
-                  This is the only copy. Passwords are hashed on creation and can't be shown
-                  again — a lost sheet means resetting those students one at a time from the
-                  class page. Students must change their password on first login.
-                </div>
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  {reactivated.length > 0 && (
+                    <li>{reactivated.length} student{reactivated.length !== 1 ? 's' : ''} previously imported, added to {className}</li>
+                  )}
+                  {withPasswords.length > 0 && (
+                    <li>{withPasswords.length} new student{withPasswords.length !== 1 ? 's' : ''} imported and added to {className}</li>
+                  )}
+                  {alreadyEnrolled.length > 0 && (
+                    <li>{alreadyEnrolled.length} student{alreadyEnrolled.length !== 1 ? 's' : ''} already in {className} — skipped</li>
+                  )}
+                </ul>
+                {withPasswords.length > 0 && (
+                  <div style={{ fontSize: 12, marginTop: 8, color: 'var(--color-text-muted)' }}>
+                    New students' passwords are shown once below — this is the only copy. Passwords
+                    are hashed on creation and can't be shown again; a lost sheet means resetting
+                    those students one at a time from the class page. Students must change their
+                    password on first login.
+                  </div>
+                )}
               </div>
             )}
             <p style={{ fontSize: 13, marginBottom: 8 }}>Enrollment results:</p>
+            <div className="table-scroll">
             <table className="table" style={{ fontSize: 13 }}>
               <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Temporary password</th></tr></thead>
               <tbody>
@@ -164,6 +180,7 @@ export function CsvImportModal({ title, endpoint, onSuccess, onClose, templateHi
                 ))}
               </tbody>
             </table>
+            </div>
             {withPasswords.length > 0 && (
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button
