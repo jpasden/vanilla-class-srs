@@ -104,7 +104,14 @@ export default function ReviewPage() {
   const [error, setError] = useState<string | null>(null)
   const [startTime, setStartTime] = useState<number>(0)
   const [completedCount, setCompletedCount] = useState(0)
-  const [sessionResult, setSessionResult] = useState<{ cardsReviewed: number; accuracyRate: number | null; weeklyGoal: WeeklyGoal | null } | null>(null)
+  const [sessionResult, setSessionResult] = useState<{
+    cardsReviewed: number
+    accuracyRate: number | null
+    weeklyGoal: WeeklyGoal | null
+    newPersonalBestDay: boolean
+    todayCardsTotal: number
+    currentStreak: number
+  } | null>(null)
   const [headline, setHeadline] = useState('')
   const [confirmFinish, setConfirmFinish] = useState(false)
   // Cards graded < 3 this session, for "Keep Studying" re-drill
@@ -315,7 +322,15 @@ export default function ReviewPage() {
   const finishSession = useCallback(async (sessionId: string, reviewed?: number) => {
     setFinishing(true)
     try {
-      const result = await api.post<{ cardsReviewed: number; accuracyRate: number | null; weeklyGoal: WeeklyGoal | null }>('/students/review/finish', { sessionId })
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const result = await api.post<{
+        cardsReviewed: number
+        accuracyRate: number | null
+        weeklyGoal: WeeklyGoal | null
+        newPersonalBestDay: boolean
+        todayCardsTotal: number
+        currentStreak: number
+      }>('/students/review/finish', { sessionId, tz })
       setSessionResult(result)
       setHeadline(pickRandom(ENCOURAGEMENT[accuracyTier(result.accuracyRate)]))
       setPhase('done')
@@ -626,8 +641,7 @@ export default function ReviewPage() {
 
       {/* Done — confetti settles on the ground + drawn checkmark + big glowing stat numbers +
           randomly-picked encouragement headline, approved in demos/anim-demo/finish-final-2.html.
-          (That demo's personal-best ribbon and streak counter are not wired in yet — no
-          backend data source for either exists; see project memory for the follow-up.) */}
+          Personal-best ribbon / streak line below. */}
       {phase === 'done' && (
         <div ref={finishStageRef} className="review-finish-stage" style={{ minHeight: 320, padding: '32px 16px' }}>
           <svg className="review-check-svg" viewBox="0 0 80 80" key={`check-${completedCount}`}>
@@ -657,6 +671,20 @@ export default function ReviewPage() {
                 </span>
                 <div className="review-big-stat-label">Accuracy</div>
               </div>
+            </div>
+          )}
+          {sessionResult && (sessionResult.newPersonalBestDay || sessionResult.currentStreak >= 2) && (
+            <div style={{ marginTop: 8, position: 'relative', zIndex: 2, textAlign: 'center' }}>
+              {sessionResult.newPersonalBestDay && (
+                <p style={{ fontSize: 'var(--text-base)', fontWeight: 700 }}>
+                  🏆 New personal best — {sessionResult.todayCardsTotal} cards in one day!
+                </p>
+              )}
+              {sessionResult.currentStreak >= 2 && (
+                <p style={{ fontSize: 'var(--text-base)', fontWeight: 700 }}>
+                  🔥 {sessionResult.currentStreak}-day streak!
+                </p>
+              )}
             </div>
           )}
           {sessionResult?.weeklyGoal && (

@@ -11,6 +11,7 @@ import { PrismaClient, FSRSState } from '@prisma/client'
 import { schedule } from '@vanilla-srs/shared/fsrs'
 import type { FSRSParams } from '@vanilla-srs/shared/fsrs'
 import { getWeeklyGoal, WeeklyGoal } from './homework.service'
+import { computeStreakAndBestDay } from './streak.service'
 
 // Caps how many due/review cards appear in a single session — a UX/session-length decision,
 // not an FSRS scheduling parameter, so it lives here rather than in the configurable
@@ -492,13 +493,36 @@ export async function gradeCard(
 
 // ── finish ───────────────────────────────────────────────────────────────────
 
+/**
+ * Was `todayKey` a NEW personal-best day — i.e. strictly more cards than any
+ * OTHER day on record? Excludes today from its own comparison so a repeat of
+ * an already-standing record doesn't re-trigger the "new personal best"
+ * callout (only the day it was first set should).
+ */
+export function isNewPersonalBestDay(cardsPerDay: Record<string, number>, todayKey: string): boolean {
+  const todayTotal = cardsPerDay[todayKey] ?? 0
+  const bestOtherDay = Object.entries(cardsPerDay)
+    .filter(([day]) => day !== todayKey)
+    .reduce((max, [, count]) => Math.max(max, count), 0)
+  return todayTotal > 0 && todayTotal > bestOtherDay
+}
+
 export async function finishSession(
   prisma: PrismaClient,
   studentId: string,
   sessionId: string,
   now: Date = new Date(),
+  tz: string = 'UTC',
 ): Promise<
-  | { ok: boolean; cardsReviewed: number; accuracyRate: number | null; weeklyGoal: WeeklyGoal | null }
+  | {
+      ok: boolean
+      cardsReviewed: number
+      accuracyRate: number | null
+      weeklyGoal: WeeklyGoal | null
+      newPersonalBestDay: boolean
+      todayCardsTotal: number
+      currentStreak: number
+    }
   | { error: string; status: number }
 > {
   const session = await prisma.reviewSession.findUnique({
@@ -520,10 +544,36 @@ export async function finishSession(
   // sessionId lets the client explain why rather than leaving them to guess.
   const weeklyGoal = await getWeeklyGoal(prisma, session.deck.enrollment.classId, session.deckId, now, sessionId)
 
+  // "New personal best" / streak — computed from the session's ACTUAL closed
+  // endedAt (which closeSession may have backdated to the student's last real
+  // review, not this request's `now`), so "today" reflects when they truly
+  // studied, not when the finish request happened to reach the server.
+  const { currentStreak, cardsPerDay } = await computeStreakAndBestDay(
+    prisma,
+    session.deckId,
+    session.deck.enrollment.id,
+    tz,
+    updated?.endedAt ?? now,
+  )
+  const endedAtForToday = updated?.endedAt ?? now
+  let todayKey: string
+  try {
+    todayKey = endedAtForToday.toLocaleDateString('en-CA', { timeZone: tz })
+  } catch {
+    todayKey = endedAtForToday.toISOString().slice(0, 10)
+  }
+  const newPersonalBestDay = isNewPersonalBestDay(cardsPerDay, todayKey)
+
   return {
     ok: true,
     cardsReviewed: updated?.cardsReviewed ?? 0,
     accuracyRate: updated?.accuracyRate ?? null,
     weeklyGoal,
+    newPersonalBestDay,
+    // Total across ALL of today's qualifying sessions, not just this one —
+    // "new personal best" is a day-level record, so the number shown for it
+    // must be the day's total, not this single session's cardsReviewed.
+    todayCardsTotal: cardsPerDay[todayKey] ?? 0,
+    currentStreak,
   }
 }

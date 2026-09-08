@@ -17,6 +17,7 @@ import { Request, Response } from 'express'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { getWeeklyGoal } from '../services/homework.service'
+import { computeStreakAndBestDay } from '../services/streak.service'
 
 const router = asyncRouter()
 const p = (req: Request, key: string) => req.params[key] as string
@@ -88,72 +89,11 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
     if (inst.state !== 'NEW' && inst.due <= now) breakdown.dueToday++
   }
 
-  // Streak — consecutive days with at least one completed qualifying session
-  // A qualifying session has cardsReviewed >= minCardsPerSession (from HomeworkRequirement, default 1)
-  const hwReq = await prisma.homeworkRequirement.findFirst({
-    where: { class: { enrollments: { some: { id: enrollmentId } } }, isActive: true },
-  })
-  const minCards = hwReq?.minCardsPerSession ?? 1
-
-  const allSessions = await prisma.reviewSession.findMany({
-    where: { deckId, endedAt: { not: null }, cardsReviewed: { gte: minCards } },
-    orderBy: { endedAt: 'desc' },
-    select: { endedAt: true, cardsReviewed: true },
-  })
-
+  // Streak — consecutive days with at least one completed qualifying session.
+  // Shared with finishSession() (review.service.ts) via streak.service.ts so
+  // the two surfaces can never disagree on what counts as a "qualifying day."
   const tz = (req.query.tz as string | undefined) || 'UTC'
-  const toLocalDay = (date: Date) => {
-    try {
-      return date.toLocaleDateString('en-CA', { timeZone: tz }) // en-CA gives YYYY-MM-DD
-    } catch {
-      return date.toISOString().slice(0, 10)
-    }
-  }
-
-  // Group by calendar day
-  const daySet = new Set<string>()
-  const cardsPerDay: Record<string, number> = {}
-  for (const s of allSessions) {
-    if (!s.endedAt) continue
-    const d = toLocalDay(s.endedAt)
-    daySet.add(d)
-    cardsPerDay[d] = (cardsPerDay[d] ?? 0) + s.cardsReviewed
-  }
-
-  // Current streak — consecutive days from today/yesterday backwards
-  // Use noon UTC as anchor so toLocalDay never flips to the previous day
-  let currentStreak = 0
-  const checkDate = new Date()
-  checkDate.setUTCHours(12, 0, 0, 0)
-  const todayStr = toLocalDay(now)
-  if (!daySet.has(todayStr)) checkDate.setUTCDate(checkDate.getUTCDate() - 1)
-  while (true) {
-    const key = toLocalDay(checkDate)
-    if (!daySet.has(key)) break
-    currentStreak++
-    checkDate.setUTCDate(checkDate.getUTCDate() - 1)
-  }
-
-  // Longest streak — scan sorted local-date strings (YYYY-MM-DD), use noon UTC to diff safely
-  const sortedDays = [...daySet].sort()
-  let longest = 0
-  let run = 0
-  let prevDay: string | null = null
-  for (const day of sortedDays) {
-    if (prevDay) {
-      const prev = new Date(prevDay + 'T12:00:00Z')
-      const curr = new Date(day + 'T12:00:00Z')
-      const diff = Math.round((curr.getTime() - prev.getTime()) / 86_400_000)
-      run = diff === 1 ? run + 1 : 1
-    } else {
-      run = 1
-    }
-    if (run > longest) longest = run
-    prevDay = day
-  }
-
-  // Most cards in a single day
-  const mostCardsInDay = Object.values(cardsPerDay).reduce((max, v) => Math.max(max, v), 0)
+  const { currentStreak, longest, mostCardsInDay } = await computeStreakAndBestDay(prisma, deckId, enrollmentId, tz, now)
 
   // Weekly goal
   const weeklyGoal = await getWeeklyGoal(prisma, enrollment.classId, deckId, now)

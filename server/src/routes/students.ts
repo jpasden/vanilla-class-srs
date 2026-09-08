@@ -482,6 +482,7 @@ router.post('/review/grade', validate(GradeSchema), async (req: Request, res: Re
 
 const FinishSchema = z.object({
   sessionId: z.string().uuid(),
+  tz: z.string().optional(),
 })
 
 // POST /api/students/review/finish
@@ -489,7 +490,7 @@ router.post('/review/finish', validate(FinishSchema), async (req: Request, res: 
   const student = await getStudent(req.user!.sub)
   if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
 
-  const result = await finishSession(prisma, student.id, req.body.sessionId)
+  const result = await finishSession(prisma, student.id, req.body.sessionId, new Date(), req.body.tz || 'UTC')
   if ('error' in result) { res.status(result.status).json({ error: result.error }); return }
   res.json(result)
 })
