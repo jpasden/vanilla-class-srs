@@ -72,16 +72,30 @@ export interface StartSessionOptions {
 
 // ── Helper: close an open session ────────────────────────────────────────────
 
-async function closeSession(prisma: PrismaClient, sessionId: string, now: Date): Promise<void> {
-  const events = await prisma.reviewEvent.findMany({ where: { sessionId } })
+export async function closeSession(prisma: PrismaClient, sessionId: string, now: Date): Promise<void> {
+  const events = await prisma.reviewEvent.findMany({ where: { sessionId }, orderBy: { reviewedAt: 'asc' } })
   const total = events.length
   const correct = events.filter((e) => e.grade >= 2).length
   const accuracyRate = total > 0 ? correct / total : null
 
+  // Stamp endedAt from the student's actual last review, not the caller's
+  // clock — this function also closes sessions IMPLICITLY (a prior session
+  // left open because the student closed the tab without hitting Finish,
+  // discovered and closed only when they next open the app, possibly days
+  // later). Using `now` there would misattribute real study time to
+  // whatever day the student happened to come back, or collide with the
+  // anti-gaming spacing rule in homework.service.ts and silently drop a
+  // legitimately-earned qualifying day. Falls back to `now` only when there
+  // are no events (nothing was actually reviewed, so it can't qualify for
+  // homework credit either way) — matches `now` almost exactly for the
+  // normal explicit-Finish path anyway, since that's called moments after
+  // the last card was graded.
+  const endedAt = total > 0 ? events[events.length - 1].reviewedAt : now
+
   await prisma.reviewSession.update({
     where: { id: sessionId },
     data: {
-      endedAt: now,
+      endedAt,
       cardsReviewed: total,
       accuracyRate,
     },
