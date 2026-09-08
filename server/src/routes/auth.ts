@@ -109,6 +109,13 @@ router.post('/refresh', async (req: Request, res: Response) => {
       return
     }
 
+    // Refresh happens far more often than an explicit login (every ~1h during
+    // active use, silently, for up to 30 days without ever re-entering a
+    // password) — without this, lastLoginAt only ever reflects the moment of
+    // the very first login, making it look like a student stopped using the
+    // app when they're actually still active every day.
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+
     setAuthCookies(res, user.id, user.role)
     res.json({
       user: {
