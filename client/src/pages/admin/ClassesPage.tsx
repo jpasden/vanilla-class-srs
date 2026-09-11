@@ -1,7 +1,8 @@
-import { useState, FormEvent } from 'react'
+import React, { useState, useMemo, FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
+import { useAuth } from '../../utils/auth'
 import { Modal } from '../../components/Modal'
 
 interface SubjectGrade { id: string; name: string; department: { name: string } }
@@ -11,6 +12,56 @@ interface Class {
   teacher: { id: string; user: { name: string } }
   subjectGrade: { id: string; name: string }
   _count: { enrollments: number; assignments: number }
+}
+
+type SortKey = 'name' | 'subjectGrade' | 'assignments' | 'teacher' | 'enrollments'
+type SortDir = 'asc' | 'desc'
+
+// Default sort order (unsorted state): by name, matching the API's own
+// default ordering — so "no sort applied yet" looks identical to before
+// sorting existed.
+const DEFAULT_SORT: { key: SortKey; dir: SortDir } = { key: 'name', dir: 'asc' }
+
+function sortValue(c: Class, key: SortKey): string | number {
+  switch (key) {
+    case 'name': return c.name
+    case 'subjectGrade': return c.subjectGrade.name
+    case 'assignments': return c._count.assignments
+    case 'teacher': return c.teacher.user.name
+    case 'enrollments': return c._count.enrollments
+  }
+}
+
+function toggleSort(current: { key: SortKey; dir: SortDir }, key: SortKey): { key: SortKey; dir: SortDir } {
+  if (current.key === key) return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+  return { key, dir: 'asc' }
+}
+
+function sortClasses(classes: Class[], sort: { key: SortKey; dir: SortDir }): Class[] {
+  const mul = sort.dir === 'asc' ? 1 : -1
+  return [...classes].sort((a, b) => {
+    const av = sortValue(a, sort.key)
+    const bv = sortValue(b, sort.key)
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * mul
+    return String(av).localeCompare(String(bv)) * mul
+  })
+}
+
+function SortableTh({
+  label, sortKey, sort, onSort, style,
+}: {
+  label: string
+  sortKey: SortKey
+  sort: { key: SortKey; dir: SortDir }
+  onSort: (key: SortKey) => void
+  style?: React.CSSProperties
+}) {
+  const active = sort.key === sortKey
+  return (
+    <th style={{ cursor: 'pointer', userSelect: 'none', ...style }} onClick={() => onSort(sortKey)}>
+      {label} {active ? (sort.dir === 'asc' ? '↑' : '↓') : ''}
+    </th>
+  )
 }
 
 export default function AdminClassesPage() {
@@ -34,6 +85,22 @@ export default function AdminClassesPage() {
   const filteredTeacherName = teacherId ? teachers?.find((t) => t.id === teacherId)?.user.name : undefined
   const filteredSubjectGradeName = subjectGradeId ? sgs?.find((sg) => sg.id === subjectGradeId)?.name : undefined
   const filterLabel = filteredTeacherName ?? filteredSubjectGradeName
+
+  // "My Classes" — only meaningful if this admin also has a Teacher profile
+  // (via "Add Admin as Teacher"). Resolved by matching the logged-in user's
+  // id against the teacher list already being fetched above, rather than a
+  // separate endpoint.
+  const { user } = useAuth()
+  const myTeacher = teachers?.find((t) => t.user.id === user?.sub)
+  const { data: myClasses, loading: myClassesLoading } = useApi<Class[] | null>(
+    () => (myTeacher ? api.get<Class[]>(`/admin/classes?teacherId=${myTeacher.id}`) : Promise.resolve(null)),
+    [myTeacher?.id],
+  )
+
+  const [allSort, setAllSort] = useState(DEFAULT_SORT)
+  const [mySort, setMySort] = useState(DEFAULT_SORT)
+  const sortedClasses = useMemo(() => (classes ? sortClasses(classes, allSort) : classes), [classes, allSort])
+  const sortedMyClasses = useMemo(() => (myClasses ? sortClasses(myClasses, mySort) : myClasses), [myClasses, mySort])
 
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<Class | null>(null)
@@ -136,8 +203,48 @@ export default function AdminClassesPage() {
           </div>
         </Modal>
       )}
+      {myTeacher && !showArchived && !subjectGradeId && !teacherId && (
+        <div style={{ marginBottom: 32 }}>
+          <div className="page-header">
+            <h1 className="page-title">My Classes</h1>
+          </div>
+          {myClassesLoading && <div className="spinner" />}
+          {sortedMyClasses && (
+            <div className="card">
+            <div className="table-scroll">
+            <table className="table">
+              <thead>
+                <tr>
+                  <SortableTh label="Name" sortKey="name" sort={mySort} onSort={(k) => setMySort((s) => toggleSort(s, k))} />
+                  <SortableTh label="Subject Grade" sortKey="subjectGrade" sort={mySort} onSort={(k) => setMySort((s) => toggleSort(s, k))} />
+                  <SortableTh label="CardSets" sortKey="assignments" sort={mySort} onSort={(k) => setMySort((s) => toggleSort(s, k))} />
+                  <SortableTh label="Teacher" sortKey="teacher" sort={mySort} onSort={(k) => setMySort((s) => toggleSort(s, k))} />
+                  <SortableTh label="Students" sortKey="enrollments" sort={mySort} onSort={(k) => setMySort((s) => toggleSort(s, k))} />
+                  <th style={{ width: 80 }}>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedMyClasses.length === 0 && <tr><td colSpan={6} className="table-empty">You have no classes of your own.</td></tr>}
+                {sortedMyClasses.map((c) => (
+                  <tr key={c.id}>
+                    <td><Link to={`/admin/classes/${c.id}`}>{c.name}</Link></td>
+                    <td>{c.subjectGrade.name}</td>
+                    <td>{c._count.assignments > 0 ? <Link to={`/admin/classes/${c.id}?tab=assignments`}>{c._count.assignments}</Link> : 0}</td>
+                    <td>{c.teacher.user.name}</td>
+                    <td>{c._count.enrollments}</td>
+                    <td><Link to={`/admin/classes/${c.id}`} className="btn btn-secondary btn-sm">Open</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="page-header">
-        <h1 className="page-title">Classes{filterLabel ? ` - ${filterLabel}` : ''}{subjectGradeId || teacherId ? ' (filtered)' : ''}</h1>
+        <h1 className="page-title">All Classes{filterLabel ? ` - ${filterLabel}` : ''}{subjectGradeId || teacherId ? ' (filtered)' : ''}</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => setShowArchived((v) => !v)}>
             {showArchived ? 'Show Active' : 'Show Archived'}
@@ -150,14 +257,23 @@ export default function AdminClassesPage() {
       )}
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
-      {classes && (
+      {sortedClasses && (
         <div className="card">
         <div className="table-scroll">
         <table className="table">
-          <thead><tr><th>Name</th><th>Subject Grade</th><th>CardSets</th><th>Teacher</th><th>Students</th><th style={{ width: 160 }}>Actions</th></tr></thead>
+          <thead>
+            <tr>
+              <SortableTh label="Name" sortKey="name" sort={allSort} onSort={(k) => setAllSort((s) => toggleSort(s, k))} />
+              <SortableTh label="Subject Grade" sortKey="subjectGrade" sort={allSort} onSort={(k) => setAllSort((s) => toggleSort(s, k))} />
+              <SortableTh label="CardSets" sortKey="assignments" sort={allSort} onSort={(k) => setAllSort((s) => toggleSort(s, k))} />
+              <SortableTh label="Teacher" sortKey="teacher" sort={allSort} onSort={(k) => setAllSort((s) => toggleSort(s, k))} />
+              <SortableTh label="Students" sortKey="enrollments" sort={allSort} onSort={(k) => setAllSort((s) => toggleSort(s, k))} />
+              <th style={{ width: 160 }}>Actions</th>
+            </tr>
+          </thead>
           <tbody>
-            {classes.length === 0 && <tr><td colSpan={6} className="table-empty">{showArchived ? 'No archived classes.' : 'No classes yet.'}</td></tr>}
-            {classes.map((c) => (
+            {sortedClasses.length === 0 && <tr><td colSpan={6} className="table-empty">{showArchived ? 'No archived classes.' : 'No classes yet.'}</td></tr>}
+            {sortedClasses.map((c) => (
               <tr key={c.id}>
                 <td>{showArchived ? c.name : <Link to={`/admin/classes/${c.id}`}>{c.name}</Link>}</td>
                 <td>{c.subjectGrade.name}</td>
