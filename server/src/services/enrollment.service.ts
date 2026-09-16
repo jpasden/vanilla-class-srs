@@ -61,7 +61,10 @@ export function parseEnrollCsv(buffer: Buffer, confirmedHeaderless: boolean): Pa
     if (!confirmedHeaderless) {
       return { status: 'needs_confirmation', detectedFormat: { name: firstRow[0]?.trim() ?? '', email: firstRow[1]?.trim() ?? '' } }
     }
-    return { status: 'parsed', rows: raw.map(([name, email]) => ({ name: name?.trim() ?? '', email: email?.trim() ?? '' })) }
+    const rows = raw
+      .map(([name, email]) => ({ name: name?.trim() ?? '', email: email?.trim() ?? '' }))
+      .filter((r) => r.name !== '' || r.email !== '')
+    return { status: 'parsed', rows }
   }
 
   // Either a recognized header, or a shape that doesn't match the headerless
@@ -69,11 +72,18 @@ export function parseEnrollCsv(buffer: Buffer, confirmedHeaderless: boolean): Pa
   // anything genuinely malformed.
   const [header, ...dataRows] = raw
   const columns = header.map((h) => h.trim().toLowerCase())
-  const rows = dataRows.map((row) => {
-    const obj: Record<string, string> = {}
-    columns.forEach((col, i) => { obj[col] = (row[i] ?? '').trim() })
-    return obj
-  })
+  const rows = dataRows
+    .map((row) => {
+      const obj: Record<string, string> = {}
+      columns.forEach((col, i) => { obj[col] = (row[i] ?? '').trim() })
+      return obj
+    })
+    // A wholly-blank row (e.g. a trailing "," left by Excel export, which
+    // `skip_empty_lines` doesn't catch since it isn't a truly empty line)
+    // is silently discarded here, before validation — it's not real data.
+    // A row with SOME content but a real problem (name with no email, a
+    // malformed email) is left alone so validateEnrollRows still flags it.
+    .filter((r) => Object.values(r).some((v) => v !== ''))
   return { status: 'parsed', rows }
 }
 

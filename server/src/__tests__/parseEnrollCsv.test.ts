@@ -74,4 +74,40 @@ describe('parseEnrollCsv', () => {
       expect(result.rows).toEqual([])
     }
   })
+
+  it('discards a trailing wholly-blank row (e.g. a stray "," left by Excel export)', () => {
+    const buf = Buffer.from('name,email\nDoug Test,dt@qbd.org\nAnne Test,at@qbd.org\n,\n')
+    const result = parseEnrollCsv(buf, false)
+    expect(result.status).toBe('parsed')
+    if (result.status === 'parsed') {
+      expect(result.rows).toEqual([
+        { name: 'Doug Test', email: 'dt@qbd.org' },
+        { name: 'Anne Test', email: 'at@qbd.org' },
+      ])
+    }
+  })
+
+  it('discards a trailing wholly-blank row in a headerless (confirmed) file', () => {
+    const buf = Buffer.from('Doug Test,dt@qbd.org\nAnne Test,at@qbd.org\n,\n')
+    const result = parseEnrollCsv(buf, true)
+    expect(result.status).toBe('parsed')
+    if (result.status === 'parsed') {
+      expect(result.rows).toEqual([
+        { name: 'Doug Test', email: 'dt@qbd.org' },
+        { name: 'Anne Test', email: 'at@qbd.org' },
+      ])
+    }
+  })
+
+  it('keeps a row with a name but no email — a real problem, not a blank row', () => {
+    const buf = Buffer.from('name,email\nDoug Test,dt@qbd.org\nNo Email Guy,\n')
+    const result = parseEnrollCsv(buf, false)
+    expect(result.status).toBe('parsed')
+    if (result.status === 'parsed') {
+      expect(result.rows).toEqual([
+        { name: 'Doug Test', email: 'dt@qbd.org' },
+        { name: 'No Email Guy', email: '' },
+      ])
+    }
+  })
 })
