@@ -4,6 +4,7 @@ import { api, ApiError, downloadBlob } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { useEnrollment } from '../../utils/enrollment'
 import { Modal } from '../../components/Modal'
+import './DeckPage.css'
 
 interface CardInstance {
   id: string
@@ -357,8 +358,24 @@ export default function StudentDeckPage() {
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
 
-      <div className="table-scroll">
-        <table className="table">
+      <div className="student-deck-mobile-sort" aria-label="Sort cards">
+        <span>Sort by</span>
+        {(['word', 'due'] as const).map((key) => (
+          <button key={key} type="button" className="btn btn-secondary btn-sm"
+            aria-pressed={sortKey === key} onClick={() => toggleSort(key)}>
+            {key === 'word' ? 'Word' : 'Due'}
+            {sortKey === key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+          </button>
+        ))}
+      </div>
+      <div className="student-deck-table-wrap">
+        <table className="table student-deck-table" role="table">
+          <colgroup>
+            <col className="student-deck-word-column" />
+            <col className="student-deck-definition-column" />
+            <col className="student-deck-status-column" />
+            <col className="student-deck-actions-column" />
+          </colgroup>
           <thead>
             <tr>
               <th>
@@ -373,9 +390,9 @@ export default function StudentDeckPage() {
                   </span>
                 </button>
               </th>
-              <th>POS</th>
-              <th>State</th>
+              <th>{definitionL2Label}</th>
               <th>
+                <div>Review Status</div>
                 <button
                   type="button"
                   onClick={() => toggleSort('due')}
@@ -387,45 +404,54 @@ export default function StudentDeckPage() {
                   </span>
                 </button>
               </th>
-              <th>Origin</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={6} className="table-empty">No cards match the filter.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={4} className="table-empty">No cards match the filter.</td></tr>}
             {filtered.map((inst) => (
-              <tr key={inst.id}>
-                <td style={{ fontWeight: 500 }}>{inst.card.word}</td>
-                <td style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{inst.card.pos ?? '—'}</td>
-                <td><span className={`badge ${stateColors[inst.state]}`}>{inst.state}</span></td>
-                <td style={{ fontSize: 12 }}>{inst.state === 'NEW' ? '—' : new Date(inst.due).toLocaleDateString()}</td>
-                <td style={{ fontSize: 12 }}>{inst.origin}</td>
-                <td style={{ display: 'flex', gap: 4 }}>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => openHistory(inst)}
-                  >
-                    History
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      setEditForm({
-                        word: inst.card.word,
-                        pos: inst.card.pos ?? '',
-                        definitionL2: inst.card.definitionL2 ?? '',
-                        definitionL1: isOwnCard(inst) ? (inst.card.definitionL1 ?? '') : (inst.definitionL1 ?? ''),
-                        exampleSentence: isOwnCard(inst) ? (inst.card.exampleSentence ?? '') : (inst.exampleSentence ?? ''),
-                      })
-                      setFormError(null)
-                      setEditModal(inst)
-                    }}
-                  >
-                    Edit
-                  </button>
-                  {isDeletable(inst) && (
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(inst)}>Delete</button>
-                  )}
+              <tr key={inst.id} role="row">
+                <td role="cell" className="student-deck-word">
+                  <div className="student-deck-word-text">{inst.card.word}</div>
+                  {inst.card.pos && <div className="student-deck-pos">{inst.card.pos}</div>}
+                </td>
+                <td role="cell" className="student-deck-definition">
+                  <span className="student-deck-mobile-label">{definitionL2Label}</span>
+                  <div>{inst.card.definitionL2 || <span className="student-deck-muted">—</span>}</div>
+                </td>
+                <td role="cell" className="student-deck-status">
+                  <span className="student-deck-mobile-label">Review Status</span>
+                  <span className={`badge ${stateColors[inst.state]}`}>{inst.state}</span>
+                  <div className="student-deck-due">Due: {inst.state === 'NEW' ? '—' : new Date(inst.due).toLocaleDateString()}</div>
+                </td>
+                <td role="cell">
+                  <div className="student-deck-actions">
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => openHistory(inst)}
+                    >
+                      History
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setEditForm({
+                          word: inst.card.word,
+                          pos: inst.card.pos ?? '',
+                          definitionL2: inst.card.definitionL2 ?? '',
+                          definitionL1: isOwnCard(inst) ? (inst.card.definitionL1 ?? '') : (inst.definitionL1 ?? ''),
+                          exampleSentence: isOwnCard(inst) ? (inst.card.exampleSentence ?? '') : (inst.exampleSentence ?? ''),
+                        })
+                        setFormError(null)
+                        setEditModal(inst)
+                      }}
+                    >
+                      Edit
+                    </button>
+                    {isDeletable(inst) && (
+                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(inst)}>Delete</button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
