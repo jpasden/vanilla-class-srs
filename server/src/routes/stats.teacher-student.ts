@@ -11,6 +11,7 @@ import { Role } from '@prisma/client'
 import { asyncRouter } from '../lib/asyncRouter'
 import prisma from '../lib/prisma'
 import { getWeeklyGoal } from '../services/homework.service'
+import { computeStreakAndBestDay } from '../services/streak.service'
 
 const router = asyncRouter({ mergeParams: true })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -66,61 +67,10 @@ router.get('/summary', async (req: Request, res: Response) => {
     if (inst.state !== 'NEW' && inst.due <= now) breakdown.dueToday++
   }
 
-  const hwReq = await prisma.homeworkRequirement.findFirst({
-    where: { class: { enrollments: { some: { id: enrollment.id } } }, isActive: true },
-  })
-  const minCards = hwReq?.minCardsPerSession ?? 1
-
-  const allSessions = await prisma.reviewSession.findMany({
-    where: { deckId, endedAt: { not: null }, cardsReviewed: { gte: minCards } },
-    orderBy: { endedAt: 'desc' },
-    select: { endedAt: true, cardsReviewed: true },
-  })
-
   const tz = (req.query.tz as string | undefined) || 'UTC'
-  const toLocalDay = (date: Date) => {
-    try { return date.toLocaleDateString('en-CA', { timeZone: tz }) } catch { return date.toISOString().slice(0, 10) }
-  }
-
-  const daySet = new Set<string>()
-  const cardsPerDay: Record<string, number> = {}
-  for (const s of allSessions) {
-    if (!s.endedAt) continue
-    const d = toLocalDay(s.endedAt)
-    daySet.add(d)
-    cardsPerDay[d] = (cardsPerDay[d] ?? 0) + s.cardsReviewed
-  }
-
-  let currentStreak = 0
-  const checkDate = new Date()
-  checkDate.setUTCHours(12, 0, 0, 0)
-  const todayStr = toLocalDay(now)
-  if (!daySet.has(todayStr)) checkDate.setUTCDate(checkDate.getUTCDate() - 1)
-  while (true) {
-    const key = toLocalDay(checkDate)
-    if (!daySet.has(key)) break
-    currentStreak++
-    checkDate.setUTCDate(checkDate.getUTCDate() - 1)
-  }
-
-  const sortedDays = [...daySet].sort()
-  let longest = 0
-  let run = 0
-  let prevDay: string | null = null
-  for (const day of sortedDays) {
-    if (prevDay) {
-      const prev = new Date(prevDay + 'T12:00:00Z')
-      const curr = new Date(day + 'T12:00:00Z')
-      const diff = Math.round((curr.getTime() - prev.getTime()) / 86_400_000)
-      run = diff === 1 ? run + 1 : 1
-    } else {
-      run = 1
-    }
-    if (run > longest) longest = run
-    prevDay = day
-  }
-
-  const mostCardsInDay = Object.values(cardsPerDay).reduce((max, v) => Math.max(max, v), 0)
+  const { currentStreak, longest, mostCardsInDay } = await computeStreakAndBestDay(
+    prisma, deckId, enrollment.id, tz, now,
+  )
 
   const weeklyGoal = await getWeeklyGoal(prisma, enrollment.classId, deckId, now)
 

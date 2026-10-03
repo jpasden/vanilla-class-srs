@@ -1,9 +1,8 @@
 /**
  * Streak / best-day computation — shared by the student's "My Stats" page
- * (`GET /students/stats/summary`) and the post-review finish screen
- * (`finishSession`), so the two surfaces can never independently drift on
- * what counts as a "qualifying day." Extracted from stats.student.ts's
- * original inline computation, behavior-preserving.
+ * (`GET /students/stats/summary`), teacher/admin student stats, and the
+ * post-review finish screen (`finishSession`), so these surfaces agree on
+ * what counts as a "qualifying day."
  */
 
 import { PrismaClient } from '@prisma/client'
@@ -58,14 +57,16 @@ export async function computeStreakAndBestDay(
   }
 
   // Current streak — consecutive days from today/yesterday backwards.
-  // Use noon UTC as anchor so toLocalDay never flips to the previous day.
+  // Derive today from the supplied time in the user's timezone. Walk date
+  // labels using UTC arithmetic only; converting the cursor back to local
+  // time would apply the timezone offset twice. In Shanghai, the local date
+  // is already tomorrow from 16:00 UTC onward.
   let currentStreak = 0
-  const checkDate = new Date()
-  checkDate.setUTCHours(12, 0, 0, 0)
   const todayStr = toLocalDay(now)
+  const checkDate = new Date(todayStr + 'T12:00:00Z')
   if (!daySet.has(todayStr)) checkDate.setUTCDate(checkDate.getUTCDate() - 1)
   while (true) {
-    const key = toLocalDay(checkDate)
+    const key = checkDate.toISOString().slice(0, 10)
     if (!daySet.has(key)) break
     currentStreak++
     checkDate.setUTCDate(checkDate.getUTCDate() - 1)
