@@ -54,7 +54,7 @@ export default function TeacherClassDetailPage() {
   const { data: enrollments, reload: reloadEnrollments } = useApi<Enrollment[]>(() => api.get(`/teachers/classes/${id}/students`), [id])
   const { data: assignments, reload: reloadAssignments } = useApi<Assignment[]>(() => api.get(`/teachers/classes/${id}/assignments`), [id])
   const { data: hw, reload: reloadHw } = useApi<HomeworkReq | null>(() => api.get(`/teachers/classes/${id}/homework`), [id])
-  const { data: cardSets } = useApi<CardSet[]>(() => api.get('/teachers/cardsets'))
+  const { data: cardSets, reload: reloadCardSets } = useApi<CardSet[]>(() => api.get(`/teachers/cardsets?classId=${id}`), [id])
 
   const [tab, setTab] = useState<Tab>('students')
   const [lastLoginSortAsc, setLastLoginSortAsc] = useState<boolean | null>(null)
@@ -186,6 +186,7 @@ export default function TeacherClassDetailPage() {
         })
       } else {
         reloadAssignments()
+        reloadCardSets()
       }
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : 'Failed')
@@ -208,6 +209,7 @@ export default function TeacherClassDetailPage() {
       setProgressDone(true)
       es.close()
       reloadAssignments()
+      reloadCardSets()
     })
 
     es.onerror = () => {
@@ -219,6 +221,7 @@ export default function TeacherClassDetailPage() {
       setProgressError(true)
       es.close()
       reloadAssignments()
+      reloadCardSets()
     }
   }
 
@@ -250,6 +253,7 @@ export default function TeacherClassDetailPage() {
       )
       setRemoveConfirm(null)
       reloadAssignments()
+      reloadCardSets()
       if (result.cardsRemoved > 0) {
         alert(`Removed "${removeConfirm.cardSet.name}" and ${result.cardsRemoved} word${result.cardsRemoved !== 1 ? 's' : ''} from student decks.`)
       }

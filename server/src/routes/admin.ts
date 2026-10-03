@@ -10,6 +10,8 @@ import { validate } from '../middleware/validate'
 import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { batchAddTeachers, batchAddClasses } from '../services/subjectGradeBatch.service'
+import { createClassWithMembership, updateClassWithMembership, removeSubjectGradeMembership } from '../services/class.service'
+import { classCardSetWhere } from '../services/cardSetAccess.service'
 import { demoteAdmin, PROTECTED_ADMIN_USER_ID } from '../services/adminRoles.service'
 import { resetAllClassPasswords } from '../services/classPasswordReset.service'
 import { buildClassStats } from './stats.teacher'
@@ -295,12 +297,8 @@ const BatchAddClassesSchema = z.object({
   })).min(1),
 })
 
-// POST /api/admin/subject-grades/:id/classes — bulk-create classes in this
-// Subject Grade, one row per class with its own name + teacher. Unlike the
-// single-class POST /classes route, this requires each teacher to already be
-// assigned to the Subject Grade (via TeacherSubjectGrade) — a consistency
-// check the single-class route doesn't have, added here deliberately so
-// batch-created classes can't silently reproduce that gap at scale.
+// POST /api/admin/subject-grades/:id/classes — class creation also adds
+// each teacher to this SubjectGrade automatically.
 router.post(
   '/subject-grades/:id/classes',
   validate(BatchAddClassesSchema),
@@ -645,9 +643,11 @@ router.post(
 router.delete(
   '/teachers/:id/subject-grades/:subjectGradeId',
   async (req: Request, res: Response) => {
-    await prisma.teacherSubjectGrade.deleteMany({
-      where: { teacherId: p(req, 'id'), subjectGradeId: p(req, 'subjectGradeId') },
-    })
+    const removed = await removeSubjectGradeMembership(prisma, p(req, 'id'), p(req, 'subjectGradeId'))
+    if (!removed) {
+      res.status(409).json({ error: 'Teacher still has active classes in this SubjectGrade. Reassign or archive those classes first.' })
+      return
+    }
     res.json({ ok: true })
   }
 )
@@ -722,12 +722,10 @@ router.post('/classes', validate(CreateClassSchema), async (req: Request, res: R
     res.status(400).json({ error: 'SubjectGrade not found or archived' })
     return
   }
-  const cls = await prisma.class.create({
-    data: {
-      name: req.body.name,
-      teacherId: req.body.teacherId,
-      subjectGradeId: req.body.subjectGradeId,
-    },
+  const cls = await createClassWithMembership(prisma, {
+    name: req.body.name,
+    teacherId: req.body.teacherId,
+    subjectGradeId: req.body.subjectGradeId,
   })
   res.status(201).json(cls)
 })
@@ -746,10 +744,7 @@ router.patch('/classes/:id', validate(PatchClassSchema), async (req: Request, re
       return
     }
   }
-  const updated = await prisma.class.update({
-    where: { id: p(req, 'id') },
-    data: req.body,
-  })
+  const updated = await updateClassWithMembership(prisma, cls.id, req.body)
   res.json(updated)
 })
 
@@ -774,10 +769,7 @@ router.post('/classes/:id/unarchive', async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Class not found' })
     return
   }
-  const updated = await prisma.class.update({
-    where: { id: p(req, 'id') },
-    data: { archivedAt: null },
-  })
+  const updated = await updateClassWithMembership(prisma, cls.id, { archivedAt: null })
   res.json(updated)
 })
 
@@ -1033,6 +1025,17 @@ router.post('/cardsets/:id/promote', validate(PromoteCardSetSchema), async (req:
 // GET /api/admin/cardsets  — list all non-personal CardSets
 // ?archived=true returns only archived CardSets, for the "show archived" toggle.
 router.get('/cardsets', async (req: Request, res: Response) => {
+  if (req.query.classId !== undefined) {
+    const cls = await prisma.class.findUnique({ where: { id: String(req.query.classId) } })
+    if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
+    const cardSets = await prisma.cardSet.findMany({
+      where: { ...classCardSetWhere(cls), assignments: { none: { classId: cls.id } } },
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { cards: true } } },
+    })
+    res.json(cardSets)
+    return
+  }
   const archived = req.query.archived === 'true'
   const cardSets = await prisma.cardSet.findMany({
     where: { archivedAt: archived ? { not: null } : null, isPersonal: false },

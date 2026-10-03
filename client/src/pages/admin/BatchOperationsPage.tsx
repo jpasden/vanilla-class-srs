@@ -275,8 +275,8 @@ export default function AdminBatchOperationsPage() {
       {/* Section B — Batch Add Classes */}
       <div className="card" style={{ marginBottom: 24 }}>
         <h2 style={{ marginTop: 0 }}>Add Classes</h2>
-        {sgTeachers.length === 0 ? (
-          <p style={{ color: 'var(--color-text-muted)' }}>Add at least one teacher to this Subject Grade first.</p>
+        {!allTeachers?.length ? (
+          <p style={{ color: 'var(--color-text-muted)' }}>Create at least one teacher account first.</p>
         ) : (
           <form onSubmit={handleAddClasses}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
@@ -296,7 +296,7 @@ export default function AdminBatchOperationsPage() {
                     style={{ flex: 1 }}
                   >
                     <option value="">Select teacher…</option>
-                    {sgTeachers.map((t) => <option key={t.id} value={t.id}>{t.user.name}</option>)}
+                    {allTeachers?.map((t) => <option key={t.id} value={t.id}>{t.user.name}</option>)}
                   </select>
                   {classRows.length > 1 && (
                     <button type="button" className="btn btn-secondary btn-sm" onClick={() => removeClassRow(i)}>✕</button>

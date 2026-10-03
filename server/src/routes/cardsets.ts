@@ -19,6 +19,7 @@ import { validate } from '../middleware/validate'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { syncNewCardsToAssignedDecks } from '../services/assignment.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
+import { classCardSetWhere } from '../services/cardSetAccess.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -62,6 +63,22 @@ const PatchCardSetSchema = z.object({
 router.get('/', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
+
+  // Class pickers use the same scope as the assignment endpoint. Ownership
+  // is checked first, so a classId cannot expose a colleague's private sets.
+  if (req.query.classId !== undefined) {
+    const cls = await prisma.class.findUnique({ where: { id: String(req.query.classId) } })
+    if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+      res.status(404).json({ error: 'Class not found' }); return
+    }
+    const cardSets = await prisma.cardSet.findMany({
+      where: { ...classCardSetWhere(cls), assignments: { none: { classId: cls.id } } },
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { cards: true } } },
+    })
+    res.json(cardSets)
+    return
+  }
 
   // Own private sets + any DEPARTMENTAL sets belonging to their SubjectGrades
   const sgIds = (

@@ -9,6 +9,8 @@ import { validate } from '../middleware/validate'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { generateTempPassword, hashPassword } from '../services/auth.service'
 import { resetAllClassPasswords } from '../services/classPasswordReset.service'
+import { createClassWithMembership, updateClassWithMembership } from '../services/class.service'
+import { classCardSetWhere } from '../services/cardSetAccess.service'
 import { createClassAssignment, streamCardInstanceCreation, rollbackOrphanedAssignment, removeAssignment, resumeClassAssignment } from '../services/assignment.service'
 import { DEFAULT_MIN_CARDS_PER_SESSION, DEFAULT_PERIOD_DAYS, DEFAULT_ALERT_THRESHOLD_DAYS } from '../services/homework.service'
 import { labelsForClass } from '../services/departmentLabels.service'
@@ -106,12 +108,10 @@ router.post('/classes', validate(CreateClassSchema), async (req: Request, res: R
     res.status(400).json({ error: 'SubjectGrade not found or archived' })
     return
   }
-  const cls = await prisma.class.create({
-    data: {
-      name: req.body.name,
-      teacherId: teacher.id,
-      subjectGradeId: req.body.subjectGradeId,
-    },
+  const cls = await createClassWithMembership(prisma, {
+    name: req.body.name,
+    teacherId: teacher.id,
+    subjectGradeId: req.body.subjectGradeId,
   })
   res.status(201).json(cls)
 })
@@ -128,10 +128,7 @@ router.patch('/classes/:id', validate(PatchClassSchema), async (req: Request, re
     res.status(404).json({ error: 'Class not found' })
     return
   }
-  const updated = await prisma.class.update({
-    where: { id: p(req, 'id') },
-    data: { name: req.body.name },
-  })
+  const updated = await updateClassWithMembership(prisma, cls.id, { name: req.body.name })
   res.json(updated)
 })
 
@@ -437,9 +434,8 @@ router.post(
     if (!cs || cs.archivedAt || cs.isPersonal) {
       res.status(400).json({ error: 'CardSet not found' }); return
     }
-    const isOwner = cs.status === 'PRIVATE' && cs.teacherId === teacher.id
-    const isDeptInSG = cs.status === 'DEPARTMENTAL' && cs.subjectGradeId === cls.subjectGradeId
-    if (!isOwner && !isDeptInSG) {
+    const assignable = await prisma.cardSet.findFirst({ where: { id: cs.id, ...classCardSetWhere(cls) } })
+    if (!assignable) {
       res.status(403).json({ error: 'Not authorized to assign this CardSet' }); return
     }
 

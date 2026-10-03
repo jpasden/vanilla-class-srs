@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { createClassWithMembership } from './class.service'
 
 export interface BatchTeacherResult {
   teacherId: string
@@ -56,38 +57,28 @@ export interface BatchClassResult {
   classId?: string
 }
 
-/**
- * Bulk-create classes in a Subject Grade, one row per class with its own
- * name + teacher. Unlike the single-class POST /classes route, each
- * teacher must already be assigned to the Subject Grade (via
- * TeacherSubjectGrade) — a consistency check the single-class route
- * doesn't have, added here deliberately so batch-created classes can't
- * reproduce that gap at scale. A row with an unassigned teacher is
- * reported as an error for that row only; the rest of the batch proceeds.
- */
+/** Bulk-create classes and automatically add their teachers to the SubjectGrade. */
 export async function batchAddClasses(
   prisma: PrismaClient,
   subjectGradeId: string,
   rows: BatchClassRow[],
 ): Promise<BatchClassResult[]> {
   const teacherIds = [...new Set(rows.map((r) => r.teacherId))]
-  const assignedTeacherIds = new Set(
-    (await prisma.teacherSubjectGrade.findMany({
-      where: { subjectGradeId, teacherId: { in: teacherIds } },
-      select: { teacherId: true },
-    })).map((t) => t.teacherId),
+  const validTeacherIds = new Set(
+    (await prisma.teacher.findMany({
+      where: { id: { in: teacherIds } },
+      select: { id: true },
+    })).map((t) => t.id),
   )
 
   const results: BatchClassResult[] = []
   for (const row of rows) {
-    if (!assignedTeacherIds.has(row.teacherId)) {
-      results.push({ name: row.name, status: 'error', error: 'Teacher is not assigned to this Subject Grade' })
+    if (!validTeacherIds.has(row.teacherId)) {
+      results.push({ name: row.name, status: 'error', error: 'Teacher not found' })
       continue
     }
     try {
-      const cls = await prisma.class.create({
-        data: { name: row.name, teacherId: row.teacherId, subjectGradeId },
-      })
+      const cls = await createClassWithMembership(prisma, { name: row.name, teacherId: row.teacherId, subjectGradeId })
       results.push({ name: row.name, status: 'created', classId: cls.id })
     } catch (err: any) {
       results.push({ name: row.name, status: 'error', error: err?.message ?? 'Unknown error' })

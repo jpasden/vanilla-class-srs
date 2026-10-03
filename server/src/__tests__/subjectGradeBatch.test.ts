@@ -85,27 +85,28 @@ describe('batchAddTeachers', () => {
 })
 
 function makeClassesPrisma({
-  assignedTeacherIds = [] as string[],
+  teacherIds = [] as string[],
   createImpl,
 }: {
-  assignedTeacherIds?: string[]
+  teacherIds?: string[]
   createImpl?: (data: any) => Promise<{ id: string }>
 } = {}) {
-  return {
-    teacherSubjectGrade: {
-      findMany: vi.fn().mockResolvedValue(assignedTeacherIds.map((teacherId) => ({ teacherId }))),
-    },
+  const tx = {
+    teacherSubjectGrade: { upsert: vi.fn().mockResolvedValue({}) },
     class: {
       create: vi.fn().mockImplementation(
         createImpl ?? (({ data }: any) => Promise.resolve({ id: `class-${data.name}` })),
       ),
     },
   }
+  return { ...tx, teacher: { findMany: vi.fn().mockResolvedValue(teacherIds.map((id) => ({ id }))) },
+    $transaction: vi.fn().mockImplementation((run) => run(tx)),
+  }
 }
 
 describe('batchAddClasses', () => {
-  it('creates every row whose teacher is already assigned to the Subject Grade', async () => {
-    const prisma = makeClassesPrisma({ assignedTeacherIds: ['t1', 't2'] })
+  it('creates classes and adds membership for every valid teacher', async () => {
+    const prisma = makeClassesPrisma({ teacherIds: ['t1', 't2'] })
 
     const results = await batchAddClasses(prisma as any, 'sg-1', [
       { name: '10AENG 1', teacherId: 't1' },
@@ -117,26 +118,31 @@ describe('batchAddClasses', () => {
       { name: '10AENG 2', status: 'created', classId: 'class-10AENG 2' },
     ])
     expect(prisma.class.create).toHaveBeenCalledTimes(2)
+    expect(prisma.teacherSubjectGrade.upsert).toHaveBeenCalledTimes(2)
+    expect(prisma.teacherSubjectGrade.upsert).toHaveBeenCalledWith({
+      where: { teacherId_subjectGradeId: { teacherId: 't2', subjectGradeId: 'sg-1' } },
+      create: { teacherId: 't2', subjectGradeId: 'sg-1' }, update: {},
+    })
   })
 
-  it('rejects a row whose teacher is not assigned to this Subject Grade, without aborting the rest of the batch', async () => {
-    const prisma = makeClassesPrisma({ assignedTeacherIds: ['t1'] })
+  it('rejects an unknown teacher without aborting the rest of the batch', async () => {
+    const prisma = makeClassesPrisma({ teacherIds: ['t1'] })
 
     const results = await batchAddClasses(prisma as any, 'sg-1', [
       { name: '10AENG 1', teacherId: 't1' },
-      { name: '10AENG 2', teacherId: 'unassigned-teacher' },
+      { name: '10AENG 2', teacherId: 'unknown-teacher' },
     ])
 
     expect(results).toEqual([
       { name: '10AENG 1', status: 'created', classId: 'class-10AENG 1' },
-      { name: '10AENG 2', status: 'error', error: 'Teacher is not assigned to this Subject Grade' },
+      { name: '10AENG 2', status: 'error', error: 'Teacher not found' },
     ])
     expect(prisma.class.create).toHaveBeenCalledTimes(1)
   })
 
   it('records a per-row error and continues if class creation throws', async () => {
     const prisma = makeClassesPrisma({
-      assignedTeacherIds: ['t1'],
+      teacherIds: ['t1'],
       createImpl: () => Promise.reject(new Error('DB exploded')),
     })
 

@@ -30,6 +30,10 @@ Department
 
 A **Teacher** creates **CardSets** (initially PRIVATE). An admin can promote a CardSet to DEPARTMENTAL, making it visible to all teachers in the same SubjectGrade.
 
+A class's teacher is automatically added to its SubjectGrade when the class is created, reassigned, or restored. Membership cannot be removed while the teacher still owns an active class in that SubjectGrade.
+
+Departmental CardSets belong to one SubjectGrade. A teacher can assign any of that group's departmental sets to their own classes in that group, regardless of who created the set. Class assignment pickers show only the class teacher's private sets and that class's SubjectGrade departmental sets, excluding archived, personal, and already-assigned sets. The general CardSets library still includes departmental sets from all of the teacher's SubjectGrades. Admin class pickers use the same class scope; existing admin assignment permissions remain broader.
+
 A **Class** has **Assignments** — links between the class and a CardSet, either MANDATORY or OPTIONAL.
 
 When a MANDATORY Assignment is created, **CardInstances** are immediately created for all enrolled students. This is done atomically in a transaction.
