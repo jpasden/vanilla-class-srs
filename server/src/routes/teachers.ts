@@ -1,3 +1,5 @@
+import staffDeckRouter from './staffDeck'
+import { classAccess } from '../services/classAccess.service'
 import { Request, Response } from 'express'
 import { z } from 'zod'
 import { AssignmentType } from '@prisma/client'
@@ -52,11 +54,11 @@ router.get('/classes', async (req: Request, res: Response) => {
     return
   }
   const classes = await prisma.class.findMany({
-    where: { teacherId: teacher.id, archivedAt: null },
+    where: { teacherId: teacher.id, archivedAt: null, subjectGrade: { archivedAt: null, department: { archivedAt: null } } },
     orderBy: { name: 'asc' },
     include: {
       subjectGrade: { select: { id: true, name: true } },
-      _count: { select: { enrollments: true } },
+      _count: { select: { enrollments: { where: { archivedAt: null } } } },
     },
   })
   res.json(classes)
@@ -76,11 +78,12 @@ router.get('/classes/:id', async (req: Request, res: Response) => {
       _count: { select: { enrollments: true, assignments: true } },
     },
   })
-  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+  const access = cls ? await classAccess(prisma, req.user!.sub, req.user!.role, cls.id) : null
+  if (!cls || !access) {
     res.status(404).json({ error: 'Class not found' })
     return
   }
-  res.json(cls)
+  res.json({ ...cls, canManage: cls.teacherId === teacher.id, teacherName: access.cls.teacher.user.name })
 })
 
 // POST /api/teachers/classes
@@ -314,7 +317,7 @@ router.get('/classes/:id/students', async (req: Request, res: Response) => {
     return
   }
   const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
-  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+  if (!cls || !(await classAccess(prisma, req.user!.sub, req.user!.role, cls.id))) {
     res.status(404).json({ error: 'Class not found' })
     return
   }
@@ -390,7 +393,7 @@ router.get('/classes/:id/assignments', async (req: Request, res: Response) => {
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
   const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
-  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+  if (!cls || !(await classAccess(prisma, req.user!.sub, req.user!.role, cls.id))) {
     res.status(404).json({ error: 'Class not found' }); return
   }
   const assignments = await prisma.assignment.findMany({
@@ -491,6 +494,11 @@ router.get('/classes/:id/assignments/:assignmentId/progress', async (req: Reques
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
+  const access = await classAccess(prisma, req.user!.sub, req.user!.role, p(req, 'id'))
+  const assignment = await prisma.assignment.findUnique({ where: { id: p(req, 'assignmentId') } })
+  if (!access?.canManage || !assignment || assignment.classId !== p(req, 'id')) {
+    res.status(404).json({ error: 'Assignment not found' }); return
+  }
   const job = pendingAssignmentJobs.get(p(req, 'assignmentId'))
   if (!job) {
     res.status(404).json({ error: 'No pending job found for this assignment' }); return
@@ -561,18 +569,18 @@ router.get('/classes/:id/students/:studentId/cards', async (req: Request, res: R
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
   const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
-  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+  if (!cls || !(await classAccess(prisma, req.user!.sub, req.user!.role, cls.id))) {
     res.status(404).json({ error: 'Class not found' }); return
   }
   // Find the student's enrollment in this class
   const enrollment = await prisma.enrollment.findFirst({
-    where: { classId: cls.id, student: { id: p(req, 'studentId') } },
-    include: { personalCardSet: { include: { cards: { orderBy: { createdAt: 'desc' } } } } },
+    where: { classId: cls.id, archivedAt: null, student: { id: p(req, 'studentId') } },
+    include: { student: { include: { user: { select: { name: true } } } }, personalCardSet: { include: { cards: { orderBy: { createdAt: 'desc' } } } } },
   })
   if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
 
   const labels = await labelsForClass(prisma, cls.id)
-  res.json({ cards: enrollment.personalCardSet?.cards ?? [], ...labels })
+  res.json({ studentName: enrollment.student.user.name, className: cls.name, cards: enrollment.personalCardSet?.cards ?? [], ...labels })
 })
 
 // ─────────────────────────────────────────────
@@ -591,7 +599,7 @@ router.get('/classes/:id/homework', async (req: Request, res: Response) => {
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
   const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
-  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+  if (!cls || !(await classAccess(prisma, req.user!.sub, req.user!.role, cls.id))) {
     res.status(404).json({ error: 'Class not found' }); return
   }
 
@@ -668,5 +676,7 @@ router.use('/classes/:id/student-additions', teacherStudentAdditionsRouter)
 
 // Student stats — teacher read-only view (mirrors student stats routes)
 router.use('/classes/:classId/students/:studentId/stats', teacherStudentStatsRouter)
+
+router.use(staffDeckRouter)
 
 export default router

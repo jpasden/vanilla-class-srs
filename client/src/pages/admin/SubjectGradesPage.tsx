@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, useRef, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
@@ -9,6 +9,7 @@ interface SubjectGrade {
   id: string
   name: string
   department: { id: string; name: string }
+  lead: { teacherId: string; membership: { teacher: { user: { name: string; email: string } } } } | null
   _count: { classes: number; teachers: number }
 }
 
@@ -21,6 +22,11 @@ export default function AdminSubjectGradesPage() {
   const { data: depts } = useApi<Department[]>(() => api.get('/admin/departments'))
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<SubjectGrade | null>(null)
+  const [leadTeacherId, setLeadTeacherId] = useState('')
+  const [candidates, setCandidates] = useState<{ teacherId: string; teacher: { user: { name: string; email: string } } }[]>([])
+  const candidateRequest = useRef(0)
+  const [candidatesReady, setCandidatesReady] = useState(false)
+  const [candidatesLoading, setCandidatesLoading] = useState(false)
   const [name, setName] = useState('')
   const [deptId, setDeptId] = useState('')
   const [archiving, setArchiving] = useState<SubjectGrade | null>(null)
@@ -28,8 +34,20 @@ export default function AdminSubjectGradesPage() {
   const [saving, setSaving] = useState(false)
 
   const openCreate = () => { setName(''); setDeptId(depts?.[0]?.id ?? ''); setFormError(null); setShowCreate(true) }
-  const openEdit = (sg: SubjectGrade) => { setEditing(sg); setName(sg.name); setDeptId(sg.department.id); setFormError(null) }
-  const closeModal = () => { setShowCreate(false); setEditing(null) }
+  const openEdit = async (sg: SubjectGrade) => {
+    const request = ++candidateRequest.current
+    setEditing(sg); setName(sg.name); setDeptId(sg.department.id); setFormError(null)
+    setLeadTeacherId(sg.lead?.teacherId ?? ''); setCandidates([]); setCandidatesLoading(true); setCandidatesReady(false)
+    try {
+      const detail = await api.get<{ teachers: typeof candidates }>(`/admin/subject-grades/${sg.id}`)
+      if (request === candidateRequest.current) { setCandidates(detail.teachers); setCandidatesReady(true) }
+    } catch (e) {
+      if (request === candidateRequest.current) setFormError(e instanceof ApiError ? e.message : 'Unable to load assigned teachers')
+    } finally {
+      if (request === candidateRequest.current) setCandidatesLoading(false)
+    }
+  }
+  const closeModal = () => { candidateRequest.current++; setShowCreate(false); setEditing(null) }
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault()
@@ -37,7 +55,7 @@ export default function AdminSubjectGradesPage() {
     setFormError(null)
     try {
       if (editing) {
-        await api.patch(`/admin/subject-grades/${editing.id}`, { name, departmentId: deptId })
+        await api.patch(`/admin/subject-grades/${editing.id}`, { name, departmentId: deptId, leadTeacherId: leadTeacherId || null })
       } else {
         await api.post('/admin/subject-grades', { name, departmentId: deptId })
       }
@@ -84,9 +102,17 @@ export default function AdminSubjectGradesPage() {
             {depts?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </div>
+        {editing && <div className="form-group">
+          <label className="form-label" htmlFor="subject-lead">Subject Lead Teacher</label>
+          <select id="subject-lead" className="form-select" value={leadTeacherId} onChange={e => setLeadTeacherId(e.target.value)} disabled={candidatesLoading || !candidatesReady}>
+            <option value="">Unassigned</option>
+            {candidates.map(m => <option key={m.teacherId} value={m.teacherId}>{m.teacher.user.name} ({m.teacher.user.email})</option>)}
+          </select>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{candidatesLoading ? 'Loading assigned teachers…' : candidates.length ? 'Choose from teachers already assigned to this Subject/Grade. The SL can oversee all its classes.' : 'Add a teacher to this Subject/Grade before choosing an SL.'}</p>
+        </div>}
         <div className="modal-footer">
           <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          <button type="submit" className="btn btn-primary" disabled={saving || (!!editing && !candidatesReady)}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
     </Modal>
@@ -128,15 +154,16 @@ export default function AdminSubjectGradesPage() {
         <div className="card">
         <div className="table-scroll">
         <table className="table">
-          <thead><tr><th>Name</th><th>Department</th><th>Classes</th><th>Teachers</th><th style={{ width: 260 }}>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Department</th><th>Classes</th><th>Teachers</th><th>Subject Lead</th><th style={{ width: 260 }}>Actions</th></tr></thead>
           <tbody>
-            {sgs.length === 0 && <tr><td colSpan={5} className="table-empty">{showArchived ? 'No archived subject grades.' : 'No subject grades yet.'}</td></tr>}
+            {sgs.length === 0 && <tr><td colSpan={6} className="table-empty">{showArchived ? 'No archived subject grades.' : 'No subject grades yet.'}</td></tr>}
             {sgs.map((sg) => (
               <tr key={sg.id}>
-                <td>{sg.name}</td>
+                <td><Link to={`/admin/leadership/${sg.id}`}>{sg.name}</Link></td>
                 <td>{sg.department.name}</td>
                 <td>{sg._count.classes > 0 ? <Link to={`/admin/classes?subjectGradeId=${sg.id}`}>{sg._count.classes}</Link> : 0}</td>
                 <td>{sg._count.teachers > 0 ? <Link to="/admin/teachers">{sg._count.teachers}</Link> : 0}</td>
+                <td>{sg.lead?.membership.teacher.user.name ?? 'Unassigned'}</td>
                 <td>
                   {showArchived ? (
                     <button className="btn btn-secondary btn-sm" onClick={() => handleUnarchive(sg)}>Unarchive</button>

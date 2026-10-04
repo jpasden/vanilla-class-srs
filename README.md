@@ -156,3 +156,7 @@ Vanilla Class SRS is intentionally generic. It has no hardcoded languages, insti
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+### Subject Lead Teachers
+
+Admins can appoint one existing member teacher as Subject Lead for each Subject/Grade from **Subject Grades → Edit → Subject Lead Teacher**. SLs see **My Classes** followed by their led groups’ classes, with read-only oversight of colleagues’ rosters, stats, and student decks, plus combined Subject/Grade reports. See [the SL guide](docs/SUBJECT_LEAD_TEACHERS.md).

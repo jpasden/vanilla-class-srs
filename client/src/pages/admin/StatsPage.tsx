@@ -29,7 +29,7 @@ export default function AdminStatsPage() {
   )
 
   const grouped = (rollup?.rows ?? []).reduce<Record<string, ClassRollupRow[]>>((acc, row) => {
-    (acc[row.subjectGradeName] ??= []).push(row)
+    (acc[row.subjectGradeId] ??= []).push(row)
     return acc
   }, {})
 
@@ -40,7 +40,7 @@ export default function AdminStatsPage() {
       </div>
       <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 16 }}>
         One row per class. Homework % and Student Additions link to more detail; Accuracy and
-        Reviews are shown for the last 30 days / this week respectively.
+        Sessions are shown for the last 30 days / this week respectively.
       </p>
 
       {rollupLoading && <div className="spinner" />}
@@ -56,18 +56,18 @@ export default function AdminStatsPage() {
                 <th>Homework Met</th>
                 <th>Student Additions</th>
                 <th>Accuracy (30d)</th>
-                <th>Reviews This Week</th>
+                <th>Sessions This Week</th>
               </tr>
             </thead>
             <tbody>
               {Object.keys(grouped).length === 0 && (
                 <tr><td colSpan={6} className="table-empty">No classes yet.</td></tr>
               )}
-              {Object.entries(grouped).map(([subjectGradeName, rows]) => (
-                <Fragment key={subjectGradeName}>
+              {Object.entries(grouped).map(([subjectGradeId, rows]) => (
+                <Fragment key={subjectGradeId}>
                   <tr>
                     <td colSpan={6} style={{ fontWeight: 700, background: 'var(--color-surface-alt, rgba(0,0,0,0.03))' }}>
-                      {subjectGradeName}
+                      <Link to={`/admin/leadership/${rows[0].subjectGradeId}`}>{rows[0].subjectGradeName}: combined report</Link>
                     </td>
                   </tr>
                   {rows.map((row) => (

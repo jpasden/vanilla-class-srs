@@ -3,6 +3,7 @@ import { createClassWithMembership, updateClassWithMembership, removeSubjectGrad
 
 function makePrisma() {
   const tx = {
+    subjectGradeLead: { findFirst: vi.fn().mockResolvedValue(null) },
     teacherSubjectGrade: { upsert: vi.fn().mockResolvedValue({}), deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
     class: {
       create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'c1', ...data })),

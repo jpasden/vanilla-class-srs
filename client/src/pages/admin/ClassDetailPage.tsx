@@ -484,6 +484,7 @@ export default function AdminClassDetailPage() {
                   <td>{enr.deck?._count.instances ?? 0}</td>
                   <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(enr.student.user.lastLoginAt)}</td>
                   <td style={{ display: 'flex', gap: 4 }}>
+                    <Link to={`/admin/classes/${id}/students/${enr.student.id}/deck`} className="btn btn-secondary btn-sm">Full Deck</Link>
                     <Link
                       to={`/admin/classes/${id}/students/${enr.student.id}`}
                       className="btn btn-secondary btn-sm"

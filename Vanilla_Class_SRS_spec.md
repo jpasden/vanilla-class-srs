@@ -1037,3 +1037,12 @@ The following must exist in the repo before v1.0:
 
 *Specification version: 0.3 — pre-implementation (all review session decisions confirmed; spec is implementation-ready)*
 *Last updated: February 2026*
+
+
+## Subject Lead Teacher permission (October 2026)
+
+SL is a Subject/Grade-scoped permission attached to an existing teacher membership, not a global User role. Each group may have one optional SL, selected by an Admin from its assigned teachers; one teacher may lead multiple groups. Appointments are managed in Subject Grades → Edit.
+
+SLs retain existing management permissions on their own classes and gain read-only access to active colleagues’ classes in led groups, including rosters, assignments, homework, class/student stats, personal cards, and full class-enrollment deck data. They receive no authority over colleagues’ classes elsewhere, private CardSet libraries, teacher accounts, or SL appointments. Revocation applies on the next request in an existing session. Archived parents suspend oversight; restoration retains eligible appointments.
+
+The Classes page displays My Classes first, followed by [Subject/Grade] Classes for each led group. Subject Leadership offers teacher/class overviews and a scope selector for an individual class or Entire Subject/Grade. Combined reports distinguish unique students from enrollments, weight accuracy by review events, and use eligible enrollment denominators for homework and optional adoption. Staff full-deck inspection and group reports are also available to Admins. Detailed workflows and metric definitions are maintained in [docs/SUBJECT_LEAD_TEACHERS.md](docs/SUBJECT_LEAD_TEACHERS.md).

@@ -59,6 +59,8 @@ PasswordResetToken
 
 Roles: `ADMIN`, `TEACHER`, `STUDENT`. A teacher can be promoted to admin. Students cannot be admins.
 
+Subject Lead Teacher (SL) is a scoped permission rather than another global role. `SubjectGradeLead` stores one optional leader per Subject/Grade and references its existing `TeacherSubjectGrade` membership. A teacher may lead several groups. SLs can read colleagues’ class/enrollment data in active led groups but retain management rights only on their own classes. Admins appoint, replace, or clear SLs from Subject Grade settings. Access checks read current leadership for immediate revocation. See [Subject Lead Teachers](SUBJECT_LEAD_TEACHERS.md) for workflows and aggregate-report definitions.
+
 ### Org Structure
 
 ```

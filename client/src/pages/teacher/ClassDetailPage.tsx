@@ -1,3 +1,4 @@
+import ReadOnlyClassPage from './ReadOnlyClassPage'
 import { useState, useRef, FormEvent } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
@@ -10,7 +11,7 @@ import { formatLastLogin } from '../../utils/formatDate'
 import ClassStatsPanel from './ClassStatsPanel'
 
 interface Class {
-  id: string; name: string
+  id: string; name: string; canManage: boolean; teacherName: string
   subjectGrade: { name: string; department: { name: string } }
   _count: { enrollments: number; assignments: number }
 }
@@ -50,11 +51,11 @@ interface ProgressLine {
 
 export default function TeacherClassDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { data: cls, loading: clsLoading } = useApi<Class>(() => api.get(`/teachers/classes/${id}`), [id])
+  const { data: cls, loading: clsLoading, error: clsError } = useApi<Class>(() => api.get(`/teachers/classes/${id}`), [id])
   const { data: enrollments, reload: reloadEnrollments } = useApi<Enrollment[]>(() => api.get(`/teachers/classes/${id}/students`), [id])
   const { data: assignments, reload: reloadAssignments } = useApi<Assignment[]>(() => api.get(`/teachers/classes/${id}/assignments`), [id])
   const { data: hw, reload: reloadHw } = useApi<HomeworkReq | null>(() => api.get(`/teachers/classes/${id}/homework`), [id])
-  const { data: cardSets, reload: reloadCardSets } = useApi<CardSet[]>(() => api.get(`/teachers/cardsets?classId=${id}`), [id])
+  const { data: cardSets, reload: reloadCardSets } = useApi<CardSet[]>(() => cls?.canManage ? api.get(`/teachers/cardsets?classId=${id}`) : Promise.resolve([]), [id, cls?.canManage])
 
   const [tab, setTab] = useState<Tab>('students')
   const [lastLoginSortAsc, setLastLoginSortAsc] = useState<boolean | null>(null)
@@ -280,6 +281,8 @@ export default function TeacherClassDetailPage() {
   }
 
   if (clsLoading) return <div className="spinner" />
+  if (clsError || !cls) return <div className="alert alert-danger">{clsError ?? 'Class not available'}</div>
+  if (!cls.canManage) return <ReadOnlyClassPage classId={id!} />
 
   // Never-logged-in ("Never") rows sink to the end regardless of sort direction,
   // so unactivated accounts don't jump to the top of a descending sort.
@@ -300,7 +303,7 @@ export default function TeacherClassDetailPage() {
         <Link to="/teacher/classes" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>← Classes</Link>
         <h1 className="page-title" style={{ marginTop: 4 }}>{cls?.name}</h1>
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-          {cls?.subjectGrade.name} · {cls?.subjectGrade.department.name}
+          {cls?.subjectGrade.name} · {cls?.subjectGrade.department.name} · Teacher: {cls?.teacherName}
         </p>
       </div>
 
@@ -536,6 +539,7 @@ export default function TeacherClassDetailPage() {
                   <td>{enr.deck?._count.instances ?? 0}</td>
                   <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{formatLastLogin(enr.student.user.lastLoginAt)}</td>
                   <td style={{ display: 'flex', gap: 4 }}>
+                    <Link to={`/teacher/classes/${id}/students/${enr.student.id}/deck`} className="btn btn-secondary btn-sm">Full Deck</Link>
                     <Link
                       to={`/teacher/classes/${id}/students/${enr.student.id}`}
                       className="btn btn-secondary btn-sm"

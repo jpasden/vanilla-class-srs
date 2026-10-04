@@ -20,8 +20,11 @@ interface AdditionsResponse {
   rangeEnd: string
 }
 
-function toDateInputValue(iso: string): string {
-  return iso.slice(0, 10)
+function toDateInputValue(iso: string, timeZone?: string): string {
+  if (!timeZone) return iso.slice(0, 10)
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(iso))
+  const get = (type: string) => parts.find(p => p.type === type)!.value
+  return `${get('year')}-${get('month')}-${get('day')}`
 }
 
 /**
@@ -33,7 +36,9 @@ function toDateInputValue(iso: string): string {
 export default function StudentAdditionsTable({
   fetchUrl,
   classOptions,
+  timeZone,
 }: {
+  timeZone?: string
   /** Base API path, e.g. "/teachers/classes/abc/student-additions" or "/admin/student-additions" */
   fetchUrl: string
   /** When provided, renders a class filter dropdown (admin use case). Omit for a single-class context. */
@@ -51,12 +56,13 @@ export default function StudentAdditionsTable({
 
   const url = useMemo(() => {
     const params = new URLSearchParams()
+    if (timeZone) params.set('tz', timeZone)
     if (start && end) { params.set('start', start); params.set('end', end) }
     if (classOptions && classId) params.set('classId', classId)
     const qs = params.toString()
     return qs ? `${fetchUrl}?${qs}` : fetchUrl
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchUrl, classId])
+  }, [fetchUrl, classId, timeZone])
 
   const { data, loading, error, reload } = useApi<AdditionsResponse>(() => api.get<AdditionsResponse>(url), [url])
 
@@ -65,8 +71,8 @@ export default function StudentAdditionsTable({
   // refreshes shouldn't overwrite what they've typed.
   useEffect(() => {
     if (data && !start && !end) {
-      setStart(toDateInputValue(data.rangeStart))
-      setEnd(toDateInputValue(data.rangeEnd))
+      setStart(toDateInputValue(data.rangeStart, timeZone))
+      setEnd(toDateInputValue(data.rangeEnd, timeZone))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
@@ -119,6 +125,7 @@ export default function StudentAdditionsTable({
         </button>
       </div>
 
+      {timeZone && <p style={{ fontSize: 13 }}>Independent date range in {timeZone}; the To date is excluded.</p>}
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
       {data && (

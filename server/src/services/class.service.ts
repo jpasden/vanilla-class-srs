@@ -34,6 +34,7 @@ export async function updateClassWithMembership(
 /** Membership cannot be removed while it is required by an active class. */
 export async function removeSubjectGradeMembership(prisma: PrismaClient, teacherId: string, subjectGradeId: string) {
   return prisma.$transaction(async (tx) => {
+    if (await tx.subjectGradeLead.findFirst({ where: { teacherId, subjectGradeId } })) return false
     const activeClasses = await tx.class.count({ where: { teacherId, subjectGradeId, archivedAt: null } })
     if (activeClasses > 0) return false
     await tx.teacherSubjectGrade.deleteMany({ where: { teacherId, subjectGradeId } })

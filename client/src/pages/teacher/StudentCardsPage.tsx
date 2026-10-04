@@ -17,6 +17,8 @@ interface Card {
 }
 
 interface StudentCardsResponse {
+  studentName: string
+  className: string
   cards: Card[]
   definitionL2Label: string
   definitionL1Label: string
@@ -38,7 +40,7 @@ export default function TeacherStudentCardsPage() {
         <Link to={`${isAdmin ? '/admin' : '/teacher'}/classes/${classId}`} style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
           ← Class
         </Link>
-        <h1 className="page-title" style={{ marginTop: 4 }}>Student Personal Cards</h1>
+        <h1 className="page-title" style={{ marginTop: 4 }}>Personal Cards ({data?.studentName ?? 'Student'})</h1>
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
           Read-only view of cards this student has added to their personal deck.
         </p>

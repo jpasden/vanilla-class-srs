@@ -100,6 +100,7 @@ model SubjectGrade {
   name                    String                   // e.g. "English B HL Grade 12"
   departmentId            String
   department              Department               @relation(fields: [departmentId], references: [id])
+  lead                    SubjectGradeLead?
   teachers                TeacherSubjectGrade[]
   classes                 Class[]
   cardSets                CardSet[]                // departmental CardSets live here
@@ -118,7 +119,18 @@ model Teacher {
   createdAt     DateTime              @default(now())
 }
 
+model SubjectGradeLead {
+  subjectGradeId String @id
+  teacherId String
+  subjectGrade SubjectGrade @relation(fields: [subjectGradeId], references: [id], onDelete: Restrict)
+  membership TeacherSubjectGrade @relation(fields: [teacherId, subjectGradeId], references: [teacherId, subjectGradeId], onDelete: Restrict)
+
+  @@unique([teacherId, subjectGradeId])
+  @@index([teacherId])
+}
+
 model TeacherSubjectGrade {
+  lead SubjectGradeLead?
   teacherId      String
   subjectGradeId String
   teacher        Teacher      @relation(fields: [teacherId], references: [id])

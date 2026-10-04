@@ -14,6 +14,8 @@ import { useApi } from '../../hooks/useApi'
 import { SimpleBarChart, AccuracyLineChart } from '../../components/Charts'
 
 interface Summary {
+  studentName: string
+  className: string
   deckBreakdown: { NEW: number; LEARNING: number; REVIEW: number; RELEARNING: number; dueToday: number }
   streak: { current: number; longest: number; mostCardsInDay: number }
   weeklyGoal: {
@@ -151,7 +153,7 @@ export default function TeacherStudentStatsPage() {
         </Link>
       </div>
       <div className="page-header">
-        <h1 className="page-title">My Stats ({studentName})</h1>
+        <h1 className="page-title">Student Stats ({summary?.studentName ?? studentName})</h1>
       </div>
 
       {!sumError && (

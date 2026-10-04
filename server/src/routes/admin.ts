@@ -1,3 +1,5 @@
+import staffDeckRouter from './staffDeck'
+import { SubjectLeadError, updateSubjectGradeLead } from '../services/subjectLead.service'
 import { Request, Response } from 'express'
 import { asyncRouter } from '../lib/asyncRouter'
 import { z } from 'zod'
@@ -162,6 +164,7 @@ const SubjectGradeSchema = z.object({
 })
 
 const SubjectGradePatchSchema = z.object({
+  leadTeacherId: z.string().uuid().nullable().optional(),
   name: z.string().min(1).optional(),
   departmentId: z.string().uuid().optional(),
 })
@@ -174,6 +177,7 @@ router.get('/subject-grades', async (req: Request, res: Response) => {
     where: archived ? { archivedAt: { not: null } } : { archivedAt: null },
     orderBy: { name: 'asc' },
     include: {
+      lead: { include: { membership: { include: { teacher: { include: { user: { select: { name: true, email: true } } } } } } } },
       department: { select: { id: true, name: true } },
       _count: { select: { classes: true, teachers: true } },
     },
@@ -225,11 +229,16 @@ router.patch('/subject-grades/:id', validate(SubjectGradePatchSchema), async (re
       return
     }
   }
-  const updated = await prisma.subjectGrade.update({
-    where: { id: p(req, 'id') },
-    data: req.body,
-  })
-  res.json(updated)
+  try {
+    const { group, previousTeacherId } = await updateSubjectGradeLead(prisma, sg.id, req.body)
+    if (req.body.leadTeacherId !== undefined && previousTeacherId !== req.body.leadTeacherId) {
+      logAuditEvent('subject_lead_changed', { actorId: req.user!.sub, subjectGradeId: sg.id, previousTeacherId, teacherId: req.body.leadTeacherId })
+    }
+    res.json(group)
+  } catch (error) {
+    if (error instanceof SubjectLeadError) { res.status(400).json({ error: error.message }); return }
+    throw error
+  }
 })
 
 // DELETE /api/admin/subject-grades/:id  — archives, cascades to classes
@@ -333,7 +342,7 @@ router.get('/teachers', async (_req: Request, res: Response) => {
     include: {
       user: { select: { id: true, name: true, email: true, role: true, lastLoginAt: true } },
       subjectGrades: {
-        include: { subjectGrade: { select: { id: true, name: true } } },
+        include: { lead: true, subjectGrade: { select: { id: true, name: true } } },
       },
       _count: { select: { classes: true } },
     },
@@ -409,7 +418,7 @@ router.get('/teachers/:id', async (req: Request, res: Response) => {
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
       subjectGrades: {
-        include: { subjectGrade: { select: { id: true, name: true } } },
+        include: { lead: true, subjectGrade: { select: { id: true, name: true } } },
       },
       classes: { where: { archivedAt: null }, orderBy: { name: 'asc' } },
     },
@@ -525,6 +534,9 @@ router.delete('/teachers/:id', async (req: Request, res: Response) => {
   if (!teacher) {
     res.status(404).json({ error: 'Teacher not found' })
     return
+  }
+  if (await prisma.subjectGradeLead.findFirst({ where: { teacherId: teacher.id } })) {
+    res.status(409).json({ error: 'Clear or replace this teacher’s Subject Lead assignments before offboarding.' }); return
   }
   // Block on ALL classes (active + archived) — FK constraint on Class.teacherId prevents deletion
   const totalClassCount = teacher._count.classes
@@ -643,6 +655,9 @@ router.post(
 router.delete(
   '/teachers/:id/subject-grades/:subjectGradeId',
   async (req: Request, res: Response) => {
+    if (await prisma.subjectGradeLead.findFirst({ where: { teacherId: p(req, 'id'), subjectGradeId: p(req, 'subjectGradeId') } })) {
+      res.status(409).json({ error: 'Clear or replace this Subject Lead before removing their membership.' }); return
+    }
     const removed = await removeSubjectGradeMembership(prisma, p(req, 'id'), p(req, 'subjectGradeId'))
     if (!removed) {
       res.status(409).json({ error: 'Teacher still has active classes in this SubjectGrade. Reassign or archive those classes first.' })
@@ -948,13 +963,13 @@ router.get('/classes/:id/students/:studentId/cards', async (req: Request, res: R
   if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
 
   const enrollment = await prisma.enrollment.findFirst({
-    where: { classId: cls.id, student: { id: p(req, 'studentId') } },
-    include: { personalCardSet: { include: { cards: { orderBy: { createdAt: 'desc' } } } } },
+    where: { classId: cls.id, archivedAt: null, student: { id: p(req, 'studentId') } },
+    include: { student: { include: { user: { select: { name: true } } } }, personalCardSet: { include: { cards: { orderBy: { createdAt: 'desc' } } } } },
   })
   if (!enrollment) { res.status(404).json({ error: 'Student not found in this class' }); return }
 
   const labels = await labelsForClass(prisma, cls.id)
-  res.json({ cards: enrollment.personalCardSet?.cards ?? [], ...labels })
+  res.json({ studentName: enrollment.student.user.name, className: cls.name, cards: enrollment.personalCardSet?.cards ?? [], ...labels })
 })
 
 // Per-student stats — reuses the same router mounted under /api/teachers/*.
@@ -1749,11 +1764,11 @@ interface ClassRollupRow {
 router.get('/class-rollup', async (req: Request, res: Response) => {
   const now = new Date()
   const classes = await prisma.class.findMany({
-    where: { archivedAt: null },
+    where: { archivedAt: null, subjectGrade: { archivedAt: null, department: { archivedAt: null } } },
     orderBy: { name: 'asc' },
     include: {
       subjectGrade: { select: { id: true, name: true } },
-      _count: { select: { enrollments: true } },
+      _count: { select: { enrollments: { where: { archivedAt: null } } } },
     },
   })
 
@@ -1782,17 +1797,17 @@ router.get('/class-rollup', async (req: Request, res: Response) => {
       const [compliance, reviewsThisWeek, accuracySessions, studentAdditionCount] = await Promise.all([
         getClassCompliance(prisma, cls.id, now),
         prisma.reviewSession.count({
-          where: { endedAt: { gte: weekStart, lt: weekEnd }, deck: { enrollment: { classId: cls.id } } },
+          where: { endedAt: { gte: weekStart, lt: weekEnd }, deck: { enrollment: { classId: cls.id, archivedAt: null } } },
         }),
-        prisma.reviewSession.findMany({
-          where: { endedAt: { gte: accuracySince }, accuracyRate: { not: null }, deck: { enrollment: { classId: cls.id } } },
-          select: { accuracyRate: true },
+        prisma.reviewEvent.findMany({
+          where: { reviewedAt: { gte: accuracySince }, session: { deck: { enrollment: { classId: cls.id, archivedAt: null } } } },
+          select: { grade: true },
         }),
         prisma.cardInstance.count({
           where: {
             origin: 'STUDENT_ADDED',
             createdAt: { gte: additionsStart, lt: additionsEnd },
-            deck: { enrollment: { classId: cls.id } },
+            deck: { enrollment: { classId: cls.id, archivedAt: null } },
           },
         }),
       ])
@@ -1802,7 +1817,7 @@ router.get('/class-rollup', async (req: Request, res: Response) => {
         : null
 
       const accuracyRate = accuracySessions.length > 0
-        ? accuracySessions.reduce((sum, s) => sum + (s.accuracyRate ?? 0), 0) / accuracySessions.length
+        ? accuracySessions.filter(e => e.grade >= 2).length / accuracySessions.length
         : null
 
       return {
@@ -1821,5 +1836,7 @@ router.get('/class-rollup', async (req: Request, res: Response) => {
 
   res.json({ rows, additionsRangeStart: additionsStart, additionsRangeEnd: additionsEnd })
 })
+
+router.use(staffDeckRouter)
 
 export default router

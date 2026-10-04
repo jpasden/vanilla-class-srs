@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
@@ -12,9 +12,24 @@ interface Class {
   _count: { enrollments: number }
 }
 
+interface LedGroup {
+  id: string; name: string
+  classes: { id: string; name: string; teacherId: string; _count: { enrollments: number } }[]
+  teachers: { teacherId: string; teacher: { user: { name: string } } }[]
+}
+
 export default function TeacherClassesPage() {
+  const { data: ledGroups, error: leadershipError, reload: reloadLeadership } = useApi<LedGroup[]>(async () => {
+    const groups = await api.get<{ id: string }[]>('/teachers/leadership')
+    return Promise.all(groups.map(group => api.get<LedGroup>(`/teachers/leadership/${group.id}`)))
+  })
   const { data: classes, loading, error, reload } = useApi<Class[]>(() => api.get('/teachers/classes'))
   const { data: sgs } = useApi<SubjectGrade[]>(() => api.get('/teachers/subject-grades'))
+  useEffect(() => {
+    const refresh = () => { reload(); reloadLeadership() }
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [reload, reloadLeadership])
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<Class | null>(null)
   const [name, setName] = useState('')
@@ -37,7 +52,7 @@ export default function TeacherClassesPage() {
         await api.post('/teachers/classes', { name, subjectGradeId: sgId })
       }
       closeModal()
-      reload()
+      reload(); reloadLeadership()
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : 'Save failed')
     } finally {
@@ -47,7 +62,7 @@ export default function TeacherClassesPage() {
 
   const handleArchive = async (c: Class) => {
     if (!confirm(`Archive class "${c.name}"?`)) return
-    try { await api.delete(`/teachers/classes/${c.id}`); reload() }
+    try { await api.delete(`/teachers/classes/${c.id}`); reload(); reloadLeadership() }
     catch (e) { alert(e instanceof ApiError ? e.message : 'Failed') }
   }
 
@@ -80,11 +95,12 @@ export default function TeacherClassesPage() {
     <div>
       {modal}
       <div className="page-header">
-        <h1 className="page-title">My Classes</h1>
+        <h1 className="page-title">Classes</h1>
         <button className="btn btn-primary" onClick={openCreate}>+ New Class</button>
       </div>
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
+      <h2 style={{ marginBottom: 16 }}>My Classes</h2>
       {classes && (
         <div className="grid-2">
           {classes.length === 0 && <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>No classes yet.</p>}
@@ -106,6 +122,18 @@ export default function TeacherClassesPage() {
           ))}
         </div>
       )}
+      {leadershipError && <div className="alert alert-danger">{leadershipError}</div>}
+      {ledGroups?.map(group => <section key={group.id} style={{ marginTop: 32 }}>
+        <div className="page-header"><h2>{group.name} Classes</h2><Link className="btn btn-secondary" to={`/teacher/leadership/${group.id}`}>Subject/Grade Stats</Link></div>
+        <div className="grid-2">
+          {group.classes.length === 0 && <p>No active classes in this Subject/Grade.</p>}
+          {group.classes.map(cls => <div key={cls.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div><strong style={{ fontSize: 16 }}>{cls.name}</strong><p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 4 }}>Teacher: {group.teachers.find(t => t.teacherId === cls.teacherId)?.teacher.user.name ?? 'Teacher'}</p></div>
+            <div style={{ fontSize: 13 }}>{cls._count.enrollments} student{cls._count.enrollments !== 1 ? 's' : ''}</div>
+            <Link to={`/teacher/classes/${cls.id}`} className="btn btn-primary btn-sm" style={{ alignSelf: 'flex-start' }}>Open</Link>
+          </div>)}
+        </div>
+      </section>)}
     </div>
   )
 }

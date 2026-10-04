@@ -29,7 +29,7 @@ export async function getStudentAdditions(
     where: {
       origin: 'STUDENT_ADDED',
       createdAt: { gte: rangeStart, lt: rangeEnd },
-      deck: { enrollment: { classId: { in: classIds } } },
+      deck: { enrollment: { classId: { in: classIds }, archivedAt: null } },
     },
     orderBy: { createdAt: 'desc' },
     include: {

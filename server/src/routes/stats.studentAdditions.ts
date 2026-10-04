@@ -1,3 +1,4 @@
+import { classAccess } from '../services/classAccess.service'
 /**
  * Teacher-side student-added-cards report for a single class.
  *
@@ -43,7 +44,7 @@ router.get('/', async (req: Request, res: Response) => {
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
   const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
-  if (!cls || cls.archivedAt || cls.teacherId !== teacher.id) {
+  if (!cls || !(await classAccess(prisma, req.user!.sub, req.user!.role, cls.id))) {
     res.status(404).json({ error: 'Class not found' }); return
   }
 

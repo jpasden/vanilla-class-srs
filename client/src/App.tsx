@@ -1,3 +1,5 @@
+import LeadershipPage from './pages/teacher/LeadershipPage'
+import StaffStudentDeckPage from './pages/teacher/StudentDeckPage'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './components/AuthProvider'
 import { EnrollmentProvider } from './components/EnrollmentProvider'
@@ -92,6 +94,9 @@ export default function App() {
               <Route path="cardsets/:id" element={<AdminCardSetDetailPage />} />
               <Route path="classes" element={<AdminClassesPage />} />
               <Route path="classes/:id" element={<AdminClassDetailPage />} />
+              <Route path="leadership" element={<LeadershipPage />} />
+              <Route path="leadership/:id" element={<LeadershipPage />} />
+              <Route path="classes/:id/students/:studentId/deck" element={<StaffStudentDeckPage />} />
               <Route path="classes/:id/students/:studentId" element={<TeacherStudentCardsPage />} />
               <Route path="classes/:classId/students/:studentId/stats" element={<TeacherStudentStatsPage />} />
               <Route path="stats" element={<AdminStatsPage />} />
@@ -103,6 +108,9 @@ export default function App() {
               <Route index element={<Navigate to="/teacher/classes" replace />} />
               <Route path="classes" element={<TeacherClassesPage />} />
               <Route path="classes/:id" element={<TeacherClassDetailPage />} />
+              <Route path="leadership" element={<LeadershipPage />} />
+              <Route path="leadership/:id" element={<LeadershipPage />} />
+              <Route path="classes/:id/students/:studentId/deck" element={<StaffStudentDeckPage />} />
               <Route path="classes/:id/students/:studentId" element={<TeacherStudentCardsPage />} />
               <Route path="classes/:classId/students/:studentId/stats" element={<TeacherStudentStatsPage />} />
               <Route path="cardsets" element={<TeacherCardSetsPage />} />

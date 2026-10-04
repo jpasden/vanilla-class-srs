@@ -1,3 +1,4 @@
+import { classAccess } from '../services/classAccess.service'
 /**
  * Teacher read-only view of a single student's stats.
  * Mirrors stats.student.ts but auth is teacher-owns-class, not student-owns-deck.
@@ -25,17 +26,11 @@ async function getEnrollmentForTeacher(
   classId: string,
   studentId: string,
 ) {
-  const cls = await prisma.class.findUnique({ where: { id: classId } })
-  if (!cls || cls.archivedAt) return null
-
-  if (userRole !== Role.ADMIN) {
-    const teacher = await prisma.teacher.findUnique({ where: { userId } })
-    if (!teacher || cls.teacherId !== teacher.id) return null
-  }
+  if (!(await classAccess(prisma, userId, userRole, classId))) return null
 
   const enrollment = await prisma.enrollment.findFirst({
-    where: { classId, student: { id: studentId } },
-    include: { deck: true, student: { include: { user: { select: { name: true } } } } },
+    where: { classId, archivedAt: null, student: { id: studentId } },
+    include: { class: { select: { name: true } }, deck: true, student: { include: { user: { select: { name: true } } } } },
   })
   return enrollment ?? null
 }
@@ -74,7 +69,7 @@ router.get('/summary', async (req: Request, res: Response) => {
 
   const weeklyGoal = await getWeeklyGoal(prisma, enrollment.classId, deckId, now)
 
-  res.json({ deckBreakdown: breakdown, streak: { current: currentStreak, longest, mostCardsInDay }, weeklyGoal })
+  res.json({ studentName: enrollment.student.user.name, className: enrollment.class.name, deckBreakdown: breakdown, streak: { current: currentStreak, longest, mostCardsInDay }, weeklyGoal })
 })
 
 // ── GET /stats/daily ──────────────────────────────────────────────────────────

@@ -1,3 +1,5 @@
+import { requireAuth, requireAdmin, requirePasswordChanged } from './middleware/auth'
+import leadershipRouter from './routes/leadership'
 import 'dotenv/config'
 import express, { Request, Response, NextFunction } from 'express'
 import cookieParser from 'cookie-parser'
@@ -27,6 +29,8 @@ app.use(express.json())
 app.use(cookieParser())
 
 // Routes
+app.use('/api/teachers/leadership', leadershipRouter)
+app.use('/api/admin/leadership', requireAuth, requireAdmin, requirePasswordChanged, leadershipRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/teachers', teachersRouter)

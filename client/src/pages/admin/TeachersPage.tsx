@@ -10,7 +10,7 @@ interface SubjectGrade { id: string; name: string; department: { name: string } 
 interface Teacher {
   id: string
   user: { id: string; name: string; email: string; role: string; lastLoginAt: string | null }
-  subjectGrades: { subjectGrade: SubjectGrade }[]
+  subjectGrades: { subjectGrade: SubjectGrade; lead: { teacherId: string } | null }[]
 }
 interface Admin { id: string; name: string; email: string; hasTeacherProfile: boolean; protected: boolean }
 
@@ -546,7 +546,7 @@ export default function AdminTeachersPage() {
                       <ol style={{ margin: 0, paddingLeft: 18, textAlign: 'left' }}>
                         {t.subjectGrades.map((m) => (
                           <li key={m.subjectGrade.id} style={{ marginBottom: 2 }}>
-                            <Link to={`/admin/classes?subjectGradeId=${m.subjectGrade.id}`}>{m.subjectGrade.name}</Link>
+                            <Link to={`/admin/classes?subjectGradeId=${m.subjectGrade.id}`}>{m.subjectGrade.name}</Link>{m.lead && <strong> · SL</strong>}
                             <button
                               onClick={() => setRemovingSg({ teacher: t, sg: m.subjectGrade })}
                               className="badge btn-danger"
