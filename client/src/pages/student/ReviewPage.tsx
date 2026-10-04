@@ -446,10 +446,15 @@ export default function ReviewPage() {
                     {summary.weeklyGoal.sessionsCompleted} of {summary.weeklyGoal.sessionsRequired} session
                     {summary.weeklyGoal.sessionsRequired !== 1 ? 's' : ''} done this week
                   </strong>
-                  {' — '}{summary.weeklyGoal.minCardsPerSession} cards each.
+                  {' — at least '}{summary.weeklyGoal.minCardsPerSession} reviews each.
                 </p>
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 8 }}>
-                  It only takes about 5 minutes for each review session. You got this!
+                  Each homework session includes at least {Math.max(10, summary.weeklyGoal.minCardsPerSession)} reviews.
+                  {' '}If fewer cards are ready, we’ll add upcoming reviews, starting with your study focus.
+                  {' '}If there aren’t enough different cards, some will repeat.
+                </p>
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 8 }}>
+                  Complete your homework sessions on different days, at least 12 hours apart.
                 </p>
               </>
             )}
@@ -462,7 +467,7 @@ export default function ReviewPage() {
 
       {/* Nothing to study right now — offer the right next step instead of a dead end */}
       {phase === 'idle' && emptyReason && (
-        <Modal title="You're all caught up!" onClose={() => setEmptyReason(null)}>
+        <Modal title={emptyReason === 'capped' ? "You're all caught up!" : 'No cards yet'} onClose={() => setEmptyReason(null)}>
           {emptyReason === 'capped' ? (
             <p style={{ marginBottom: 16 }}>
               You're all caught up on reviews, and you've reached today's new-word limit. Want to study
@@ -470,21 +475,16 @@ export default function ReviewPage() {
             </p>
           ) : (
             <p style={{ marginBottom: 16 }}>
-              You're all caught up — no new words left to learn either! You can still review your
-              already-learned words ahead of schedule if you'd like.
+              There are no cards available to study yet. Check back after cards have been added to your class.
             </p>
           )}
           <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={() => setEmptyReason(null)}>Maybe Later</button>
+            <button className="btn btn-secondary" onClick={() => setEmptyReason(null)}>{emptyReason === 'capped' ? 'Maybe Later' : 'Close'}</button>
             {emptyReason === 'capped' ? (
               <button className="btn btn-primary" onClick={() => startSession({ bypassNewCardCap: true })}>
                 Study More New Words
               </button>
-            ) : (
-              <button className="btn btn-primary" onClick={() => startSession({ reviewAhead: true })}>
-                Review Early
-              </button>
-            )}
+            ) : null}
           </div>
         </Modal>
       )}

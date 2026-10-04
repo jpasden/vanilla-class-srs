@@ -10,7 +10,7 @@
 import { PrismaClient, FSRSState } from '@prisma/client'
 import { schedule } from '@vanilla-srs/shared/fsrs'
 import type { FSRSParams } from '@vanilla-srs/shared/fsrs'
-import { getWeeklyGoal, WeeklyGoal } from './homework.service'
+import { DEFAULT_MIN_CARDS_PER_SESSION, getWeeklyGoal, WeeklyGoal } from './homework.service'
 import { computeStreakAndBestDay } from './streak.service'
 
 // Caps how many due/review cards appear in a single session — a UX/session-length decision,
@@ -18,8 +18,6 @@ import { computeStreakAndBestDay } from './streak.service'
 // per-deck fsrsParams JSON. Any due cards beyond this roll over to the next session/day.
 // Does not apply to the separate newCardsPerDay cap on brand-new cards.
 const MAX_DUE_CARDS_PER_SESSION = 20
-// Same cap applied to "Review Early" (studying already-learned cards ahead of schedule).
-const MAX_REVIEW_AHEAD_CARDS = 20
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,10 +44,9 @@ export interface StartSessionResult {
   /**
    * Set when `cards` is empty, so the client can offer the right next step instead of a
    * dead-end "nothing to do" screen:
-   *  - 'capped'    — no due reviews, but NEW cards exist beyond today's per-day cap.
+   *  - 'capped'    — no learned cards available, but NEW cards exist beyond today's per-day cap.
    *                  Client can retry with `bypassNewCardCap: true`.
-   *  - 'exhausted' — no due reviews and no NEW cards left anywhere in the deck.
-   *                  Client can retry with `reviewAhead: true` to study early.
+   *  - 'exhausted' — no cards available anywhere in the deck.
    */
   emptyReason?: 'capped' | 'exhausted'
 }
@@ -58,8 +55,8 @@ export interface StartSessionOptions {
   /** Pull extra NEW cards beyond the deck's configured daily limit for this one session. */
   bypassNewCardCap?: boolean
   /**
-   * No due/new cards at all — pull already-learned LEARNING/REVIEW/RELEARNING cards
-   * regardless of due date (soonest-due first) so the student can study ahead of schedule.
+   * Legacy client option. Short queues now automatically include upcoming learned
+   * cards, so reviewing early no longer requires an explicit opt-in.
    */
   reviewAhead?: boolean
   /**
@@ -254,6 +251,39 @@ export async function startSession(
 
   let allInstances = [...dueInstances, ...newInstances]
 
+  const homework = await prisma.homeworkRequirement.findFirst({
+    where: { classId: enrollment.classId, isActive: true },
+    include: { cardSets: true },
+  })
+  const minimumReviews = Math.max(DEFAULT_MIN_CARDS_PER_SESSION, homework?.minCardsPerSession ?? 0)
+  const paddingFocusIds = options.cardSetIds?.length
+    ? options.cardSetIds
+    : homework?.cardSets.map((set) => set.cardSetId) ?? []
+
+  // DECISION: Fill short queues at the start so students can see the full session
+  // length. Use learned cards due soonest, within the study focus first, without
+  // introducing extra new cards beyond the daily allowance.
+  if (allInstances.length < minimumReviews) {
+    const addUpcoming = async (focusIds?: string[]) => {
+      const remaining = minimumReviews - allInstances.length
+      if (remaining <= 0) return
+      const upcoming = await prisma.cardInstance.findMany({
+        where: {
+          deckId: deck.id,
+          state: { in: ['LEARNING', 'REVIEW', 'RELEARNING'] },
+          id: { notIn: allInstances.map((instance) => instance.id) },
+          ...(focusIds?.length && { card: { cardSetId: { in: focusIds } } }),
+        },
+        include: { card: true },
+        orderBy: [{ due: 'asc' }, { id: 'asc' }],
+        take: remaining,
+      })
+      allInstances.push(...upcoming)
+    }
+    if (paddingFocusIds.length > 0) await addUpcoming(paddingFocusIds)
+    await addUpcoming()
+  }
+
   // CardSet focus produced an empty session — it's a soft steering preference,
   // never a hard block, so fall back to the whole deck rather than leaving the
   // student with nothing to study.
@@ -261,23 +291,17 @@ export async function startSession(
     return startSession(prisma, studentId, enrollmentId, now, { ...options, cardSetIds: undefined })
   }
 
-  // Nothing due, nothing new available within the cap.
+  // No natural queue or learned cards available, even after falling back.
   if (allInstances.length === 0) {
-    if (options.reviewAhead) {
-      // Study ahead of schedule: pull LEARNING/REVIEW/RELEARNING regardless of due date,
-      // since there's truly nothing new left to introduce. Prioritise the most fragile
-      // cards (lowest stability = most likely to be forgotten soon) rather than dumping
-      // the entire learned deck — this is meant to be a focused refresher, not a full replay.
-      allInstances = await prisma.cardInstance.findMany({
-        where: { deckId: deck.id, state: { in: ['LEARNING', 'REVIEW', 'RELEARNING'] } },
-        include: { card: true },
-        orderBy: { stability: 'asc' },
-        take: MAX_REVIEW_AHEAD_CARDS,
-      })
-    } else if (allInstances.length === 0) {
-      const emptyReason: 'capped' | 'exhausted' = moreNewCardsExistBeyondCap ? 'capped' : 'exhausted'
-      return { sessionId: '', cards: [], deckId: deck.id, emptyReason }
-    }
+    const emptyReason: 'capped' | 'exhausted' = moreNewCardsExistBeyondCap ? 'capped' : 'exhausted'
+    return { sessionId: '', cards: [], deckId: deck.id, emptyReason }
+  }
+
+  // DECISION: A tiny deck still supports a qualifying session. Append repeats
+  // after all distinct cards, cycling through them until the minimum is met.
+  const distinctInstances = [...allInstances]
+  for (let repeatIndex = 0; allInstances.length < minimumReviews; repeatIndex++) {
+    allInstances.push(distinctInstances[repeatIndex % distinctInstances.length])
   }
 
   // Create the ReviewSession record

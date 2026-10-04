@@ -148,6 +148,7 @@ Vanilla Class SRS is intentionally generic. It has no hardcoded languages, insti
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Data model, hierarchy, key design decisions |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Self-hosting, Docker, China cloud deployment |
 | [docs/CSV_TEMPLATE.md](docs/CSV_TEMPLATE.md) | CSV formats and AI prompt for card generation |
+| [docs/STUDENT_REVIEW_SESSIONS.md](docs/STUDENT_REVIEW_SESSIONS.md) | Session length, repeat cards, and homework credit for students |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 
 ---
