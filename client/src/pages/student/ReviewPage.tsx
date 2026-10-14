@@ -559,7 +559,7 @@ export default function ReviewPage() {
                   boxShadow: 'var(--shadow-sm)',
                 }}
               >
-                <div style={{ fontSize: 'clamp(24px, 7vw, 36px)', fontWeight: 700, marginBottom: 8, wordBreak: 'break-word' }}>{currentCard.word}</div>
+                <div style={{ fontSize: 'clamp(32px, 8vw, 48px)', fontWeight: 800, marginBottom: 8, wordBreak: 'break-word' }}>{currentCard.word}</div>
                 {currentCard.pos && (
                   <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{currentCard.pos}</div>
                 )}
@@ -576,6 +576,7 @@ export default function ReviewPage() {
                   boxShadow: 'var(--shadow-sm)', overflowY: 'auto',
                 }}
               >
+                <div style={{ fontSize: 22, fontWeight: 400, marginBottom: 16, lineHeight: 1.25, wordBreak: 'break-word' }}>{currentCard.word}</div>
                 {currentCard.definitionL2 && (
                   <p style={{ fontSize: 'var(--text-lg)', marginBottom: 8 }}>{currentCard.definitionL2}</p>
                 )}
