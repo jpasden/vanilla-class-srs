@@ -4,6 +4,7 @@ import { api, ApiError } from '../../utils/api'
 import { useEnrollment } from '../../utils/enrollment'
 import { useApi } from '../../hooks/useApi'
 import { Modal } from '../../components/Modal'
+import StudyCardFront from '../../components/StudyCardFront'
 
 interface SessionCard {
   instanceId: string
@@ -550,21 +551,7 @@ export default function ReviewPage() {
               onClick={flipCard}
             >
               {/* Front */}
-              <div
-                className="review-flip-face"
-                style={{
-                  background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12,
-                  padding: 'clamp(20px, 5vw, 40px) clamp(16px, 4vw, 32px)', textAlign: 'center', cursor: flipped ? 'default' : 'pointer',
-                  height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: 'var(--shadow-sm)',
-                }}
-              >
-                <div style={{ fontSize: 'clamp(32px, 8vw, 48px)', fontWeight: 800, marginBottom: 8, wordBreak: 'break-word' }}>{currentCard.word}</div>
-                {currentCard.pos && (
-                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{currentCard.pos}</div>
-                )}
-                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 24 }}>Tap to reveal</p>
-              </div>
+              <StudyCardFront word={currentCard.word} pos={currentCard.pos} flipped={flipped} />
 
               {/* Back */}
               <div
