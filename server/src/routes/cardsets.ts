@@ -19,7 +19,7 @@ import { validate } from '../middleware/validate'
 import { validateCardRows, normaliseCardRow, cardDedupeKey, partitionDuplicateRows } from '../services/card.service'
 import { syncNewCardsToAssignedDecks } from '../services/assignment.service'
 import { labelsForCardSet } from '../services/departmentLabels.service'
-import { classCardSetWhere } from '../services/cardSetAccess.service'
+import { classCardSetWhere, teacherReadableCardSetWhere } from '../services/cardSetAccess.service'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } })
 const p = (req: Request, key: string) => req.params[key] as string
@@ -80,27 +80,12 @@ router.get('/', async (req: Request, res: Response) => {
     return
   }
 
-  // Own private sets + any DEPARTMENTAL sets belonging to their SubjectGrades
-  const sgIds = (
-    await prisma.teacherSubjectGrade.findMany({
-      where: { teacherId: teacher.id },
-      select: { subjectGradeId: true },
-    })
-  ).map((m) => m.subjectGradeId)
-
   const cardSets = await prisma.cardSet.findMany({
-    where: {
-      archivedAt: null,
-      isPersonal: false,
-      OR: [
-        { teacherId: teacher.id, status: CardSetStatus.PRIVATE },
-        { subjectGradeId: { in: sgIds }, status: CardSetStatus.DEPARTMENTAL },
-      ],
-    },
+    where: teacherReadableCardSetWhere(teacher.id),
     orderBy: { name: 'asc' },
     include: { _count: { select: { cards: true } } },
   })
-  res.json(cardSets)
+  res.json(cardSets.map((cs) => ({ ...cs, canEdit: cs.status === 'PRIVATE' && cs.teacherId === teacher.id })))
 })
 
 // GET /api/teachers/cardsets/:id
@@ -108,28 +93,17 @@ router.get('/:id', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cs = await prisma.cardSet.findUnique({
-    where: { id: p(req, 'id') },
+  const cs = await prisma.cardSet.findFirst({
+    where: { AND: [{ id: p(req, 'id') }, teacherReadableCardSetWhere(teacher.id)] },
     include: {
       cards: { orderBy: { createdAt: 'asc' } },
       _count: { select: { assignments: true } },
     },
   })
-  if (!cs || cs.archivedAt || cs.isPersonal) { res.status(404).json({ error: 'CardSet not found' }); return }
-
-  // Must be owner (PRIVATE) or belong to the SG (DEPARTMENTAL)
-  if (cs.status === CardSetStatus.PRIVATE && cs.teacherId !== teacher.id) {
-    res.status(404).json({ error: 'CardSet not found' }); return
-  }
-  if (cs.status === CardSetStatus.DEPARTMENTAL) {
-    const membership = await prisma.teacherSubjectGrade.findFirst({
-      where: { teacherId: teacher.id, subjectGradeId: cs.subjectGradeId! },
-    })
-    if (!membership) { res.status(404).json({ error: 'CardSet not found' }); return }
-  }
+  if (!cs) { res.status(404).json({ error: 'CardSet not found' }); return }
 
   const labels = await labelsForCardSet(prisma, cs)
-  res.json({ ...cs, ...labels })
+  res.json({ ...cs, ...labels, canEdit: cs.status === 'PRIVATE' && cs.teacherId === teacher.id })
 })
 
 // POST /api/teachers/cardsets
@@ -206,11 +180,10 @@ router.get('/:id/cards', async (req: Request, res: Response) => {
   const teacher = await getTeacher(req.user!.sub)
   if (!teacher) { res.status(403).json({ error: 'No teacher profile found' }); return }
 
-  const cs = await prisma.cardSet.findUnique({ where: { id: p(req, 'id') } })
-  if (!cs || cs.archivedAt || cs.isPersonal) { res.status(404).json({ error: 'CardSet not found' }); return }
-  if (cs.status === CardSetStatus.PRIVATE && cs.teacherId !== teacher.id) {
-    res.status(404).json({ error: 'CardSet not found' }); return
-  }
+  const cs = await prisma.cardSet.findFirst({
+    where: { AND: [{ id: p(req, 'id') }, teacherReadableCardSetWhere(teacher.id)] },
+  })
+  if (!cs) { res.status(404).json({ error: 'CardSet not found' }); return }
 
   const cards = await prisma.card.findMany({
     where: { cardSetId: cs.id },

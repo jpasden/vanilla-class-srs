@@ -10,6 +10,7 @@ interface CardSet {
   name: string
   description: string | null
   status: 'PRIVATE' | 'DEPARTMENTAL'
+  canEdit: boolean
   _count: { cards: number }
 }
 
@@ -88,8 +89,8 @@ export default function TeacherCardSetsPage() {
                 {cs._count.cards} cards
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <Link to={`/teacher/cardsets/${cs.id}`} className="btn btn-primary btn-sm">Manage Cards</Link>
-                {cs.status === 'PRIVATE' && (
+                <Link to={`/teacher/cardsets/${cs.id}`} className="btn btn-primary btn-sm">{cs.canEdit ? 'Manage Cards' : 'View Cards'}</Link>
+                {cs.canEdit && (
                   <button className="btn btn-danger btn-sm" onClick={() => handleArchive(cs)}>Archive</button>
                 )}
               </div>

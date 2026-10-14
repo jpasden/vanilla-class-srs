@@ -1,7 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { startSession } from '../services/review.service'
 
 const now = new Date('2026-10-04T08:00:00Z')
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now) })
+afterEach(() => vi.useRealTimers())
 function card(id: string, state = 'REVIEW', dueOffset = -1, setId = 'focus') {
   return {
     id, deckId: 'deck', cardId: `card-${id}`, state,

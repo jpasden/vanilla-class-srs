@@ -13,7 +13,7 @@ import { hashPassword, generateTempPassword } from '../services/auth.service'
 import { enrollStudents, validateEnrollRows, parseEnrollCsv } from '../services/enrollment.service'
 import { batchAddTeachers, batchAddClasses } from '../services/subjectGradeBatch.service'
 import { createClassWithMembership, updateClassWithMembership, removeSubjectGradeMembership } from '../services/class.service'
-import { classCardSetWhere } from '../services/cardSetAccess.service'
+import { cardSetForSubjectGrade, CrossSubjectCopyRequired, CardSetCopyError } from '../services/cardSetCopy.service'
 import { demoteAdmin, PROTECTED_ADMIN_USER_ID } from '../services/adminRoles.service'
 import { resetAllClassPasswords } from '../services/classPasswordReset.service'
 import { buildClassStats } from './stats.teacher'
@@ -38,6 +38,22 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 *
 const router = asyncRouter()
 const p = (req: Request, key: string) => req.params[key] as string
 router.use(requireAuth, requireAdmin, requirePasswordChanged)
+
+async function assignmentCardSet(req: Request, res: Response, source: Parameters<typeof cardSetForSubjectGrade>[1], subjectGradeId: string) {
+  try {
+    return await cardSetForSubjectGrade(prisma, source, subjectGradeId, req.body.confirmCrossSubjectCopy)
+  } catch (error) {
+    if (error instanceof CrossSubjectCopyRequired) {
+      res.status(409).json({ error: error.message, code: 'CROSS_SUBJECT_COPY_REQUIRED' })
+      return null
+    }
+    if (error instanceof CardSetCopyError) {
+      res.status(400).json({ error: error.message })
+      return null
+    }
+    throw error
+  }
+}
 
 // ─────────────────────────────────────────────
 // Departments
@@ -1044,9 +1060,9 @@ router.get('/cardsets', async (req: Request, res: Response) => {
     const cls = await prisma.class.findUnique({ where: { id: String(req.query.classId) } })
     if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
     const cardSets = await prisma.cardSet.findMany({
-      where: { ...classCardSetWhere(cls), assignments: { none: { classId: cls.id } } },
+      where: { archivedAt: null, isPersonal: false, assignments: { none: { classId: cls.id } } },
       orderBy: { name: 'asc' },
-      include: { _count: { select: { cards: true } } },
+      include: { _count: { select: { cards: true } }, subjectGrade: { select: { id: true, name: true } } },
     })
     res.json(cardSets)
     return
@@ -1293,6 +1309,7 @@ router.delete('/cardsets/:csId/cards/:cardId', async (req: Request, res: Respons
 // ─────────────────────────────────────────────
 
 const CreateSGAssignmentSchema = z.object({
+  confirmCrossSubjectCopy: z.boolean().default(false),
   cardSetId: z.string().uuid(),
   type: z.nativeEnum(AssignmentType),
 })
@@ -1317,10 +1334,20 @@ router.post(
     const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
     if (!sg || sg.archivedAt) { res.status(404).json({ error: 'SubjectGrade not found' }); return }
 
-    const cs = await prisma.cardSet.findUnique({ where: { id: req.body.cardSetId } })
+    let cs = await prisma.cardSet.findUnique({ where: { id: req.body.cardSetId } })
     if (!cs || cs.archivedAt || cs.isPersonal) {
       res.status(400).json({ error: 'CardSet not found' }); return
     }
+
+    const originalAssignment = await prisma.subjectGradeAssignment.findFirst({
+      where: { subjectGradeId: sg.id, cardSetId: { in: [cs.id, ...(cs.copiedFromId ? [cs.copiedFromId] : [])] } },
+    })
+    if (originalAssignment) {
+      res.status(409).json({ error: 'CardSet already assigned; existing assignments retain their original set' }); return
+    }
+
+    cs = await assignmentCardSet(req, res, cs, sg.id)
+    if (!cs) return
 
     const existing = await prisma.subjectGradeAssignment.findUnique({
       where: { subjectGradeId_cardSetId: { subjectGradeId: sg.id, cardSetId: cs.id } },
@@ -1456,6 +1483,7 @@ router.get('/classes/:id/student-additions', async (req: Request, res: Response)
 
 // Admin can also create class-level assignments directly
 const AdminCreateClassAssignmentSchema = z.object({
+  confirmCrossSubjectCopy: z.boolean().default(false),
   cardSetId: z.string().uuid(),
   type: z.nativeEnum(AssignmentType),
   priority: z.number().int().min(0).default(0),
@@ -1480,10 +1508,20 @@ router.post(
     const cls = await prisma.class.findUnique({ where: { id: p(req, 'id') } })
     if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
 
-    const cs = await prisma.cardSet.findUnique({ where: { id: req.body.cardSetId } })
+    let cs = await prisma.cardSet.findUnique({ where: { id: req.body.cardSetId } })
     if (!cs || cs.archivedAt || cs.isPersonal) {
       res.status(400).json({ error: 'CardSet not found' }); return
     }
+
+    const originalAssignment = await prisma.assignment.findFirst({
+      where: { classId: cls.id, cardSetId: { in: [cs.id, ...(cs.copiedFromId ? [cs.copiedFromId] : [])] } },
+    })
+    if (originalAssignment) {
+      res.status(409).json({ error: 'CardSet already assigned; existing assignments retain their original set' }); return
+    }
+
+    cs = await assignmentCardSet(req, res, cs, cls.subjectGradeId)
+    if (!cs) return
 
     const existing = await prisma.assignment.findUnique({
       where: { classId_cardSetId: { classId: cls.id, cardSetId: cs.id } },
@@ -1561,6 +1599,7 @@ router.get('/classes/:id/assignments/:assignmentId/resume', async (req: Request,
 })
 
 const BatchAssignSchema = z.object({
+  confirmCrossSubjectCopy: z.boolean().default(false),
   cardSetId: z.string().uuid(),
   classIds: z.array(z.string().uuid()).min(1),
   type: z.nativeEnum(AssignmentType),
@@ -1590,28 +1629,10 @@ router.post(
     const sg = await prisma.subjectGrade.findUnique({ where: { id: p(req, 'id') } })
     if (!sg || sg.archivedAt) { res.status(404).json({ error: 'SubjectGrade not found' }); return }
 
-    const cs = await prisma.cardSet.findUnique({ where: { id: req.body.cardSetId } })
+    let cs = await prisma.cardSet.findUnique({ where: { id: req.body.cardSetId } })
     if (!cs || cs.archivedAt || cs.isPersonal) {
       res.status(400).json({ error: 'CardSet not found' }); return
     }
-    // CardSet must belong to this Subject Grade, or be owned by one of the
-    // Subject Grade's own teachers — prevents assigning an unrelated
-    // department's CardSet to these classes by mistake. The single-class
-    // assign route (POST /classes/:id/assignments) has no such check; this
-    // batch route adds it deliberately, per the same reasoning as the
-    // teacher/Subject-Grade check on the batch class-create route above.
-    if (cs.subjectGradeId !== sg.id) {
-      if (!cs.teacherId) {
-        res.status(400).json({ error: 'CardSet does not belong to this Subject Grade' }); return
-      }
-      const ownerAssigned = await prisma.teacherSubjectGrade.findUnique({
-        where: { teacherId_subjectGradeId: { teacherId: cs.teacherId, subjectGradeId: sg.id } },
-      })
-      if (!ownerAssigned) {
-        res.status(400).json({ error: 'CardSet does not belong to this Subject Grade' }); return
-      }
-    }
-
     const classIds: string[] = req.body.classIds
     const classes = await prisma.class.findMany({ where: { id: { in: classIds } } })
     const invalid = classIds.filter((id) => {
@@ -1623,8 +1644,11 @@ router.post(
       return
     }
 
+    cs = await assignmentCardSet(req, res, cs, sg.id)
+    if (!cs) return
+
     const existingAssignments = await prisma.assignment.findMany({
-      where: { cardSetId: cs.id, classId: { in: classIds } },
+      where: { cardSetId: { in: [cs.id, req.body.cardSetId, ...(cs.copiedFromId ? [cs.copiedFromId] : [])] }, classId: { in: classIds } },
       select: { classId: true },
     })
     const alreadyAssigned = new Set(existingAssignments.map((a) => a.classId))
@@ -1647,6 +1671,8 @@ router.post(
 
     if (targets.length === 0) {
       res.status(201).json({
+        cardSetId: cs.id,
+        assignedCount: classes.length - skipped.length,
         jobId: null,
         needsStream: false,
         skipped,
@@ -1663,6 +1689,8 @@ router.post(
     batchAssignJobs.set(jobId, { cardSetId: cs.id, targets, timer })
 
     res.status(201).json({
+      cardSetId: cs.id,
+      assignedCount: classes.length - skipped.length,
       jobId,
       needsStream: true,
       skipped,

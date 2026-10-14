@@ -37,7 +37,8 @@ const cardsets = [
 function matches(set: typeof cardsets[number], where: any): boolean {
   return Object.entries(where).every(([key, value]) => {
     if (key === 'OR') return (value as any[]).some((branch) => matches(set, branch))
-    if (key === 'assignments') return set.id !== 'already-assigned'
+    if (key === 'assignments') return (value as any).none ? set.id !== 'already-assigned' : false
+    if (key === 'subjectGrade') return ['sg1', 'sg2'].includes(set.subjectGradeId ?? '')
     return set[key as keyof typeof set] === value
   })
 }
@@ -72,7 +73,7 @@ describe('class cardset picker scope', () => {
     const res = await fetch(`${base}/${role}/cardsets?classId=c1`)
     expect(res.status).toBe(200)
     const choices = await res.json() as { id: string }[]
-    expect(choices.map((cs) => cs.id)).toEqual(cardsets.slice(0, 2).map((cs) => cs.id))
+    expect(choices.map((cs) => cs.id)).toEqual(cardsets.slice(0, role === 'admin' ? 4 : 2).map((cs) => cs.id))
     expect(prisma.teacherSubjectGrade.findMany).not.toHaveBeenCalled()
     expect(prisma.cardSet.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ assignments: { none: { classId: 'c1' } } }),
@@ -92,17 +93,13 @@ describe('class cardset picker scope', () => {
     expect(prisma.cardSet.findMany).not.toHaveBeenCalled()
   })
 
-  it('preserves the general teacher library across all their memberships', async () => {
-    prisma.teacherSubjectGrade.findMany.mockResolvedValue([{ subjectGradeId: 'sg1' }, { subjectGradeId: 'sg2' }])
-    // General library uses an "in" predicate rather than the class-specific equality.
-    prisma.cardSet.findMany.mockResolvedValue([])
-    expect((await fetch(`${base}/teachers/cardsets`)).status).toBe(200)
-    expect(prisma.cardSet.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ OR: [
-        { teacherId: 't1', status: 'PRIVATE' },
-        { subjectGradeId: { in: ['sg1', 'sg2'] }, status: 'DEPARTMENTAL' },
-      ] }),
-    }))
+  it('preserves the general teacher library across memberships without exposing unrelated private sets', async () => {
+    const response = await fetch(`${base}/teachers/cardsets`)
+    expect(response.status).toBe(200)
+    const library = await response.json() as { id: string; canEdit: boolean }[]
+    expect(library.map((set) => set.id)).toEqual([cardsets[0].id, cardsets[1].id, cardsets[2].id, cardsets[6].id])
+    expect(library.find((set) => set.id === cardsets[0].id)?.canEdit).toBe(true)
+    expect(library.filter((set) => set.id !== cardsets[0].id).every((set) => !set.canEdit)).toBe(true)
   })
 })
 

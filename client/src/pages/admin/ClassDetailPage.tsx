@@ -1,3 +1,4 @@
+import { confirmCrossSubjectCopy } from '../../utils/crossSubjectCopy'
 import { useState, useRef, FormEvent } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
@@ -11,7 +12,7 @@ import ClassStatsPanel from '../teacher/ClassStatsPanel'
 
 interface Class {
   id: string; name: string
-  subjectGrade: { name: string; department: { name: string } }
+  subjectGrade: { id: string; name: string; department: { name: string } }
   _count: { enrollments: number; assignments: number }
 }
 interface Enrollment {
@@ -19,7 +20,7 @@ interface Enrollment {
   student: { id: string; user: { name: string; email: string; lastLoginAt: string | null } }
   deck: { id: string; _count: { instances: number } } | null
 }
-interface CardSet { id: string; name: string; status: string; _count: { cards: number } }
+interface CardSet { subjectGrade: { id: string; name: string } | null; id: string; name: string; status: string; _count: { cards: number } }
 interface Assignment {
   id: string; type: string; priority: number
   cardSet: { id: string; name: string; status: string; _count: { cards: number } }
@@ -177,6 +178,7 @@ export default function AdminClassDetailPage() {
 
   const handleAssign = async (e: FormEvent) => {
     e.preventDefault()
+    if (!confirmCrossSubjectCopy(cardSets?.find((cs) => cs.id === assignForm.cardSetId), cls?.subjectGrade)) return
     setSaving(true)
     setFormError(null)
     try {
@@ -186,7 +188,7 @@ export default function AdminClassDetailPage() {
         totalInstances: number
         enrollmentCount: number
         needsStream: boolean
-      }>(`/admin/classes/${id}/assignments`, assignForm)
+      }>(`/admin/classes/${id}/assignments`, { ...assignForm, confirmCrossSubjectCopy: true })
 
       setShowAddAssignment(false)
 
@@ -667,7 +669,7 @@ export default function AdminClassDetailPage() {
                   <label className="form-label">CardSet</label>
                   <select className="form-select" value={assignForm.cardSetId} onChange={(e) => setAssignForm({ ...assignForm, cardSetId: e.target.value })} required>
                     <option value="">Select…</option>
-                    {cardSets?.map((cs) => <option key={cs.id} value={cs.id}>{cs.name} ({cs._count.cards} cards)</option>)}
+                    {cardSets?.map((cs) => <option key={cs.id} value={cs.id}>{cs.name} ({cs._count.cards} cards){cs.subjectGrade ? ` — ${cs.subjectGrade.name}` : ' — Private'}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
@@ -730,7 +732,7 @@ export default function AdminClassDetailPage() {
               {!assignments?.length && <tr><td colSpan={5} className="table-empty">No assignments yet.</td></tr>}
               {assignments?.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.cardSet.name}</td>
+                  <td><Link to={`/admin/cardsets/${a.cardSet.id}`}>{a.cardSet.name}</Link></td>
                   <td><span className={`badge badge-${a.type === 'MANDATORY' ? 'blue' : 'yellow'}`}>{a.type}</span></td>
                   <td>{a.priority}</td>
                   <td>{a.cardSet._count.cards}</td>

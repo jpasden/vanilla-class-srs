@@ -1,3 +1,4 @@
+import { confirmCrossSubjectCopy } from '../../utils/crossSubjectCopy'
 import { useState, FormEvent } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
@@ -22,6 +23,8 @@ interface TeacherResult { teacherId: string; teacherName: string | null; status:
 interface ClassResult { name: string; status: 'created' | 'error'; error?: string; classId?: string }
 interface ClassTarget { classId: string; className: string; enrollmentCount: number; totalInstances: number }
 interface BatchAssignResponse {
+  cardSetId: string
+  assignedCount: number
   jobId: string | null
   needsStream: boolean
   skipped: { classId: string; className: string }[]
@@ -34,7 +37,7 @@ export default function AdminBatchOperationsPage() {
   const { id } = useParams<{ id: string }>()
   const { data: sg, loading, error, reload } = useApi<SubjectGradeDetail>(() => api.get(`/admin/subject-grades/${id}`), [id])
   const { data: allTeachers } = useApi<Teacher[]>(() => api.get('/admin/teachers'))
-  const { data: cardSets } = useApi<CardSet[]>(() => api.get('/admin/cardsets'))
+  const { data: cardSets, reload: reloadCardSets } = useApi<CardSet[]>(() => api.get('/admin/cardsets'))
 
   // ── Section A: batch add teachers ──────────────────────────────────────
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<Set<string>>(new Set())
@@ -111,9 +114,7 @@ export default function AdminBatchOperationsPage() {
 
   // ── Section C: batch assign CardSet ────────────────────────────────────
   const activeClasses = sg?.classes.filter((c) => !c.archivedAt) ?? []
-  const scopedCardSets = cardSets?.filter(
-    (cs) => cs.subjectGrade?.id === id || (cs.teacher && sgTeachers.some((t) => t.id === cs.teacher!.id)),
-  ) ?? []
+  const scopedCardSets = cardSets ?? []
 
   const [assignForm, setAssignForm] = useState({ cardSetId: '', type: 'MANDATORY', priority: 0 })
   const [selectedClassIds, setSelectedClassIds] = useState<Set<string> | null>(null)
@@ -121,6 +122,7 @@ export default function AdminBatchOperationsPage() {
   const [savingAssign, setSavingAssign] = useState(false)
   const [skippedClasses, setSkippedClasses] = useState<{ classId: string; className: string }[] | null>(null)
   const [classProgress, setClassProgress] = useState<Map<string, { total: number; completed: number; result?: ClassDoneResult }>>(new Map())
+  const [assignSuccess, setAssignSuccess] = useState<string | null>(null)
   const [assignDone, setAssignDone] = useState(false)
   const [assignStreamError, setAssignStreamError] = useState(false)
   const [showAssignProgress, setShowAssignProgress] = useState(false)
@@ -144,6 +146,8 @@ export default function AdminBatchOperationsPage() {
     e.preventDefault()
     const classIds = [...effectiveSelectedClassIds]
     if (!assignForm.cardSetId || classIds.length === 0) return
+    if (!confirmCrossSubjectCopy(cardSets?.find((cs) => cs.id === assignForm.cardSetId), sg ?? undefined)) return
+    setAssignSuccess(null)
     setSavingAssign(true)
     setAssignError(null)
     setSkippedClasses(null)
@@ -153,12 +157,17 @@ export default function AdminBatchOperationsPage() {
         classIds,
         type: assignForm.type,
         priority: assignForm.priority,
+        confirmCrossSubjectCopy: true,
       })
       setSkippedClasses(result.skipped)
+      reloadCardSets()
+      setAssignForm((form) => ({ ...form, cardSetId: result.cardSetId }))
 
       if (!result.needsStream || !result.jobId) {
-        if (result.skipped.length > 0 && result.classes.length === 0) {
+        if (result.assignedCount === 0) {
           setAssignError('Every selected class already has this CardSet assigned.')
+        } else {
+          setAssignSuccess(`CardSet assigned to ${result.assignedCount} classes.`)
         }
         return
       }
@@ -330,7 +339,7 @@ export default function AdminBatchOperationsPage() {
         {activeClasses.length === 0 ? (
           <p style={{ color: 'var(--color-text-muted)' }}>Add at least one class to this Subject Grade first.</p>
         ) : scopedCardSets.length === 0 ? (
-          <p style={{ color: 'var(--color-text-muted)' }}>No CardSets belong to this Subject Grade or its teachers yet.</p>
+          <p style={{ color: 'var(--color-text-muted)' }}>No CardSets available yet.</p>
         ) : (
           <form onSubmit={handleBatchAssign}>
             <div className="form-group">
@@ -343,7 +352,7 @@ export default function AdminBatchOperationsPage() {
               >
                 <option value="">Select…</option>
                 {scopedCardSets.map((cs) => (
-                  <option key={cs.id} value={cs.id}>{cs.name} ({cs._count.cards} cards)</option>
+                  <option key={cs.id} value={cs.id}>{cs.name} ({cs._count.cards} cards){cs.subjectGrade ? ` — ${cs.subjectGrade.name}` : ' — Private'}</option>
                 ))}
               </select>
             </div>
@@ -369,7 +378,8 @@ export default function AdminBatchOperationsPage() {
                 ))}
               </div>
             </div>
-            {assignError && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{assignError}</div>}
+            {assignSuccess && <div className="alert alert-success">{assignSuccess}</div>}
+        {assignError && <div className="alert alert-danger" style={{ marginBottom: 12 }}>{assignError}</div>}
             {skippedClasses && skippedClasses.length > 0 && (
               <div className="alert alert-info" style={{ marginBottom: 12 }}>
                 Already assigned, skipped: {skippedClasses.map((c) => c.className).join(', ')}

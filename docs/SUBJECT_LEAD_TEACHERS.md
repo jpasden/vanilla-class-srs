@@ -22,6 +22,14 @@ The group list shows its current SL; the Teachers page marks the relevant member
 
 The SL can read class rosters, assignments, homework, stats, and student card data. They cannot edit colleagues' classes, change rosters or passwords, assign/remove CardSets, set homework, edit other teachers' private libraries, or appoint SLs. Full-deck inspection exposes only cards actually present in the selected student's class deck, with their effective definitions/examples and learning progress.
 
+The CardSets library also includes sets assigned to active classes the SL oversees, including other teachers' private sets and departmental sets from other groups. Assigned set names link to read-only card inspection. Unassigned private sets remain hidden. Ordinary teachers can inspect sets assigned to their own classes. Editing remains limited to the owner of a private set, or an Admin for departmental sets.
+
+## Cross-Subject/Grade CardSet assignments
+
+Admins can select sets from other groups when assigning to a class or using Subject/Grade Batch Ops. A warning names the source and destination and explains that edits will not sync. After confirmation, the system copies the set's content into a departmental set in the destination group; card IDs are new and no student progress is copied. Later assignments of the same source reuse the destination copy, retaining its independent edits. Restore an archived destination copy before reusing it.
+
+Existing assignments continue to use their original sets. Batch assignment skips classes already using either the source or destination copy, preventing duplicate learning cards. This behavior also applies to the Subject/Grade assignment API, which requires `confirmCrossSubjectCopy: true` for a set scoped to a different group. Same-group sets and teacher-owned private sets without a Subject/Grade retain their existing assignment behavior.
+
 Leadership is checked from the database on each request. Clearing or replacing an SL takes effect for their next request with the same session. Navigation refreshes on changing pages or returning focus to the browser. Archiving a Subject/Grade or Department suspends oversight access; retained appointments resume when the group is active again.
 
 Admins can access the same reports through **Subject/Grade Reports**, from the Subject Grade name, or from the Classes Overview group headings. The new full-deck view is available to Admins for all active classes and ordinary teachers for their own classes.

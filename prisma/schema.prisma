@@ -193,6 +193,9 @@ model CardSet {
   id          String        @id @default(uuid())
   name        String        // e.g. "Unit 3 Vocabulary"
   description String?
+  copiedFromId String?
+  copiedFrom CardSet? @relation("CardSetCopies", fields: [copiedFromId], references: [id], onDelete: SetNull)
+  copies CardSet[] @relation("CardSetCopies")
   status      CardSetStatus @default(PRIVATE)
 
   // Ownership: either teacher-owned or departmental (subjectGrade-owned)
@@ -215,6 +218,8 @@ model CardSet {
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   archivedAt              DateTime?
+
+  @@unique([copiedFromId, subjectGradeId])
 }
 
 model Card {

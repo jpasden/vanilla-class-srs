@@ -19,6 +19,7 @@ interface CardSet {
   name: string
   description: string | null
   status: 'PRIVATE' | 'DEPARTMENTAL'
+  canEdit: boolean
   cards: Card[]
   definitionL2Label: string
   definitionL1Label: string
@@ -68,7 +69,7 @@ async function parseCsvFile(file: File): Promise<{ rows: Record<string, string>[
 
 export default function TeacherCardSetDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const { data: cs, loading, reload } = useApi<CardSet>(() => api.get(`/teachers/cardsets/${id}`), [id])
+  const { data: cs, loading, error, reload } = useApi<CardSet>(() => api.get(`/teachers/cardsets/${id}`), [id])
   const [editing, setEditing] = useState<Card | null>(null)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState<CardFormData>(emptyForm)
@@ -86,7 +87,7 @@ export default function TeacherCardSetDetailPage() {
   const [csvUploading, setCsvUploading] = useState(false)
   const [csvParseError, setCsvParseError] = useState<string | null>(null)
 
-  const isEditable = cs?.status === 'PRIVATE'
+  const isEditable = cs?.canEdit === true
 
   const openCreate = () => { setForm(emptyForm); setFormError(null); setCreating(true) }
   const openEdit = (c: Card) => {
@@ -190,10 +191,12 @@ export default function TeacherCardSetDetailPage() {
     }
   }
 
+  if (error) return <div className="alert alert-danger">{error}</div>
   if (loading) return <div className="spinner" />
 
   return (
     <div>
+      {cs && !isEditable && <p style={{ color: 'var(--color-text-muted)' }}>Read-only CardSet inspection</p>}
       {(editing || creating) && (
         <Modal title={editing ? `Edit "${editing.word}"` : 'New Card'} onClose={closeModal}>
           <form onSubmit={handleSave}>

@@ -288,7 +288,7 @@ describe.runIf(!!dbUrl)('SL workflows with PostgreSQL and authenticated routes',
       400,
     )
     expect((await request(`/teachers/leadership/${ids.sg}/stats?tz=Invalid/Zone`)).status).toBe(400)
-    expect((await request(`/teachers/cardsets/${ids.set}`)).status).toBe(404)
+    expect((await request(`/teachers/cardsets/${ids.set}`)).status).toBe(200)
   })
   it('does not grant management through write or assignment streaming routes', async () => {
     const writes: [string, string, unknown][] = [
@@ -440,4 +440,75 @@ describe.runIf(!!dbUrl)('SL workflows with PostgreSQL and authenticated routes',
     ).json()) as any
     expect(search.total).toBe(51)
   })
+  it('allows assigned-set inspection but denies edits, unrelated libraries, and revoked leadership', async () => {
+    const detail = await request(`/teachers/cardsets/${ids.set}`)
+    expect(await detail.json()).toMatchObject({ canEdit: false, name: 'Teacher Private Assigned Set' })
+    expect((await request(`/teachers/cardsets/${ids.set}/cards`)).status).toBe(200)
+    const library = await (await request('/teachers/cardsets')).json() as any[]
+    expect(library.some((set) => set.id === ids.set && set.canEdit === false)).toBe(true)
+    expect((await request(`/teachers/cardsets/${ids.set}`, leadCookie, 'PATCH', { name: 'Forbidden' })).status).toBe(404)
+    expect((await request(`/teachers/cardsets/${ids.set}`, leadCookie, 'DELETE')).status).toBe(404)
+    expect((await request(`/teachers/cardsets/${ids.set}/cards/${ids.card}`, leadCookie, 'PATCH', { word: 'Forbidden' })).status).toBe(404)
+    const privateSet = await db.cardSet.create({ data: { name: 'Unassigned Private Set', teacherId: ids.owner } })
+    expect((await request(`/teachers/cardsets/${privateSet.id}`)).status).toBe(404)
+    const unrelatedGroup = await db.subjectGrade.create({ data: { name: 'Unrelated group', departmentId: ids.dept } })
+    const foreignSet = await db.cardSet.create({ data: { name: 'Foreign group set', status: 'DEPARTMENTAL', subjectGradeId: unrelatedGroup.id } })
+    expect((await request(`/teachers/cardsets/${foreignSet.id}`)).status).toBe(404)
+    expect((await request(`/teachers/cardsets/${foreignSet.id}/cards`)).status).toBe(404)
+    const assignment = await db.assignment.create({ data: { classId: ids.b, cardSetId: foreignSet.id, type: 'OPTIONAL', assignedBy: ids.admin } })
+    expect((await request(`/teachers/cardsets/${foreignSet.id}`)).status).toBe(200)
+    await db.assignment.delete({ where: { id: assignment.id } })
+    expect((await request(`/teachers/cardsets/${foreignSet.id}`)).status).toBe(404)
+    await db.class.update({ where: { id: ids.a }, data: { archivedAt: new Date() } })
+    expect((await request(`/teachers/cardsets/${ids.set}`)).status).toBe(404)
+    await db.class.update({ where: { id: ids.a }, data: { archivedAt: null } })
+    await db.subjectGradeLead.delete({ where: { subjectGradeId: ids.sg } })
+    expect((await request(`/teachers/cardsets/${ids.set}`)).status).toBe(404)
+    await db.subjectGradeLead.create({ data: { subjectGradeId: ids.sg, teacherId: ids.lead } })
+    expect(await (await request(`/teachers/cardsets/${ids.set}`, ownerCookie)).json()).toMatchObject({ canEdit: true })
+  })
+  it('warns, copies and reuses cross-subject sets across all Admin assignment entry points', async () => {
+    const source = await db.cardSet.create({ data: {
+      name: 'Cross-subject source', description: 'Source description', status: 'DEPARTMENTAL', subjectGradeId: ids.otherSg,
+      cards: { create: { word: 'original', pos: 'noun', definitionL1: 'Translation', definitionL2: 'Definition', exampleSentence: 'Original example' } },
+    }, include: { cards: true } })
+    const payload = { cardSetId: source.id, type: 'OPTIONAL' }
+    for (const path of [`/admin/subject-grades/${ids.sg}/assignments`, `/admin/classes/${ids.b}/assignments`, `/admin/subject-grades/${ids.sg}/batch-assign`]) {
+      const denied = await request(path, adminCookie, 'POST', { ...payload, classIds: [ids.a] })
+      expect(denied.status).toBe(409)
+      expect(await denied.json()).toMatchObject({ code: 'CROSS_SUBJECT_COPY_REQUIRED' })
+    }
+    expect(await db.cardSet.count({ where: { copiedFromId: source.id } })).toBe(0)
+    const assigned = await request(`/admin/subject-grades/${ids.sg}/assignments`, adminCookie, 'POST', { ...payload, confirmCrossSubjectCopy: true })
+    expect(assigned.status).toBe(201)
+    const sgAssignment = await assigned.json() as any
+    const copy = await db.cardSet.findUniqueOrThrow({ where: { id: sgAssignment.cardSetId }, include: { cards: true } })
+    expect(copy).toMatchObject({ subjectGradeId: ids.sg, copiedFromId: source.id, status: 'DEPARTMENTAL', name: source.name, description: source.description })
+    expect(copy.cards[0]).toMatchObject({ word: 'original', pos: 'noun', definitionL1: 'Translation', definitionL2: 'Definition', exampleSentence: 'Original example' })
+    expect(copy.cards[0].id).not.toBe(source.cards[0].id)
+    await db.card.update({ where: { id: source.cards[0].id }, data: { word: 'source changed' } })
+    expect((await db.card.findUniqueOrThrow({ where: { id: copy.cards[0].id } })).word).toBe('original')
+    await db.card.update({ where: { id: copy.cards[0].id }, data: { word: 'copy changed' } })
+    expect((await db.card.findUniqueOrThrow({ where: { id: source.cards[0].id } })).word).toBe('source changed')
+    const direct = await request(`/admin/classes/${ids.b}/assignments`, adminCookie, 'POST', { ...payload, confirmCrossSubjectCopy: true })
+    expect(direct.status).toBe(201)
+    const directData = await direct.json() as any
+    expect((await db.assignment.findUniqueOrThrow({ where: { id: directData.assignmentId } })).cardSetId).toBe(copy.id)
+    await db.assignment.create({ data: { classId: ids.a, cardSetId: source.id, type: 'OPTIONAL', assignedBy: ids.admin } })
+    const batch = await request(`/admin/subject-grades/${ids.sg}/batch-assign`, adminCookie, 'POST', { ...payload, classIds: [ids.a, ids.b], confirmCrossSubjectCopy: true })
+    expect(batch.status).toBe(201)
+    expect(await batch.json()).toMatchObject({ cardSetId: copy.id, assignedCount: 0, needsStream: false, skipped: expect.arrayContaining([{ classId: ids.a, className: 'Class a' }, { classId: ids.b, className: 'Class b' }]) })
+    expect(await db.assignment.count({ where: { classId: ids.a, cardSetId: copy.id } })).toBe(0)
+    const copyRetry = await request(`/admin/subject-grades/${ids.sg}/batch-assign`, adminCookie, 'POST', { cardSetId: copy.id, type: 'OPTIONAL', classIds: [ids.a] })
+    expect(await copyRetry.json()).toMatchObject({ assignedCount: 0 })
+    expect((await request(`/admin/classes/${ids.a}/assignments`, adminCookie, 'POST', { cardSetId: copy.id, type: 'OPTIONAL' })).status).toBe(409)
+    const freshClass = await db.class.create({ data: { name: 'New batch target', teacherId: ids.owner, subjectGradeId: ids.sg } })
+    const newBatch = await request(`/admin/subject-grades/${ids.sg}/batch-assign`, adminCookie, 'POST', { ...payload, classIds: [freshClass.id], confirmCrossSubjectCopy: true })
+    expect(newBatch.status).toBe(201)
+    expect(await newBatch.json()).toMatchObject({ cardSetId: copy.id, assignedCount: 1, needsStream: false, skipped: [] })
+    expect(await db.assignment.count({ where: { classId: freshClass.id, cardSetId: copy.id } })).toBe(1)
+    expect(await db.cardSet.count({ where: { copiedFromId: source.id } })).toBe(1)
+    expect((await request(`/teachers/cardsets/${copy.id}`)).status).toBe(200)
+  })
+
 })

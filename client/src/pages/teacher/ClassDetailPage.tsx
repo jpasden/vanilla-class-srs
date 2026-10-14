@@ -697,7 +697,7 @@ export default function TeacherClassDetailPage() {
               {!assignments?.length && <tr><td colSpan={5} className="table-empty">No assignments yet.</td></tr>}
               {assignments?.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.cardSet.name}</td>
+                  <td><Link to={`/teacher/cardsets/${a.cardSet.id}`}>{a.cardSet.name}</Link></td>
                   <td><span className={`badge badge-${a.type === 'MANDATORY' ? 'blue' : 'yellow'}`}>{a.type}</span></td>
                   <td>{a.priority}</td>
                   <td>{a.cardSet._count.cards}</td>

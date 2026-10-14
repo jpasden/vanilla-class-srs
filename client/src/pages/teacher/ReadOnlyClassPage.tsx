@@ -18,7 +18,7 @@ export default function ReadOnlyClassPage({ classId }: { classId: string }) {
       deck: { _count: { instances: number } } | null
     }[]
   >(() => api.get(`/teachers/classes/${classId}/students`), [classId])
-  const { data: assignments } = useApi<{ id: string; type: string; cardSet: { name: string } }[]>(
+  const { data: assignments } = useApi<{ id: string; type: string; cardSet: { id: string; name: string } }[]>(
     () => api.get(`/teachers/classes/${classId}/assignments`),
     [classId],
   )
@@ -87,7 +87,7 @@ export default function ReadOnlyClassPage({ classId }: { classId: string }) {
           <h2>Assigned CardSets</h2>
           {assignments?.map((a) => (
             <p key={a.id}>
-              {a.cardSet.name} · {a.type}
+              <Link to={`/teacher/cardsets/${a.cardSet.id}`}>{a.cardSet.name}</Link> · {a.type}
             </p>
           ))}
           {assignments?.length === 0 && <p>No assignments.</p>}
