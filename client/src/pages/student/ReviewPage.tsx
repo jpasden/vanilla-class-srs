@@ -451,7 +451,7 @@ export default function ReviewPage() {
                 </p>
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 8 }}>
                   Each homework session includes at least {Math.max(10, summary.weeklyGoal.minCardsPerSession)} reviews.
-                  {' '}If fewer cards are ready, we’ll add upcoming reviews, starting with your study focus.
+                  {' '}If fewer cards are ready, we’ll add upcoming reviews within your study focus.
                   {' '}If there aren’t enough different cards, some will repeat.
                 </p>
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', textAlign: 'center', marginTop: 8 }}>
@@ -476,7 +476,7 @@ export default function ReviewPage() {
             </p>
           ) : (
             <p style={{ marginBottom: 16 }}>
-              There are no cards available to study yet. Check back after cards have been added to your class.
+              There are no cards in this study focus. Choose another focus or add cards to this one.
             </p>
           )}
           <div className="modal-footer">

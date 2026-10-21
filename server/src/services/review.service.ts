@@ -18,6 +18,7 @@ import { computeStreakAndBestDay } from './streak.service'
 // per-deck fsrsParams JSON. Any due cards beyond this roll over to the next session/day.
 // Does not apply to the separate newCardsPerDay cap on brand-new cards.
 const MAX_DUE_CARDS_PER_SESSION = 20
+const PERSONAL_CARD_PRIORITY = 3
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,10 +61,8 @@ export interface StartSessionOptions {
    */
   reviewAhead?: boolean
   /**
-   * Narrow the session to only these CardSets (e.g. a homework focus, or a
-   * manual Study Focus choice) — a soft steering preference, not a hard
-   * filter: if it would produce an empty session while unfiltered cards
-   * exist, startSession falls back to the full deck instead of blocking.
+   * Restrict every card in the session to these CardSets, including upcoming
+   * reviews and repeats. Omitted or empty means the whole deck.
    */
   cardSetIds?: string[]
 }
@@ -178,9 +177,7 @@ export async function startSession(
     await closeSession(prisma, openSession.id, now)
   }
 
-  // Optional CardSet focus (homework, or a manual Study Focus choice) — a soft
-  // steering preference. If it would produce an empty session while unfiltered
-  // cards exist, we fall back to the full deck below rather than block the student.
+  // Explicit focus is a strict boundary for every queue query.
   const cardSetFilter = options.cardSetIds && options.cardSetIds.length > 0
     ? { cardSetId: { in: options.cardSetIds } }
     : undefined
@@ -235,8 +232,8 @@ export async function startSession(
 
     // Sort by assignment priority (lower = higher priority), then by cardInstance createdAt
     allNew.sort((a, b) => {
-      const aPrio = a.card.cardSet.assignments[0]?.priority ?? 9999
-      const bPrio = b.card.cardSet.assignments[0]?.priority ?? 9999
+      const aPrio = a.card.cardSet.isPersonal ? PERSONAL_CARD_PRIORITY : (a.card.cardSet.assignments[0]?.priority ?? 9999)
+      const bPrio = b.card.cardSet.isPersonal ? PERSONAL_CARD_PRIORITY : (b.card.cardSet.assignments[0]?.priority ?? 9999)
       if (aPrio !== bPrio) return aPrio - bPrio
       return a.createdAt.getTime() - b.createdAt.getTime()
     })
@@ -245,7 +242,9 @@ export async function startSession(
     newInstances = allNew.slice(0, newCardSlots)
   } else {
     // Cap is 0 (already hit today) — check if there's anything beyond it worth offering.
-    const anyNew = await prisma.cardInstance.findFirst({ where: { deckId: deck.id, state: 'NEW' } })
+    const anyNew = await prisma.cardInstance.findFirst({
+      where: { deckId: deck.id, state: 'NEW', ...(cardSetFilter && { card: cardSetFilter }) },
+    })
     moreNewCardsExistBeyondCap = !!anyNew
   }
 
@@ -261,7 +260,7 @@ export async function startSession(
     : homework?.cardSets.map((set) => set.cardSetId) ?? []
 
   // DECISION: Fill short queues at the start so students can see the full session
-  // length. Use learned cards due soonest, within the study focus first, without
+  // length. Use learned cards due soonest, strictly within an explicit focus, without
   // introducing extra new cards beyond the daily allowance.
   if (allInstances.length < minimumReviews) {
     const addUpcoming = async (focusIds?: string[]) => {
@@ -281,17 +280,10 @@ export async function startSession(
       allInstances.push(...upcoming)
     }
     if (paddingFocusIds.length > 0) await addUpcoming(paddingFocusIds)
-    await addUpcoming()
+    if (!cardSetFilter) await addUpcoming()
   }
 
-  // CardSet focus produced an empty session — it's a soft steering preference,
-  // never a hard block, so fall back to the whole deck rather than leaving the
-  // student with nothing to study.
-  if (allInstances.length === 0 && cardSetFilter) {
-    return startSession(prisma, studentId, enrollmentId, now, { ...options, cardSetIds: undefined })
-  }
-
-  // No natural queue or learned cards available, even after falling back.
+  // No eligible cards within the selected scope. Never substitute another set.
   if (allInstances.length === 0) {
     const emptyReason: 'capped' | 'exhausted' = moreNewCardsExistBeyondCap ? 'capped' : 'exhausted'
     return { sessionId: '', cards: [], deckId: deck.id, emptyReason }
