@@ -42,7 +42,7 @@ import EnrollmentPickerPage from './pages/student/EnrollmentPickerPage'
 import StudentDeckPage from './pages/student/DeckPage'
 import ReviewPage from './pages/student/ReviewPage'
 import StudentStatsPage from './pages/student/StatsPage'
-import OptionalSetsPage from './pages/student/OptionalSetsPage'
+import ClassCardSetsPage from './pages/student/ClassCardSetsPage'
 
 function RequireAuth({ children, role }: { children: JSX.Element; role?: string }) {
   const { user, loading } = useAuth()
@@ -123,7 +123,8 @@ export default function App() {
               <Route path="deck" element={<StudentDeckPage />} />
               <Route path="review" element={<ReviewPage />} />
               <Route path="stats" element={<StudentStatsPage />} />
-              <Route path="optional" element={<OptionalSetsPage />} />
+              <Route path="cardsets" element={<ClassCardSetsPage />} />
+              <Route path="optional" element={<Navigate to="/student/cardsets" replace />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -264,12 +264,12 @@ router.delete('/deck/cards/:instanceId', async (req: Request, res: Response) => 
 })
 
 // ─────────────────────────────────────────────
-// Optional CardSets — student opt-in (spec §10, §11)
+// Class CardSets — read-only browsing of required and optional assignments
 // ─────────────────────────────────────────────
 
 // GET /api/students/deck/optional?enrollmentId=...
-// Returns optional CardSets available to the student (assigned to their class, not yet opted in)
-router.get('/deck/optional', async (req: Request, res: Response) => {
+// The legacy optional endpoint remains available for older clients.
+router.get(['/deck/cardsets', '/deck/optional'], async (req: Request, res: Response) => {
   const student = await getStudent(req.user!.sub)
   if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
 
@@ -278,35 +278,41 @@ router.get('/deck/optional', async (req: Request, res: Response) => {
 
   const enrollment = await getEnrollmentAndDeck(student.id, enrollmentId)
   if (!enrollment) { res.status(404).json({ error: 'Enrollment not found' }); return }
+  const cls = await prisma.class.findUnique({ where: { id: enrollment.classId }, select: { archivedAt: true } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
 
-  // Get OPTIONAL assignments for this class
-  const optionalAssignments = await prisma.assignment.findMany({
-    where: { classId: enrollment.classId, type: 'OPTIONAL' },
+  const optionalOnly = req.path.startsWith('/deck/optional')
+  // List only active, non-personal sets assigned to this enrollment's class.
+  const assignments = await prisma.assignment.findMany({
+    where: { classId: enrollment.classId, ...(optionalOnly && { type: 'OPTIONAL' as const }),
+      cardSet: { archivedAt: null, isPersonal: false } },
     include: { cardSet: { include: { _count: { select: { cards: true } } } } },
   })
 
-  // Exclude any the student has already opted into (CardInstance with origin OPTIONAL from that set)
-  // We detect opt-in by checking if the deck has any instances from this CardSet
+  // Report optional opt-in status without hiding already-added sets.
+  if (!enrollment.deck) { res.status(404).json({ error: 'Deck not found' }); return }
   const optedInCardSetIds = (
     await prisma.cardInstance.findMany({
       where: {
-        deckId: enrollment.deck?.id,
+        deckId: enrollment.deck.id,
         origin: CardOrigin.OPTIONAL,
-        card: { cardSetId: { in: optionalAssignments.map((a) => a.cardSetId) } },
+        card: { cardSetId: { in: assignments.map((a) => a.cardSetId) } },
       },
       select: { card: { select: { cardSetId: true } } },
       distinct: ['cardId'],
     })
   ).map((i) => i.card.cardSetId)
 
-  res.json(optionalAssignments.map((a) => ({
-    ...a.cardSet,
-    added: optedInCardSetIds.includes(a.cardSetId),
+  res.json(assignments.map((a) => ({
+    id: a.cardSet.id, name: a.cardSet.name, description: a.cardSet.description,
+    _count: a.cardSet._count,
+    type: a.type,
+    added: a.type === 'MANDATORY' || optedInCardSetIds.includes(a.cardSetId),
   })))
 })
 
 // GET /api/students/deck/optional/:cardSetId/cards  — browse cards before opting in
-router.get('/deck/optional/:cardSetId/cards', async (req: Request, res: Response) => {
+router.get(['/deck/cardsets/:cardSetId/cards', '/deck/optional/:cardSetId/cards'], async (req: Request, res: Response) => {
   const student = await getStudent(req.user!.sub)
   if (!student) { res.status(403).json({ error: 'No student profile found' }); return }
 
@@ -315,10 +321,15 @@ router.get('/deck/optional/:cardSetId/cards', async (req: Request, res: Response
 
   const enrollment = await getEnrollmentAndDeck(student.id, enrollmentId)
   if (!enrollment) { res.status(404).json({ error: 'Enrollment not found' }); return }
+  const cls = await prisma.class.findUnique({ where: { id: enrollment.classId }, select: { archivedAt: true } })
+  if (!cls || cls.archivedAt) { res.status(404).json({ error: 'Class not found' }); return }
 
-  // Verify this CardSet is actually assigned as OPTIONAL to the student's class
+  const optionalOnly = req.path.startsWith('/deck/optional')
+  // Membership alone does not grant access to unassigned or personal sets.
   const assignment = await prisma.assignment.findFirst({
-    where: { classId: enrollment.classId, cardSetId: p(req, 'cardSetId'), type: 'OPTIONAL' },
+    where: { classId: enrollment.classId, cardSetId: p(req, 'cardSetId'),
+      ...(optionalOnly && { type: 'OPTIONAL' as const }),
+      cardSet: { archivedAt: null, isPersonal: false } },
   })
   if (!assignment) { res.status(404).json({ error: 'CardSet not found' }); return }
 

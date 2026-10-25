@@ -6,7 +6,7 @@ import AppShell from '../../components/AppShell'
 const navItems = [
   { to: '/student/review', label: 'Study' },
   { to: '/student/deck', label: 'My Deck' },
-  { to: '/student/optional', label: 'Optional Sets' },
+  { to: '/student/cardsets', label: 'Class CardSets' },
   { to: '/student/stats', label: 'Stats' },
 ]
 

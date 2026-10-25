@@ -15,3 +15,5 @@ Complete qualifying sessions on different calendar days, at least 12 hours apart
 If your deck has no cards yet, check back after cards have been added to your class.
 
 After finishing a session, the Study Focus dropdown keeps your selection. “Keep Reviewing” starts another session within that focus, even for a small set you have already studied. You can choose a different focus on the completion screen. “Keep Studying” practices only the weak cards from the session you just finished. Clicking Study in the navigation returns to the setup screen and restores the default focus.
+
+Use Class CardSets to see the required and optional sets your teacher has assigned to your current class. Each set shows its card count and a View Cards button for reading the words, definitions, and examples without starting a review. Required sets are added automatically. Optional sets can be browsed before choosing Add to Deck, and remain available to view afterward.

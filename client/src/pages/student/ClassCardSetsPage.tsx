@@ -4,12 +4,13 @@ import { api, ApiError } from '../../utils/api'
 import { useApi } from '../../hooks/useApi'
 import { useEnrollment } from '../../utils/enrollment'
 
-interface OptionalSet {
+interface ClassCardSet {
   id: string
   name: string
   description: string | null
   _count: { cards: number }
   added: boolean
+  type: 'MANDATORY' | 'OPTIONAL'
 }
 
 interface BrowseCard {
@@ -27,11 +28,11 @@ interface BrowseCardsResponse {
   definitionL1Label: string
 }
 
-export default function OptionalSetsPage() {
+export default function ClassCardSetsPage() {
   const { active } = useEnrollment()
   const navigate = useNavigate()
-  const { data: sets, loading, error, reload } = useApi<OptionalSet[]>(
-    () => api.get(`/students/deck/optional?enrollmentId=${active?.enrollmentId}`),
+  const { data: sets, loading, error, reload } = useApi<ClassCardSet[]>(
+    () => api.get(`/students/deck/cardsets?enrollmentId=${active?.enrollmentId}`),
     [active?.enrollmentId]
   )
   const [adding, setAdding] = useState<string | null>(null)
@@ -46,13 +47,13 @@ export default function OptionalSetsPage() {
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseError, setBrowseError] = useState<string | null>(null)
 
-  const handleBrowse = async (cs: OptionalSet) => {
+  const handleBrowse = async (cs: ClassCardSet) => {
     setBrowseSet({ id: cs.id, name: cs.name })
     setBrowseCards(null)
     setBrowseError(null)
     setBrowseLoading(true)
     try {
-      const result = await api.get<BrowseCardsResponse>(`/students/deck/optional/${cs.id}/cards?enrollmentId=${active?.enrollmentId}`)
+      const result = await api.get<BrowseCardsResponse>(`/students/deck/cardsets/${cs.id}/cards?enrollmentId=${active?.enrollmentId}`)
       setBrowseCards(result.cards)
       setBrowseLabels({ definitionL2Label: result.definitionL2Label, definitionL1Label: result.definitionL1Label })
     } catch (e) {
@@ -69,7 +70,7 @@ export default function OptionalSetsPage() {
     setAddError(null)
     try {
       const result = await api.post<{ ok: boolean; added: number }>(`/students/deck/optional/${cardSetId}?enrollmentId=${active.enrollmentId}`)
-      // Show inline success before the set disappears from the list
+      // Keep the assigned set visible after opting in.
       setJustAdded((prev) => ({ ...prev, [cardSetId]: result.added }))
       setTimeout(() => reload(), 1500)
     } catch (e) {
@@ -82,31 +83,33 @@ export default function OptionalSetsPage() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Optional CardSets</h1>
+        <h1 className="page-title">Class CardSets</h1>
       </div>
       <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 20 }}>
-        These CardSets are available for you to add to your deck. They are optional — your teacher has made them available but not required.
+        CardSets your teacher has assigned to this class. Required sets are added automatically; optional sets are available to add yourself.
       </p>
       {loading && <div className="spinner" />}
       {error && <div className="alert alert-danger">{error}</div>}
       {addError && <div className="alert alert-danger">{addError}</div>}
       {sets?.length === 0 && !loading && (
-        <div className="alert alert-info">No optional CardSets have been assigned to your class.</div>
+        <div className="alert alert-info">No CardSets have been assigned to your class.</div>
       )}
       <div className="grid-2">
         {sets?.map((cs) => (
             <div key={cs.id} className="card">
               <div style={{ fontWeight: 600, marginBottom: 4 }}>{cs.name}</div>
+              <div style={{ marginBottom: 8 }}><span className={`badge ${cs.type === 'MANDATORY' ? 'badge-blue' : 'badge-gray'}`}>{cs.type === 'MANDATORY' ? 'Required' : 'Optional'}</span></div>
               {cs.description && <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8 }}>{cs.description}</div>}
               <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 16 }}>{cs._count.cards} cards</div>
                   {justAdded[cs.id] !== undefined ? (
                 <div className="alert alert-success" style={{ margin: 0, padding: '6px 10px', fontSize: 13 }}>
                   Added {justAdded[cs.id]} card{justAdded[cs.id] !== 1 ? 's' : ''} to your deck!
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleBrowse(cs)}>View Cards</button>
                 </div>
-              ) : cs.added ? (
+              ) : cs.type === 'MANDATORY' || cs.added ? (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   <span className="badge badge-green">Already in your deck</span>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleBrowse(cs)}>Browse</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleBrowse(cs)}>View Cards</button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -117,7 +120,7 @@ export default function OptionalSetsPage() {
                   >
                     {adding === cs.id ? 'Adding…' : 'Add to Deck'}
                   </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleBrowse(cs)}>Browse</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleBrowse(cs)}>View Cards</button>
                 </div>
               )}
             </div>
