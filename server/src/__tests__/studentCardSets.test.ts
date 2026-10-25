@@ -30,7 +30,7 @@ let server: Server, base: string
 beforeAll(async () => {
   const { default: router } = await import('../routes/students')
   const app = express(); app.use(express.json()); app.use(router)
-  await new Promise<void>(resolve => { server = app.listen(0, '127.0.0.1', resolve) })
+  await new Promise<void>(resolve => { server = app.listen(0, '127.0.0.1', () => resolve()) })
   base = `http://127.0.0.1:${(server.address() as any).port}`
 })
 afterAll(async () => { if (server) await new Promise<void>(resolve => server.close(() => resolve())) })
@@ -78,7 +78,7 @@ describe('student class CardSets', () => {
   })
   it('keeps legacy optional browsing restricted to optional assignments', async () => {
     const res = await fetch(`${base}/deck/optional?enrollmentId=enrollment`)
-    expect((await res.json()).map((s: any) => s.id)).toEqual(['optional'])
+    expect((await res.json() as { id: string }[]).map(s => s.id)).toEqual(['optional'])
     expect((await fetch(`${base}/deck/optional/required/cards?enrollmentId=enrollment`)).status).toBe(404)
   })
 })
