@@ -13,3 +13,5 @@ Finish the session to record your progress. Using “Finish Early” before reac
 Complete qualifying sessions on different calendar days, at least 12 hours apart. A longer session still earns one session of homework credit. Weekly homework runs from Monday through Sunday using the app's Asia/Shanghai calendar boundaries.
 
 If your deck has no cards yet, check back after cards have been added to your class.
+
+After finishing a session, the Study Focus dropdown keeps your selection. “Keep Reviewing” starts another session within that focus, even for a small set you have already studied. You can choose a different focus on the completion screen. “Keep Studying” practices only the weak cards from the session you just finished. Clicking Study in the navigation returns to the setup screen and restores the default focus.

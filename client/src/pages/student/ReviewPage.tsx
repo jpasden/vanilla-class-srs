@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { api, ApiError } from '../../utils/api'
 import { useEnrollment } from '../../utils/enrollment'
 import { useApi } from '../../hooks/useApi'
@@ -93,6 +93,13 @@ function rand(min: number, max: number) {
 }
 
 export default function ReviewPage() {
+  const location = useLocation()
+  const { active } = useEnrollment()
+  // Clicking Study again starts fresh, even when already on this route.
+  return <ReviewSessionPage key={`${location.key}:${active?.enrollmentId ?? ''}`} />
+}
+
+function ReviewSessionPage() {
   const { active } = useEnrollment()
   const navigate = useNavigate()
   const [phase, setPhase] = useState<Phase>('idle')
@@ -143,10 +150,10 @@ export default function ReviewPage() {
 
   // Drives the Study Focus dropdown. '' = All CardSets, '__homework__' = the
   // homework-assigned CardSet(s) as a group (may be more than one), or a
-  // single CardSet id for a manual, one-CardSet override. A manual choice
-  // only applies to the next session started — never persisted, re-derived
-  // from the homework default on every load.
+  // single CardSet id. Keep the choice across sessions and summary refreshes;
+  // navigating to Study again remounts this page and restores the default.
   const [selectedFocus, setSelectedFocus] = useState<string>('')
+  const focusInitialized = useRef(false)
   const { data: summary, reload: reloadSummary } = useApi<StatsSummary>(
     () => active
       ? api.get<StatsSummary>(`/students/stats/summary?enrollmentId=${active.enrollmentId}`)
@@ -155,7 +162,9 @@ export default function ReviewPage() {
   )
 
   useEffect(() => {
-    const focus = summary?.weeklyGoal?.cardSetFocus
+    if (!summary || focusInitialized.current) return
+    focusInitialized.current = true
+    const focus = summary.weeklyGoal?.cardSetFocus
     setSelectedFocus(focus?.mode === 'assigned' ? '__homework__' : '')
   }, [summary])
 
@@ -387,6 +396,28 @@ export default function ReviewPage() {
     return () => { pieces.forEach((p) => p.remove()) }
   }, [phase, completedCount])
 
+  const focusSelector = summary && (
+    <div className="form-group" style={{ marginBottom: 16 }}>
+      <label className="form-label" htmlFor="study-focus">Study Focus</label>
+      <select id="study-focus" className="form-select" value={selectedFocus} onChange={(e) => setSelectedFocus(e.target.value)}>
+        <option value="">All CardSets</option>
+        {summary.personalCardSet && (
+          <option value={summary.personalCardSet.id}>
+            Cards I added ({summary.personalCardSet.cardCount})
+          </option>
+        )}
+        {summary.weeklyGoal?.cardSetFocus?.mode === 'assigned' && (
+          <option value="__homework__">
+            Homework: {summary.weeklyGoal.cardSetFocus.cardSetNames.join(', ')}
+          </option>
+        )}
+        {summary.deckCardSets.map((cs) => (
+          <option key={cs.id} value={cs.id}>{cs.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+
   return (
     <div style={{ maxWidth: 600, margin: '0 auto' }}>
       {showGradeInfo && (
@@ -417,27 +448,7 @@ export default function ReviewPage() {
           <button className="btn btn-primary btn-lg" onClick={() => startSession()}>Start Reviewing</button>
 
           <div style={{ maxWidth: 320, margin: '24px auto 0', textAlign: 'left' }}>
-            {summary && (
-              <div className="form-group" style={{ marginBottom: 16 }}>
-                <label className="form-label">Study Focus</label>
-                <select className="form-select" value={selectedFocus} onChange={(e) => setSelectedFocus(e.target.value)}>
-                  <option value="">All CardSets</option>
-                  {summary.personalCardSet && (
-                    <option value={summary.personalCardSet.id}>
-                      Cards I added ({summary.personalCardSet.cardCount})
-                    </option>
-                  )}
-                  {summary.weeklyGoal?.cardSetFocus?.mode === 'assigned' && (
-                    <option value="__homework__">
-                      Homework: {summary.weeklyGoal.cardSetFocus.cardSetNames.join(', ')}
-                    </option>
-                  )}
-                  {summary.deckCardSets.map((cs) => (
-                    <option key={cs.id} value={cs.id}>{cs.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {focusSelector}
 
             {summary?.weeklyGoal && (
               <>
@@ -689,6 +700,9 @@ export default function ReviewPage() {
               )}
             </div>
           )}
+          <div style={{ maxWidth: 320, margin: '24px auto 0', textAlign: 'left', position: 'relative', zIndex: 2 }}>
+            {focusSelector}
+          </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, position: 'relative', zIndex: 2 }}>
             {weakCards.length > 0 && (
               <button className="btn btn-primary" onClick={keepStudying}>
